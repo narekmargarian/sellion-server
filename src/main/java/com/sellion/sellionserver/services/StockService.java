@@ -18,7 +18,7 @@ public class StockService {
 
     // Запуск каждые 3 часа: 0 0 */3 * * *
     // Запуск каждые 10 минут:  "0 */10 * * * *"
-    @Scheduled(cron = "0 */10 * * * *")
+    @Scheduled(cron = "0 */3 * * * *")
     @Transactional
     public void updateStockFromOrders() {
         System.out.println(">>> ЗАПУСК СИНХРОНИЗАЦИИ СКЛАДА. (10 мин)..");
