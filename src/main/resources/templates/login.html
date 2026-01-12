@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Вход в систему Sellion</title>
+    <link href="cdn.jsdelivr.net" rel="stylesheet">
+    <style>
+        body { height: 100vh; display: flex; align-items: center; background-color: #f8f9fa; }
+        .login-form { width: 100%; max-width: 400px; padding: 15px; margin: auto; }
+    </style>
+</head>
+<body>
+<main class="login-form">
+    <div class="card shadow border-0">
+        <div class="card-body p-4">
+            <h2 class="text-center mb-4">Офис Sellion</h2>
+
+            <!-- Сообщение об ошибке, если логин/пароль неверные -->
+            <div th:if="${param.error}" class="alert alert-danger">
+                Неверный логин или пароль
+            </div>
+
+            <form th:action="@{/login}" method="post">
+                <div class="mb-3">
+                    <label class="form-label">Логин сотрудника</label>
+                    <input type="text" name="username" class="form-control" placeholder="op1 или acc1" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Пароль</label>
+                    <input type="password" name="password" class="form-control" placeholder="****" required>
+                </div>
+                <button class="btn btn-primary w-100 py-2" type="submit">Войти</button>
+            </form>
+
+            <p class="mt-4 text-muted text-center">&copy; 2026 Sellion System</p>
+        </div>
+    </div>
+</main>
+</body>
+</html>

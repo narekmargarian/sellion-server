@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Офис Sellion - Главная</title>
+    <link href="cdn.jsdelivr.net" rel="stylesheet">
+    <style>
+        .menu-card { transition: 0.3s; cursor: pointer; }
+        .menu-card:hover { transform: translateY(-5px); box-shadow: 0 10px 20px rgba(0,0,0,0.1); }
+    </style>
+</head>
+<body class="bg-light">
+
+<nav class="navbar navbar-dark bg-dark mb-4">
+    <div class="container-fluid">
+        <span class="navbar-brand">Sellion Office 2026</span>
+        <div class="text-white">
+            Вы вошли как: <strong th:text="${#authentication.name}">Username</strong>
+            <a th:href="@{/logout}" class="btn btn-outline-danger btn-sm ms-3">Выйти</a>
+        </div>
+    </div>
+</nav>
+
+<div class="container">
+    <div class="row g-4">
+        <!-- Кнопка ЗАКАЗЫ (доступна всем) -->
+        <div class="col-md-4">
+            <div class="card h-100 menu-card border-primary">
+                <div class="card-body text-center">
+                    <h3>Заказы</h3>
+                    <p>Просмотр заказов от агентов</p>
+                    <a href="/admin/orders" class="btn btn-primary">Открыть список</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Кнопка ТОВАРЫ (директор и операторы) -->
+        <div class="col-md-4">
+            <div class="card h-100 menu-card border-success">
+                <div class="card-body text-center">
+                    <h3>Товары и Цены</h3>
+                    <p>Управление ассортиментом</p>
+                    <a href="/admin/products" class="btn btn-success">Управление</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Кнопка ВОЗВРАТЫ (директор и бухгалтеры) -->
+        <div class="col-md-4">
+            <div class="card h-100 menu-card border-danger">
+                <div class="card-body text-center">
+                    <h3>Возвраты и Долги</h3>
+                    <p>Бухгалтерский учет</p>
+                    <a href="/admin/returns" class="btn btn-danger">Открыть отчеты</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</html>
