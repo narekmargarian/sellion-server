@@ -10,4 +10,9 @@ public class LoginController {
     public String login() {
         return "login"; // Открывает login.html
     }
+
+    @GetMapping("/")
+    public String index() {
+        return "redirect:/admin"; // Если пользователь не залогинен, Spring Security сам кинет его на /login
+    }
 }

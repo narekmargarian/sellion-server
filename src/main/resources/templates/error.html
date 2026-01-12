@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="ru" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Ошибка системы | 2026</title>
+    <style>
+        body { font-family: sans-serif; background: #f8fafc; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+        .error-card { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); text-align: center; max-width: 500px; }
+        h1 { color: #6366f1; font-size: 80px; margin: 0; }
+        h2 { color: #1e293b; margin-top: 10px; }
+        p { color: #64748b; margin-bottom: 30px; }
+        .btn { background: #6366f1; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; }
+    </style>
+</head>
+<body>
+<div class="error-card">
+    <h1 th:text="${errorCode}">Err</h1>
+    <h2 th:text="${errorTitle}">Заголовок ошибки</h2>
+    <p th:text="${errorMessage}">Описание ошибки появится здесь.</p>
+    <a href="/admin" class="btn">Вернуться в систему</a>
+</div>
+</body>
+</html>

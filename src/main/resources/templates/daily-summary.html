@@ -1,0 +1,14 @@
+<div class="card-container">
+    <h4>Общий сбор товара на сегодня</h4>
+    <table class="table">
+        <thead>
+        <tr><th>Товар</th><th>Нужно подготовить (всего)</th></tr>
+        </thead>
+        <tbody>
+        <tr th:each="entry : ${summary}">
+            <td th:text="${entry.key}"></td>
+            <td class="fw-bold" th:text="${entry.value + ' шт.'}"></td>
+        </tr>
+        </tbody>
+    </table>
+</div>

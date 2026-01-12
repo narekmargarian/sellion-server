@@ -97,9 +97,14 @@
                         <tbody>
                         <tr th:each="o : ${orders}">
                             <td class="text-muted" th:text="${'#' + o.id}"></td>
-                            <td th:text="${o.managerId}"></td>
+                            <td th:text="${o.managerId != null ? o.managerId : 'Система'}"></td> <!-- Поле Менеджер -->
                             <td class="fw-semibold" th:text="${o.shopName}"></td>
-                            <td><span class="badge bg-light" th:each="entry : ${o.items}" th:text="${entry.key + '(' + entry.value + ') '}"></span></td>
+                            <td>
+        <span class="badge bg-light" th:each="entry : ${o.items}"
+              th:text="${entry.key + ' (' + entry.value + ') '}"></span>
+                            </td>
+                            <!-- Поле Итоговая сумма -->
+                            <td class="fw-bold" th:text="${#numbers.formatDecimal(o.totalAmount != null ? o.totalAmount : 0, 0, 'COMMA', 0, 'POINT') + ' ֏'}"></td>
                             <td><span class="badge bg-info-subtle" th:text="${o.paymentMethod}"></span></td>
                         </tr>
                         </tbody>
@@ -169,25 +174,29 @@
             <!-- RETURNS Tab (Using Thymeleaf logic) -->
             <div id="returns">
                 <div class="header-section">
-                    <h4 class="fw-semibold">Все возвраты</h4>
+                    <h4 class="fw-semibold">Журнал возвратов</h4>
                 </div>
                 <div class="card-container">
                     <table class="table">
-                        <thead>
-                        <tr><th>ID</th><th>Менеджер</th><th>Магазин</th><th>Причина</th><th>Товары</th></tr>
-                        </thead>
+                        <thead><tr><th>Дата</th><th>Магазин</th><th>Причина</th><th>Сумма</th></tr></thead>
                         <tbody>
                         <tr th:each="r : ${returns}">
-                            <td th:text="${r.id}"></td>
-                            <td th:text="${r.managerId}"></td>
+                            <td th:text="${r.returnDate}"></td>
+                            <td th:text="${r.managerId}"></td> <!-- Поле Менеджер -->
                             <td th:text="${r.shopName}"></td>
-                            <td class="text-danger" th:text="${r.returnReason}"></td>
-                            <td><small th:each="entry : ${r.items}" th:text="${entry.key + '(' + entry.value + ') '}"></small></td>
+                            <td th:text="${r.returnReason}"></td>
+                            <td>
+                                <ul style="list-style:none; padding:0; margin:0; font-size: 0.8rem;">
+                                    <li th:each="item : ${r.items}" th:text="${item.key + ': ' + item.value}"></li>
+                                </ul>
+                            </td>
+                            <td class="fw-bold text-danger" th:text="${r.totalAmount + ' ֏'}"></td> <!-- Поле Сумма -->
                         </tr>
                         </tbody>
                     </table>
                 </div>
             </div>
+
 
         </div>
         <div class="footer-date">12 января 2026 г., понедельник.</div>
@@ -198,10 +207,18 @@
 <script>
     function switchTab(event, tabId) {
         event.preventDefault();
-        document.querySelectorAll('.tab-content > div').forEach(el => el.classList.remove('active'));
-        document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
+
+        // 1. Скрываем все вкладки
+        const contents = document.querySelectorAll('.tab-content > div');
+        contents.forEach(content => content.classList.remove('active'));
+
+        // 2. Убираем активный класс у всех ссылок
+        const links = document.querySelectorAll('.nav-link');
+        links.forEach(link => link.classList.remove('active'));
+
+        // 3. Показываем нужную вкладку и подсвечиваем ссылку
         document.getElementById(tabId).classList.add('active');
-        event.target.classList.add('active');
+        event.currentTarget.classList.add('active');
     }
 </script>
 <script src="cdn.jsdelivr.net"></script>

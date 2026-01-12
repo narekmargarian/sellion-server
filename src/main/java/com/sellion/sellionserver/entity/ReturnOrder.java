@@ -35,5 +35,9 @@ public class ReturnOrder {
     private String status;
 
     @JsonProperty("managerId")
-    private String managerId; // Поле для ID менеджера
+    private String managerId;
+
+    // НОВОЕ ПОЛЕ: Сумма возврата
+    @JsonProperty("totalAmount")
+    private Double totalAmount;
 }

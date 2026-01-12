@@ -6,6 +6,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -24,23 +25,16 @@ public class OrderApiController {
      * Эндпоинт для синхронизации заказов.
      * Принимает список заказов из Android и сохраняет их в MySQL.
      */
-    @Transactional
     @PostMapping("/sync")
+    @Transactional
     public ResponseEntity<Map<String, String>> syncOrders(@RequestBody List<Order> orders) {
-        System.out.println(">>> ПОЛУЧЕНО ЗАКАЗОВ: " + (orders != null ? orders.size() : 0));
-
         if (orders != null && !orders.isEmpty()) {
             for (Order order : orders) {
-                // КЛЮЧЕВОЙ МОМЕНТ: обнуляем ID перед сохранением.
-                // Теперь MySQL сама присвоит новый уникальный ID (Auto Increment).
-                order.setId(null);
+                order.setId(null); // Сбрасываем Android ID, чтобы MySQL создал свой
             }
             orderRepository.saveAll(orders);
         }
-
-        Map<String, String> response = new HashMap<>();
-        response.put("status", "success");
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(Collections.singletonMap("status", "success"));
     }
 
     /**

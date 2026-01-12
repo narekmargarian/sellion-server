@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="ru" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Sellion 2026 | Клиенты</title>
+    <style>
+        :root { --accent-color: #10b981; --bg-body: #f8fafc; }
+        body { font-family: sans-serif; background-color: var(--bg-body); margin: 0; padding: 20px; }
+        .container { width: 95%; margin: auto; }
+        .card { background: white; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); overflow: hidden; }
+        .table { width: 100%; border-collapse: collapse; }
+        .table th { padding: 12px; background: #f1f5f9; text-align: left; font-size: 13px; }
+        .table td { padding: 12px; border-bottom: 1px solid #f1f5f9; font-size: 14px; }
+        .form-control { border: 1px solid #ccc; padding: 5px; border-radius: 4px; width: 120px; }
+        .btn { padding: 6px 12px; border-radius: 4px; cursor: pointer; text-decoration: none; border: none; font-size: 13px; }
+        .btn-success { background: #10b981; color: white; }
+        .btn-secondary { background: #64748b; color: white; }
+        .badge-day { background: #e0f2fe; color: #0369a1; padding: 4px 8px; border-radius: 4px; font-weight: bold; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div style="display:flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h2>Реестр клиентов и задолженностей</h2>
+        <a href="/admin" class="btn btn-secondary">В меню</a>
+    </div>
+    <div class="card">
+        <table class="table">
+            <thead>
+            <tr>
+                <th>Магазин / ИП</th>
+                <th>ИНН</th>
+                <th>Маршрут</th>
+                <th>Текущий долг (֏)</th>
+                <th>Действие</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="client : ${clients}">
+                <td>
+                    <div style="font-weight: bold;" th:text="${client.name}"></div>
+                    <div style="font-size: 12px; color: #64748b;" th:text="${client.address}"></div>
+                </td>
+                <td th:text="${client.inn}"></td>
+
+                <form th:action="@{/admin/clients/update}" method="post" style="display: contents;">
+                    <input type="hidden" name="id" th:value="${client.id}">
+                    <td>
+                        <select name="routeDay" class="form-control">
+                            <option th:each="day : ${ {'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'} }"
+                                    th:value="${day}" th:text="${day}" th:selected="${day == client.routeDay}"></option>
+                        </select>
+                    </td>
+                    <td>
+                        <input type="number" name="debt" class="form-control" th:value="${client.debt}" step="0.01">
+                    </td>
+                    <td>
+                        <button type="submit" class="btn btn-success">Сохранить</button>
+                    </td>
+                </form>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+</body>
+</html>

@@ -21,4 +21,7 @@ public class Product {
     private Integer itemsPerBox;
     private String barcode;
     private String category;
+
+    // НОВОЕ ПОЛЕ: Остаток на складе
+    private Integer stockQuantity;
 }

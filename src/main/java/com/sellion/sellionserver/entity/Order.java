@@ -19,7 +19,7 @@ public class Order {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @JsonProperty("shopName") // Указываем Jackson, как поле называется в Android
+    @JsonProperty("shopName")
     private String shopName;
 
     @ElementCollection
@@ -39,7 +39,10 @@ public class Order {
 
     private String status;
 
-    // Это поле мы сейчас начнем заполнять из Android
     @JsonProperty("managerId")
     private String managerId;
+
+    // НОВОЕ ПОЛЕ: Итоговая сумма заказа
+    @JsonProperty("totalAmount")
+    private Double totalAmount;
 }
