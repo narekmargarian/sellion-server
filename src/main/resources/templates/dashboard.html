@@ -1,62 +1,209 @@
 <!DOCTYPE html>
-<html lang="en">
-<html xmlns:th="http://www.thymeleaf.org">
+<html lang="ru" xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="UTF-8">
-    <title>Офис Sellion - Главная</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sellion Office 2026 | Директор</title>
+
+    <!-- Google Fonts & Icons (Исправленные, полные ссылки) -->
+    <link href="fonts.googleapis.com" rel="stylesheet">
+    <link rel="stylesheet" href="cdn.jsdelivr.net">
     <link href="cdn.jsdelivr.net" rel="stylesheet">
+
     <style>
-        .menu-card { transition: 0.3s; cursor: pointer; }
-        .menu-card:hover { transform: translateY(-5px); box-shadow: 0 10px 20px rgba(0,0,0,0.1); }
+        :root {
+            --accent-color: #6366f1;
+            --bg-body: #f8fafc;
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: var(--bg-body);
+            color: #1e293b;
+            margin: 0;
+            line-height: 1.5;
+        }
+
+        .navbar { background: #ffffff; border-bottom: 1px solid #e2e8e0; padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; }
+        .navbar-brand { color: var(--accent-color); font-weight: 700; text-decoration: none; letter-spacing: 1px; }
+        .user-info { margin-right: 15px; font-size: 0.9rem; }
+        .btn-danger { background-color: #dc3545; color: white; border: none; padding: 6px 12px; border-radius: 5px; }
+
+        .container-fluid { display: flex; min-height: calc(100vh - 56px); }
+        .sidebar { width: 220px; background: white; border-right: 1px solid #e2e8e0; padding: 20px 0; }
+        .nav-link {
+            display: flex; align-items: center; padding: 10px 20px; text-decoration: none; color: #64748b; font-weight: 500;
+            border-left: 3px solid transparent; transition: all 0.2s; cursor: pointer;
+        }
+        .nav-link.active, .nav-link:hover { background-color: #f1f5f9; color: var(--accent-color); border-left-color: var(--accent-color); }
+        .nav-link i { margin-right: 10px; }
+
+        .main-content { flex-grow: 1; padding: 30px; position: relative; }
+        .card-container { background: white; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); overflow: hidden; margin-top: 20px; }
+        .header-section { display: flex; justify-content: space-between; align-items: center; padding: 0 20px; }
+
+        .table { width: 100%; border-collapse: collapse; }
+        .table thead th { padding: 15px 20px; background-color: #f8fafc; text-align: left; font-size: 0.8rem; text-transform: uppercase; }
+        .table tbody td { padding: 15px 20px; border-bottom: 1px solid #f1f5f9; }
+        .table tbody tr:last-child td { border-bottom: none; }
+
+        .badge { padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; }
+        .bg-info-subtle { background-color: #e0f2fe; color: #026aa2; }
+        .bg-light { background-color: #f1f5f9; color: #333; }
+        .badge-soft-danger { background-color: #fef2f2; color: #dc2626; padding: 6px 12px; border-radius: 8px; font-weight: bold; }
+        .fw-semibold { font-weight: 600; }
+        .text-muted { color: #64748b; }
+        .text-end { text-align: right; }
+
+        .tab-content > div { display: none; }
+        .tab-content > div.active { display: block; }
+        .footer-date { position: absolute; bottom: 10px; right: 20px; font-size: 0.7rem; color: #94a3b8; }
     </style>
 </head>
-<body class="bg-light">
+<body>
 
-<nav class="navbar navbar-dark bg-dark mb-4">
-    <div class="container-fluid">
-        <span class="navbar-brand">Sellion Office 2026</span>
-        <div class="text-white">
-            Вы вошли как: <strong th:text="${#authentication.name}">Username</strong>
-            <a th:href="@{/logout}" class="btn btn-outline-danger btn-sm ms-3">Выйти</a>
-        </div>
+<!-- Navbar -->
+<nav class="navbar">
+    <a class="navbar-brand" href="#">SELLION 2026</a>
+    <div style="display: flex; align-items: center;">
+        <span class="user-info">Директор: <b th:text="${#authentication.name}">Boss</b></span>
+        <a th:href="@{/logout}" class="btn btn-danger">Выйти</a>
     </div>
 </nav>
 
-<div class="container">
-    <div class="row g-4">
-        <!-- Кнопка ЗАКАЗЫ (доступна всем) -->
-        <div class="col-md-4">
-            <div class="card h-100 menu-card border-primary">
-                <div class="card-body text-center">
-                    <h3>Заказы</h3>
-                    <p>Просмотр заказов от агентов</p>
-                    <a href="/admin/orders" class="btn btn-primary">Открыть список</a>
-                </div>
-            </div>
-        </div>
-
-        <!-- Кнопка ТОВАРЫ (директор и операторы) -->
-        <div class="col-md-4">
-            <div class="card h-100 menu-card border-success">
-                <div class="card-body text-center">
-                    <h3>Товары и Цены</h3>
-                    <p>Управление ассортиментом</p>
-                    <a href="/admin/products" class="btn btn-success">Управление</a>
-                </div>
-            </div>
-        </div>
-
-        <!-- Кнопка ВОЗВРАТЫ (директор и бухгалтеры) -->
-        <div class="col-md-4">
-            <div class="card h-100 menu-card border-danger">
-                <div class="card-body text-center">
-                    <h3>Возвраты и Долги</h3>
-                    <p>Бухгалтерский учет</p>
-                    <a href="/admin/returns" class="btn btn-danger">Открыть отчеты</a>
-                </div>
-            </div>
-        </div>
+<div class="container-fluid">
+    <!-- Sidebar Menu -->
+    <div class="sidebar">
+        <!-- JS switchTab kept for local file viewing, but Spring Boot might use real links -->
+        <a href="#" class="nav-link active" onclick="switchTab(event, 'orders')"><i class="bi bi-receipt"></i> Заказы</a>
+        <a href="#" class="nav-link" onclick="switchTab(event, 'returns')"><i class="bi bi-arrow-counterclockwise"></i> Возвраты</a>
+        <a href="#" class="nav-link" onclick="switchTab(event, 'debts')"><i class="bi bi-piggy-bank"></i> Долги</a>
+        <a href="#" class="nav-link" onclick="switchTab(event, 'products')"><i class="bi bi-box-seam"></i> Товары</a>
+        <a href="#" class="nav-link" onclick="switchTab(event, 'clients')"><i class="bi bi-geo-alt"></i> Клиенты</a>
     </div>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+        <div class="tab-content">
+            <!-- ORDERS Tab (Active by default, using Thymeleaf logic) -->
+            <div id="orders" class="active">
+                <div class="header-section">
+                    <h4 class="fw-semibold">Активность заказов</h4>
+                    <button class="btn" style="background: #e2e8e0;">Экспорт</button>
+                </div>
+                <div class="card-container">
+                    <table class="table">
+                        <thead><tr><th>ID</th><th>Менеджер</th><th>Магазин</th><th>Товары</th><th>Оплата</th></tr></thead>
+                        <tbody>
+                        <tr th:each="o : ${orders}">
+                            <td class="text-muted" th:text="${'#' + o.id}"></td>
+                            <td th:text="${o.managerId}"></td>
+                            <td class="fw-semibold" th:text="${o.shopName}"></td>
+                            <td><span class="badge bg-light" th:each="entry : ${o.items}" th:text="${entry.key + '(' + entry.value + ') '}"></span></td>
+                            <td><span class="badge bg-info-subtle" th:text="${o.paymentMethod}"></span></td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- DEBTS Tab (Using Thymeleaf logic) -->
+            <div id="debts">
+                <div class="header-section">
+                    <h4 class="fw-semibold">Дебиторская задолженность</h4>
+                </div>
+                <div class="card-container">
+                    <table class="table">
+                        <thead><tr><th>Магазин</th><th>Адрес</th><th class="text-end">Сумма долга</th></tr></thead>
+                        <tbody>
+                        <tr th:each="c : ${clients}" th:if="${c.debt > 0}">
+                            <td class="fw-semibold" th:text="${c.name}"></td>
+                            <td th:text="${c.address}"></td>
+                            <td class="text-end"><span class="badge-soft-danger" th:text="${#numbers.formatDecimal(c.debt, 0, 'COMMA', 0, 'POINT') + ' ֏'}"></span></td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- PRODUCTS Tab (Using Thymeleaf logic) -->
+            <div id="products">
+                <div class="header-section">
+                    <h4 class="fw-semibold">Справочник продукции</h4>
+                    <button class="btn btn-primary">+ Новый товар</button>
+                </div>
+                <div class="card-container">
+                    <table class="table">
+                        <thead><tr><th>Категория</th><th>Название</th><th>Цена</th><th>Упаковка</th></tr></thead>
+                        <tbody>
+                        <tr th:each="p : ${products}">
+                            <td><span class="badge bg-secondary" th:text="${p.category}"></span></td>
+                            <td th:text="${p.name}"></td>
+                            <td class="fw-bold" th:text="${p.price + ' ֏'}"></td>
+                            <td th:text="${p.itemsPerBox + ' шт/кор'}"></td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- CLIENTS Tab (Using Thymeleaf logic) -->
+            <div id="clients">
+                <div class="header-section">
+                    <h4 class="fw-semibold">База магазинов</h4>
+                </div>
+                <div class="card-container">
+                    <table class="table">
+                        <thead><tr><th>Название</th><th>ИНН</th><th>Маршрут</th></tr></thead>
+                        <tbody>
+                        <tr th:each="c : ${clients}">
+                            <td th:text="${c.name}"></td>
+                            <td th:text="${c.inn}"></td>
+                            <td th:text="${c.routeDay}"></td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- RETURNS Tab (Using Thymeleaf logic) -->
+            <div id="returns">
+                <div class="header-section">
+                    <h4 class="fw-semibold">Все возвраты</h4>
+                </div>
+                <div class="card-container">
+                    <table class="table">
+                        <thead>
+                        <tr><th>ID</th><th>Менеджер</th><th>Магазин</th><th>Причина</th><th>Товары</th></tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="r : ${returns}">
+                            <td th:text="${r.id}"></td>
+                            <td th:text="${r.managerId}"></td>
+                            <td th:text="${r.shopName}"></td>
+                            <td class="text-danger" th:text="${r.returnReason}"></td>
+                            <td><small th:each="entry : ${r.items}" th:text="${entry.key + '(' + entry.value + ') '}"></small></td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+        <div class="footer-date">12 января 2026 г., понедельник.</div>
+    </main>
 </div>
+
+<!-- Simple JS for tab switching in static mode, will be overridden by Bootstrap JS if linked -->
+<script>
+    function switchTab(event, tabId) {
+        event.preventDefault();
+        document.querySelectorAll('.tab-content > div').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
+        document.getElementById(tabId).classList.add('active');
+        event.target.classList.add('active');
+    }
+</script>
+<script src="cdn.jsdelivr.net"></script>
 </body>
 </html>

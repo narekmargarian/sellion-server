@@ -1,41 +1,140 @@
 <!DOCTYPE html>
-<html lang="en">
-<html xmlns:th="http://www.thymeleaf.org">
+<html lang="ru" xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Вход в систему Sellion</title>
+    <!-- Bootstrap 5 -->
     <link href="cdn.jsdelivr.net" rel="stylesheet">
+    <!-- Google Fonts -->
+    <link href="fonts.googleapis.com" rel="stylesheet">
     <style>
-        body { height: 100vh; display: flex; align-items: center; background-color: #f8f9fa; }
-        .login-form { width: 100%; max-width: 400px; padding: 15px; margin: auto; }
+        :root {
+            --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --glass-bg: rgba(255, 255, 255, 0.9);
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #f4f7f9;
+            background-image: radial-gradient(at 0% 0%, hsla(253,16%,7%,1) 0, transparent 50%),
+            radial-gradient(at 50% 0%, hsla(225,39%,30%,1) 0, transparent 50%),
+            radial-gradient(at 100% 0%, hsla(339,49%,30%,1) 0, transparent 50%);
+            margin: 0;
+        }
+
+        .login-card {
+            width: 100%;
+            max-width: 420px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            padding: 40px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+        }
+
+        .brand-logo {
+            font-weight: 700;
+            letter-spacing: -1px;
+            color: #2d3748;
+            margin-bottom: 30px;
+            width: 100%;
+        }
+
+        .form-container {
+            width: 100%;
+            max-width: 300px;
+            /* Используем flexbox для центрирования кнопки внутри контейнера */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .form-label {
+            font-weight: 500;
+            color: #4a5568;
+            font-size: 0.9rem;
+            text-align: left;
+            width: 100%;
+        }
+
+        .form-control {
+            border-radius: 10px;
+            padding: 12px 15px;
+            border: 1px solid #e2e8f0;
+            transition: all 0.3s ease;
+            width: 100%;
+        }
+
+        .form-control:focus {
+            box-shadow: 0 0 0 4px rgba(118, 75, 162, 0.1);
+            border-color: #764ba2;
+        }
+
+        .btn-primary {
+            background: var(--primary-gradient);
+            border: none;
+            border-radius: 10px;
+            padding: 12px 30px; /* Увеличил горизонтальный padding, уменьшил общую ширину за счет отсутствия width: 100% */
+            font-weight: 600;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            /* Убрал width: 100% */
+            /* Кнопка центрируется за счет align-items: center в .form-container */
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 10px 15px -3px rgba(118, 75, 162, 0.4);
+        }
+
+        .alert {
+            border-radius: 12px;
+            font-size: 0.9rem;
+            border: none;
+            width: 100%;
+            text-align: left;
+        }
     </style>
 </head>
 <body>
-<main class="login-form">
-    <div class="card shadow border-0">
-        <div class="card-body p-4">
-            <h2 class="text-center mb-4">Офис Sellion</h2>
 
-            <!-- Сообщение об ошибке, если логин/пароль неверные -->
-            <div th:if="${param.error}" class="alert alert-danger">
-                Неверный логин или пароль
+<main class="login-card">
+    <h2 class="brand-logo">Sellion <span style="color: #764ba2;">Office</span></h2>
+
+    <div class="form-container">
+        <!-- Сообщение об ошибке -->
+        <div th:if="${param.error}" class="alert alert-danger d-flex align-items-center mb-3" role="alert">
+            <div>Неверный логин или пароль</div>
+        </div>
+
+        <form th:action="@{/login}" method="post" class="w-100">
+            <div class="mb-3">
+                <label class="form-label">Логин сотрудника</label>
+                <input type="text" name="username" class="form-control" placeholder="Напр: op1" required autofocus>
+            </div>
+            <div class="mb-5"> <!-- Увеличен отступ снизу (mb-5) -->
+                <label class="form-label">Пароль</label>
+                <input type="password" name="password" class="form-control" placeholder="••••••••" required>
             </div>
 
-            <form th:action="@{/login}" method="post">
-                <div class="mb-3">
-                    <label class="form-label">Логин сотрудника</label>
-                    <input type="text" name="username" class="form-control" placeholder="op1 или acc1" required>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Пароль</label>
-                    <input type="password" name="password" class="form-control" placeholder="****" required>
-                </div>
-                <button class="btn btn-primary w-100 py-2" type="submit">Войти</button>
-            </form>
-
-            <p class="mt-4 text-muted text-center">&copy; 2026 Sellion System</p>
-        </div>
+            <!-- Кнопка центрируется и имеет фиксированную ширину, а не 100% -->
+            <button class="btn btn-primary mt-4" type="submit">Войти в систему</button>
+        </form>
     </div>
+
+    <footer class="mt-5">
+        <p class="text-muted text-center small mb-0">&copy; 2026 Sellion System. Все права защищены.</p>
+    </footer>
 </main>
+
 </body>
 </html>

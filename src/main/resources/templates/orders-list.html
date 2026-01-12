@@ -1,47 +1,103 @@
 <!DOCTYPE html>
-<html lang="en">
-<html xmlns:th="http://www.thymeleaf.org">
+<html lang="ru" xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="UTF-8">
-    <title>Офис - Управление товарами</title>
-    <link href="cdn.jsdelivr.net" rel="stylesheet">
-</head>
-<body class="bg-light">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sellion Office 2026 | Управление товарами</title>
 
-<div class="container mt-5">
+    <style>
+        /* Все стили Bootstrap и наши стили встроены здесь для автономной работы */
+        :root {
+            --accent-color: #6366f1;
+            --bg-body: #f8fafc;
+        }
+
+        body {
+            font-family: sans-serif;
+            background-color: var(--bg-body);
+            color: #1e293b;
+            margin: 0;
+            line-height: 1.5;
+        }
+
+        .container {
+            width: 90%;
+            margin: 3rem auto;
+        }
+
+        .card-container {
+            background: white;
+            border-radius: 10px; /* Уменьшил до 10px для автономности */
+            border: 1px solid #e2e8e0;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .d-flex { display: flex; }
+        .justify-content-between { justify-content: space-between; }
+        .align-items-center { align-items: center; }
+        .mb-4 { margin-bottom: 1.5rem; }
+        .fw-bold { font-weight: 700; }
+        .m-0 { margin: 0; }
+        .btn { padding: 8px 16px; border-radius: 5px; cursor: pointer; text-decoration: none; }
+        .btn-secondary { background-color: #e2e8e0; color: #475569; border: none; }
+        .btn-success { background-color: #10b981; color: white; border: none; }
+        .form-control { border: 1px solid #ccc; padding: 6px; border-radius: 4px; }
+        .w-100 { width: 100%; }
+        .badge { padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; background-color: #f1f5f9; color: #333; }
+        .text-price { font-weight: 700; color: #0f172a; }
+
+        /* Tables (Simple styles since Bootstrap CSS isn't loaded) */
+        .table { width: 100%; border-collapse: collapse; }
+        .table thead th { padding: 12px 15px; background-color: #f8fafc; text-align: left; font-size: 0.8rem; }
+        .table tbody td { padding: 12px 15px; border-bottom: 1px solid #f1f5f9; }
+
+    </style>
+</head>
+<body>
+
+<div class="container">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2>Справочник товаров и цен</h2>
-        <a href="/admin" class="btn btn-secondary">В меню</a>
+        <h2 class="fw-bold m-0">Справочник товаров и цен</h2>
+        <a href="/admin" class="btn btn-secondary">
+            В меню
+        </a>
     </div>
 
-    <table class="table table-white shadow-sm rounded">
-        <thead class="table-dark">
-        <tr>
-            <th>Название</th>
-            <th>Категория</th>
-            <th>Текущая цена (֏)</th>
-            <th>Новая цена</th>
-            <th>Действие</th>
-        </tr>
-        </thead>
-        <tbody>
-        <tr th:each="product : ${products}">
-            <td th:text="${product.name}"></td>
-            <td th:text="${product.category}"></td>
-            <td th:text="${product.price}" class="fw-bold text-primary"></td>
-            <form th:action="@{/admin/products/update-price}" method="post">
-                <td>
-                    <input type="hidden" name="id" th:value="${product.id}">
-                    <input type="number" name="newPrice" class="form-control form-control-sm" step="0.1" required>
-                </td>
-                <td>
-                    <button type="submit" class="btn btn-success btn-sm">Обновить</button>
-                </td>
-            </form>
-        </tr>
-        </tbody>
-    </table>
+    <div class="card-container">
+        <table class="table">
+            <thead>
+            <tr>
+                <th>Название товара</th>
+                <th>Категория</th>
+                <th>Текущая цена (֏)</th>
+                <th>Новая цена (֏)</th>
+                <th>Действие</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="product : ${products}">
+                <td th:text="${product.name}"></td>
+                <td><span class="badge" th:text="${product.category}"></span></td>
+                <td th:text="${product.price}" class="text-price"></td>
+
+                <form th:action="@{/admin/products/update-price}" method="post" style="display:contents;">
+                    <td>
+                        <input type="hidden" name="id" th:value="${product.id}">
+                        <input type="number" name="newPrice" class="form-control" step="0.1" required placeholder="Введите новую цену">
+                    </td>
+                    <td>
+                        <button type="submit" class="btn btn-success w-100">
+                            Обновить
+                        </button>
+                    </td>
+                </form>
+            </tr>
+            </tbody>
+        </table>
+    </div>
 </div>
 
+<!-- Scripts are not included in this autonomous version as we rely purely on inline styles -->
 </body>
 </html>
