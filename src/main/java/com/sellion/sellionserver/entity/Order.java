@@ -32,6 +32,7 @@ public class Order {
     @JsonProperty("deliveryDate")
     private String deliveryDate;
 
+
     @JsonProperty("paymentMethod")
     private String paymentMethod;
 

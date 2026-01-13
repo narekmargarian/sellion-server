@@ -42,19 +42,29 @@
             </div>
             <div class="card">
                 <table class="table">
-                    <thead><tr><th>Дата</th><th>Менеджер</th><th>Магазин</th><th>Сумма</th><th>Статус</th><th>Действие</th></tr></thead>
+                    <thead>
+                    <tr>
+                        <th>Дата заказа</th>
+                        <th>Менеджер</th>
+                        <th>Магазин</th>
+                        <th>Сумма</th>
+                        <th>Дата доставки</th>
+                        <th>Статус</th>
+                        <th>Действие</th>
+                    </tr>
+                    </thead>
                     <tbody>
                     <tr th:each="o : ${orders}" th:onclick="'openOrderDetails(' + ${o.id} + ')'" style="cursor:pointer;">
                         <td th:text="${#temporals.format(o.createdAt, 'dd.MM.yyyy HH:mm')}"></td>
                         <td th:text="${o.managerId}" style="font-weight:600; color:var(--accent);"></td>
                         <td th:text="${o.shopName}" style="font-weight:700;"></td>
                         <td class="price-up" th:text="${o.totalAmount + ' ֏'}"></td>
+                        <td th:text="${o.deliveryDate}"></td> <!-- Дата доставки -->
                         <td><span class="badge" th:text="${o.status}"></span></td>
                         <td onclick="event.stopPropagation()">
                             <form th:if="${o.invoiceId == null}" th:action="@{'/admin/invoices/create-from-order/' + ${o.id}}" method="post">
                                 <button type="submit" class="btn-primary" style="padding:5px 10px; font-size:11px;">Счет</button>
                             </form>
-                            <span th:if="${o.invoiceId != null}"><i class="bi bi-lock-fill" style="color:#cbd5e1"></i></span>
                         </td>
                     </tr>
                     </tbody>
@@ -198,6 +208,7 @@
         </div>
     </div>
 </div>
+
 
 <!-- ДАННЫЕ И СКРИПТ -->
 <script th:inline="javascript">

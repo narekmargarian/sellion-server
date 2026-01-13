@@ -5,10 +5,7 @@ import com.sellion.sellionserver.entity.ReturnStatus;
 import com.sellion.sellionserver.repository.ReturnOrderRepository;
 import jakarta.transaction.Transactional;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.Collections;
 import java.util.List;
@@ -41,5 +38,16 @@ public class ReturnApiController {
             returnOrderRepository.saveAll(returns);
         }
         return ResponseEntity.ok(Map.of("status", "success"));
+    }
+
+
+    @PutMapping("/{id}/edit")
+    public ResponseEntity<?> editReturn(@PathVariable Long id, @RequestBody Map<String, Object> payload) {
+        ReturnOrder existingReturn = returnOrderRepository.findById(id).orElseThrow();
+        Map<String, Integer> items = (Map<String, Integer>) payload.get("items");
+        existingReturn.setItems(items);
+        // Можно добавить пересчет totalAmount здесь
+        returnOrderRepository.save(existingReturn);
+        return ResponseEntity.ok("Обновлено");
     }
 }

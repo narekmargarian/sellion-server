@@ -1,6 +1,7 @@
 package com.sellion.sellionserver.services;
 
 import com.sellion.sellionserver.entity.OrderStatus;
+import com.sellion.sellionserver.entity.Product;
 import com.sellion.sellionserver.repository.OrderRepository;
 import com.sellion.sellionserver.repository.ProductRepository;
 import jakarta.transaction.Transactional;
@@ -14,48 +15,52 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class StockService {
 
-    private final OrderRepository orderRepository;
     private final ProductRepository productRepository;
+    private final OrderRepository orderRepository;
 
+    // Метод для возврата товаров из заказа обратно на склад
+    @Transactional
+    public void returnItemsToStock(Map<String, Integer> items) {
+        if (items == null) return;
+        for (Map.Entry<String, Integer> entry : items.entrySet()) {
+            productRepository.findByName(entry.getKey()).ifPresent(product -> {
+                product.setStockQuantity(product.getStockQuantity() + entry.getValue());
+                productRepository.save(product);
+            });
+        }
+    }
 
+    // Метод для списания товаров со склада
+    @Transactional
+    public void deductItemsFromStock(Map<String, Integer> items) {
+        if (items == null) return;
+        for (Map.Entry<String, Integer> entry : items.entrySet()) {
+            Product product = productRepository.findByName(entry.getKey())
+                    .orElseThrow(() -> new RuntimeException("Товар не найден: " + entry.getKey()));
+
+            if (product.getStockQuantity() < entry.getValue()) {
+                throw new RuntimeException("Недостаточно товара: " + entry.getKey());
+            }
+
+            product.setStockQuantity(product.getStockQuantity() - entry.getValue());
+            productRepository.save(product);
+        }
+    }
+
+    // Ваш существующий планировщик (обновленный)
     @Scheduled(cron = "0 */3 * * * *")
     @Transactional
     public void updateStockFromOrders() {
-        System.out.println(">>> SELLION LOG: Запуск синхронизации склада...");
-
-        // 1. Берем заказы со статусом NEW (те, что пришли с Android и еще не обработаны складом)
-        // В репозитории метод должен быть: List<Order> findAllByStatus(OrderStatus status);
+        // Берем только NEW заказы. После списания ставим PROCESSED
         orderRepository.findAllByStatus(OrderStatus.NEW).forEach(order -> {
-
-            Map<String, Integer> items = order.getItems();
-            if (items != null && !items.isEmpty()) {
-
-                for (Map.Entry<String, Integer> entry : items.entrySet()) {
-                    String productName = entry.getKey();
-                    Integer quantityInOrder = entry.getValue();
-
-                    // 2. Ищем товар по имени и обновляем его количество на складе
-                    productRepository.findByName(productName).ifPresent(product -> {
-                        int currentStock = (product.getStockQuantity() != null) ? product.getStockQuantity() : 0;
-
-                        // Вычитаем заказанное количество
-                        int newStock = currentStock - quantityInOrder;
-
-                        // Защита: остаток не может быть меньше 0
-                        product.setStockQuantity(Math.max(newStock, 0));
-
-                        productRepository.save(product);
-                        System.out.println(">>> Товар [" + productName + "] списан: " + quantityInOrder + " шт.");
-                    });
-                }
+            try {
+                deductItemsFromStock(order.getItems());
+                order.setStatus(OrderStatus.PROCESSED);
+                orderRepository.save(order);
+            } catch (Exception e) {
+                System.err.println("Ошибка авто-списания заказа #" + order.getId() + ": " + e.getMessage());
+                // Можно поставить статус ERROR или оставить NEW до исправления остатков
             }
-
-            // 3. МЕНЯЕМ СТАТУС НА PROCESSED.
-            // Это гарантирует, что при следующем запуске (через 3 мин) этот заказ не будет обработан повторно.
-            order.setStatus(OrderStatus.PROCESSED);
-            orderRepository.save(order);
         });
-
-        System.out.println(">>> SELLION LOG: Синхронизация склада завершена успешно.");
     }
 }
