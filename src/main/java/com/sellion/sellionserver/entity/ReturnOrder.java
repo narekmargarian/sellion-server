@@ -7,6 +7,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.time.LocalDateTime;
 import java.util.Map;
 
 @Entity
@@ -32,12 +33,14 @@ public class ReturnOrder {
     @JsonProperty("returnDate")
     private String returnDate;
 
-    private String status;
+    @Enumerated(EnumType.STRING)
+    private ReturnStatus status = ReturnStatus.DRAFT;
 
     @JsonProperty("managerId")
     private String managerId;
 
-    // НОВОЕ ПОЛЕ: Сумма возврата
     @JsonProperty("totalAmount")
     private Double totalAmount;
+
+    private LocalDateTime createdAt = LocalDateTime.now();
 }

@@ -7,6 +7,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.time.LocalDateTime;
 import java.util.Map;
 
 
@@ -37,12 +38,18 @@ public class Order {
     @JsonProperty("needsSeparateInvoice")
     private boolean needsSeparateInvoice;
 
-    private String status;
+    @Enumerated(EnumType.STRING)
+    private OrderStatus status = OrderStatus.NEW;
 
     @JsonProperty("managerId")
     private String managerId;
 
-    // НОВОЕ ПОЛЕ: Итоговая сумма заказа
     @JsonProperty("totalAmount")
     private Double totalAmount;
+
+    // НОВОЕ ПОЛЕ: Ссылка на инвойс (счёт), если он создан
+    private Long invoiceId;
+
+    // НОВОЕ ПОЛЕ: Дата создания заказа (нужно для фильтров оператора)
+    private LocalDateTime createdAt = LocalDateTime.now();
 }

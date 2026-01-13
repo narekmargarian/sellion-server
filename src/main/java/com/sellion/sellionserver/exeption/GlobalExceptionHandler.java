@@ -1,4 +1,4 @@
-package com.sellion.sellionserver.api.exeption;
+package com.sellion.sellionserver.exeption;
 
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.ui.Model;

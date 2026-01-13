@@ -1,38 +1,26 @@
 package com.sellion.sellionserver.controller;
 
+import com.sellion.sellionserver.entity.Client;
 import com.sellion.sellionserver.repository.ClientRepository;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.*;
 
 @Controller
 @RequestMapping("/admin/clients")
+@RequiredArgsConstructor
 public class ClientWebController {
-
     private final ClientRepository clientRepository;
 
-    public ClientWebController(ClientRepository clientRepository) {
-        this.clientRepository = clientRepository;
+    // ... listClients и updateClient методы не нужны, т.к. данные в MainWebController ...
+
+    @PostMapping("/create")
+    public String createClient(@ModelAttribute Client client) {
+        clientRepository.save(client);
+        // Редиректим обратно на /admin и указываем открыть вкладку клиентов
+        return "redirect:/admin?activeTab=tab-clients";
     }
 
-    @GetMapping
-    public String listClients(Model model) {
-        model.addAttribute("clients", clientRepository.findAll());
-        return "clients-list";
-    }
 
-    @PostMapping("/update")
-    public String updateClient(@RequestParam("id") Long id,
-                               @RequestParam("debt") Double debt,
-                               @RequestParam("routeDay") String routeDay) {
-        clientRepository.findById(id).ifPresent(c -> {
-            c.setDebt(debt);
-            c.setRouteDay(routeDay);
-            clientRepository.save(c);
-        });
-        return "redirect:/admin/clients";
-    }
 }

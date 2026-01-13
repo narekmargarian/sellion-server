@@ -1,5 +1,6 @@
 package com.sellion.sellionserver.services;
 
+import com.sellion.sellionserver.entity.OrderStatus;
 import com.sellion.sellionserver.repository.OrderRepository;
 import com.sellion.sellionserver.repository.ProductRepository;
 import jakarta.transaction.Transactional;
@@ -16,35 +17,45 @@ public class StockService {
     private final OrderRepository orderRepository;
     private final ProductRepository productRepository;
 
-    // Запуск каждые 3 часа: 0 0 */3 * * *
-    // Запуск каждые 10 минут:  "0 */10 * * * *"
+
     @Scheduled(cron = "0 */3 * * * *")
     @Transactional
     public void updateStockFromOrders() {
-        System.out.println(">>> ЗАПУСК СИНХРОНИЗАЦИИ СКЛАДА. (10 мин)..");
+        System.out.println(">>> SELLION LOG: Запуск синхронизации склада...");
 
-        // 1. Получаем все заказы со статусом PENDING (которые еще не обработаны складом)
-        orderRepository.findAllByStatus("PENDING").forEach(order -> {
+        // 1. Берем заказы со статусом NEW (те, что пришли с Android и еще не обработаны складом)
+        // В репозитории метод должен быть: List<Order> findAllByStatus(OrderStatus status);
+        orderRepository.findAllByStatus(OrderStatus.NEW).forEach(order -> {
+
             Map<String, Integer> items = order.getItems();
+            if (items != null && !items.isEmpty()) {
 
-            for (Map.Entry<String, Integer> entry : items.entrySet()) {
-                String productName = entry.getKey();
-                Integer quantityInOrder = entry.getValue();
+                for (Map.Entry<String, Integer> entry : items.entrySet()) {
+                    String productName = entry.getKey();
+                    Integer quantityInOrder = entry.getValue();
 
-                // 2. Ищем товар в базе и уменьшаем остаток
-                productRepository.findByName(productName).ifPresent(product -> {
-                    int newStock = product.getStockQuantity() - quantityInOrder;
-                    if (newStock < 0) newStock = 0; // Защита от отрицательного остатка
-                    product.setStockQuantity(newStock);
-                    productRepository.save(product);
-                });
+                    // 2. Ищем товар по имени и обновляем его количество на складе
+                    productRepository.findByName(productName).ifPresent(product -> {
+                        int currentStock = (product.getStockQuantity() != null) ? product.getStockQuantity() : 0;
+
+                        // Вычитаем заказанное количество
+                        int newStock = currentStock - quantityInOrder;
+
+                        // Защита: остаток не может быть меньше 0
+                        product.setStockQuantity(Math.max(newStock, 0));
+
+                        productRepository.save(product);
+                        System.out.println(">>> Товар [" + productName + "] списан: " + quantityInOrder + " шт.");
+                    });
+                }
             }
 
-            // 3. Помечаем заказ как "PROCESSED" или "COMPLETED", чтобы не списывать его дважды
-            order.setStatus("PROCESSED");
+            // 3. МЕНЯЕМ СТАТУС НА PROCESSED.
+            // Это гарантирует, что при следующем запуске (через 3 мин) этот заказ не будет обработан повторно.
+            order.setStatus(OrderStatus.PROCESSED);
             orderRepository.save(order);
         });
 
-        System.out.println(">>> СКЛАД ОБНОВЛЕН УСПЕШНО.");
+        System.out.println(">>> SELLION LOG: Синхронизация склада завершена успешно.");
     }
 }

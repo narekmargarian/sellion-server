@@ -8,11 +8,12 @@ public class LoginController {
 
     @GetMapping("/login")
     public String login() {
-        return "login"; // Открывает login.html
+        return "login"; // Вернет login.html из папки templates
     }
 
     @GetMapping("/")
     public String index() {
-        return "redirect:/admin"; // Если пользователь не залогинен, Spring Security сам кинет его на /login
+        // Перенаправляем в админку. Если юзер не залогинен, Security сам кинет на /login
+        return "redirect:/admin";
     }
 }

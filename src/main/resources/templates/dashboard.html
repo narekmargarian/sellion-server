@@ -2,225 +2,209 @@
 <html lang="ru" xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sellion Office 2026 | Директор</title>
-
-    <!-- Google Fonts & Icons (Исправленные, полные ссылки) -->
-    <link href="fonts.googleapis.com" rel="stylesheet">
+    <title>Sellion ERP 2026</title>
+    <!-- Иконки Bootstrap -->
     <link rel="stylesheet" href="cdn.jsdelivr.net">
-    <link href="cdn.jsdelivr.net" rel="stylesheet">
-
-    <style>
-        :root {
-            --accent-color: #6366f1;
-            --bg-body: #f8fafc;
-        }
-
-        body {
-            font-family: 'Plus Jakarta Sans', sans-serif;
-            background-color: var(--bg-body);
-            color: #1e293b;
-            margin: 0;
-            line-height: 1.5;
-        }
-
-        .navbar { background: #ffffff; border-bottom: 1px solid #e2e8e0; padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; }
-        .navbar-brand { color: var(--accent-color); font-weight: 700; text-decoration: none; letter-spacing: 1px; }
-        .user-info { margin-right: 15px; font-size: 0.9rem; }
-        .btn-danger { background-color: #dc3545; color: white; border: none; padding: 6px 12px; border-radius: 5px; }
-
-        .container-fluid { display: flex; min-height: calc(100vh - 56px); }
-        .sidebar { width: 220px; background: white; border-right: 1px solid #e2e8e0; padding: 20px 0; }
-        .nav-link {
-            display: flex; align-items: center; padding: 10px 20px; text-decoration: none; color: #64748b; font-weight: 500;
-            border-left: 3px solid transparent; transition: all 0.2s; cursor: pointer;
-        }
-        .nav-link.active, .nav-link:hover { background-color: #f1f5f9; color: var(--accent-color); border-left-color: var(--accent-color); }
-        .nav-link i { margin-right: 10px; }
-
-        .main-content { flex-grow: 1; padding: 30px; position: relative; }
-        .card-container { background: white; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); overflow: hidden; margin-top: 20px; }
-        .header-section { display: flex; justify-content: space-between; align-items: center; padding: 0 20px; }
-
-        .table { width: 100%; border-collapse: collapse; }
-        .table thead th { padding: 15px 20px; background-color: #f8fafc; text-align: left; font-size: 0.8rem; text-transform: uppercase; }
-        .table tbody td { padding: 15px 20px; border-bottom: 1px solid #f1f5f9; }
-        .table tbody tr:last-child td { border-bottom: none; }
-
-        .badge { padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; }
-        .bg-info-subtle { background-color: #e0f2fe; color: #026aa2; }
-        .bg-light { background-color: #f1f5f9; color: #333; }
-        .badge-soft-danger { background-color: #fef2f2; color: #dc2626; padding: 6px 12px; border-radius: 8px; font-weight: bold; }
-        .fw-semibold { font-weight: 600; }
-        .text-muted { color: #64748b; }
-        .text-end { text-align: right; }
-
-        .tab-content > div { display: none; }
-        .tab-content > div.active { display: block; }
-        .footer-date { position: absolute; bottom: 10px; right: 20px; font-size: 0.7rem; color: #94a3b8; }
-    </style>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
 </head>
 <body>
 
-<!-- Navbar -->
-<nav class="navbar">
-    <a class="navbar-brand" href="#">SELLION 2026</a>
-    <div style="display: flex; align-items: center;">
-        <span class="user-info">Директор: <b th:text="${#authentication.name}">Boss</b></span>
-        <a th:href="@{/logout}" class="btn btn-danger">Выйти</a>
-    </div>
-</nav>
+<div class="sidebar">
+    <div class="brand">SELLION 2026</div>
+    <div onclick="showTab('tab-orders')" class="nav-link" id="btn-orders"><i class="bi bi-cart"></i> Заказы</div>
+    <div onclick="showTab('tab-returns')" class="nav-link" id="btn-returns"><i class="bi bi-arrow-counterclockwise"></i> Возвраты</div>
+    <div onclick="showTab('tab-clients')" class="nav-link" id="btn-clients"><i class="bi bi-people"></i> Клиенты</div>
+    <div onclick="showTab('tab-products')" class="nav-link" id="btn-products"><i class="bi bi-box-seam"></i> Склад / Цены</div>
 
-<div class="container-fluid">
-    <!-- Sidebar Menu -->
-    <div class="sidebar">
-        <!-- JS switchTab kept for local file viewing, but Spring Boot might use real links -->
-        <a href="#" class="nav-link active" onclick="switchTab(event, 'orders')"><i class="bi bi-receipt"></i> Заказы</a>
-        <a href="#" class="nav-link" onclick="switchTab(event, 'returns')"><i class="bi bi-arrow-counterclockwise"></i> Возвраты</a>
-        <a href="#" class="nav-link" onclick="switchTab(event, 'debts')"><i class="bi bi-piggy-bank"></i> Долги</a>
-        <a href="#" class="nav-link" onclick="switchTab(event, 'products')"><i class="bi bi-box-seam"></i> Товары</a>
-        <a href="#" class="nav-link" onclick="switchTab(event, 'clients')"><i class="bi bi-geo-alt"></i> Клиенты</a>
-    </div>
-
-    <!-- Main Content Area -->
-    <main class="main-content">
-        <div class="tab-content">
-            <!-- ORDERS Tab (Active by default, using Thymeleaf logic) -->
-            <div id="orders" class="active">
-                <div class="header-section">
-                    <h4 class="fw-semibold">Активность заказов</h4>
-                    <button class="btn" style="background: #e2e8e0;">Экспорт</button>
-                </div>
-                <div class="card-container">
-                    <table class="table">
-                        <thead><tr><th>ID</th><th>Менеджер</th><th>Магазин</th><th>Товары</th><th>Оплата</th></tr></thead>
-                        <tbody>
-                        <tr th:each="o : ${orders}">
-                            <td class="text-muted" th:text="${'#' + o.id}"></td>
-                            <td th:text="${o.managerId != null ? o.managerId : 'Система'}"></td> <!-- Поле Менеджер -->
-                            <td class="fw-semibold" th:text="${o.shopName}"></td>
-                            <td>
-        <span class="badge bg-light" th:each="entry : ${o.items}"
-              th:text="${entry.key + ' (' + entry.value + ') '}"></span>
-                            </td>
-                            <!-- Поле Итоговая сумма -->
-                            <td class="fw-bold" th:text="${#numbers.formatDecimal(o.totalAmount != null ? o.totalAmount : 0, 0, 'COMMA', 0, 'POINT') + ' ֏'}"></td>
-                            <td><span class="badge bg-info-subtle" th:text="${o.paymentMethod}"></span></td>
-                        </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- DEBTS Tab (Using Thymeleaf logic) -->
-            <div id="debts">
-                <div class="header-section">
-                    <h4 class="fw-semibold">Дебиторская задолженность</h4>
-                </div>
-                <div class="card-container">
-                    <table class="table">
-                        <thead><tr><th>Магазин</th><th>Адрес</th><th class="text-end">Сумма долга</th></tr></thead>
-                        <tbody>
-                        <tr th:each="c : ${clients}" th:if="${c.debt > 0}">
-                            <td class="fw-semibold" th:text="${c.name}"></td>
-                            <td th:text="${c.address}"></td>
-                            <td class="text-end"><span class="badge-soft-danger" th:text="${#numbers.formatDecimal(c.debt, 0, 'COMMA', 0, 'POINT') + ' ֏'}"></span></td>
-                        </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- PRODUCTS Tab (Using Thymeleaf logic) -->
-            <div id="products">
-                <div class="header-section">
-                    <h4 class="fw-semibold">Справочник продукции</h4>
-                    <button class="btn btn-primary">+ Новый товар</button>
-                </div>
-                <div class="card-container">
-                    <table class="table">
-                        <thead><tr><th>Категория</th><th>Название</th><th>Цена</th><th>Упаковка</th></tr></thead>
-                        <tbody>
-                        <tr th:each="p : ${products}">
-                            <td><span class="badge bg-secondary" th:text="${p.category}"></span></td>
-                            <td th:text="${p.name}"></td>
-                            <td class="fw-bold" th:text="${p.price + ' ֏'}"></td>
-                            <td th:text="${p.itemsPerBox + ' шт/кор'}"></td>
-                        </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- CLIENTS Tab (Using Thymeleaf logic) -->
-            <div id="clients">
-                <div class="header-section">
-                    <h4 class="fw-semibold">База магазинов</h4>
-                </div>
-                <div class="card-container">
-                    <table class="table">
-                        <thead><tr><th>Название</th><th>ИНН</th><th>Маршрут</th></tr></thead>
-                        <tbody>
-                        <tr th:each="c : ${clients}">
-                            <td th:text="${c.name}"></td>
-                            <td th:text="${c.inn}"></td>
-                            <td th:text="${c.routeDay}"></td>
-                        </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- RETURNS Tab (Using Thymeleaf logic) -->
-            <div id="returns">
-                <div class="header-section">
-                    <h4 class="fw-semibold">Журнал возвратов</h4>
-                </div>
-                <div class="card-container">
-                    <table class="table">
-                        <thead><tr><th>Дата</th><th>Магазин</th><th>Причина</th><th>Сумма</th></tr></thead>
-                        <tbody>
-                        <tr th:each="r : ${returns}">
-                            <td th:text="${r.returnDate}"></td>
-                            <td th:text="${r.managerId}"></td> <!-- Поле Менеджер -->
-                            <td th:text="${r.shopName}"></td>
-                            <td th:text="${r.returnReason}"></td>
-                            <td>
-                                <ul style="list-style:none; padding:0; margin:0; font-size: 0.8rem;">
-                                    <li th:each="item : ${r.items}" th:text="${item.key + ': ' + item.value}"></li>
-                                </ul>
-                            </td>
-                            <td class="fw-bold text-danger" th:text="${r.totalAmount + ' ֏'}"></td> <!-- Поле Сумма -->
-                        </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-
-        </div>
-        <div class="footer-date">12 января 2026 г., понедельник.</div>
-    </main>
+    <form th:action="@{/logout}" method="post" style="margin-top:auto; padding:20px;">
+        <button type="submit" style="width:100%; background:#ef4444; color:white; border:none; padding:10px; border-radius:8px; cursor:pointer; font-weight:700;">ВЫХОД</button>
+    </form>
 </div>
 
-<!-- Simple JS for tab switching in static mode, will be overridden by Bootstrap JS if linked -->
-<script>
-    function switchTab(event, tabId) {
-        event.preventDefault();
+<div class="main">
+    <div class="scroll-area">
 
-        // 1. Скрываем все вкладки
-        const contents = document.querySelectorAll('.tab-content > div');
-        contents.forEach(content => content.classList.remove('active'));
+        <!-- ВКЛАДКА ЗАКАЗЫ -->
+        <div id="tab-orders" class="tab-pane">
+            <div class="summary-card">
+                <div class="summary-item"><small>Заказов всего:</small> <span th:text="${totalOrdersCount}">0</span></div>
+                <div class="summary-item"><small>Общая сумма:</small> <span class="price-up" th:text="${#numbers.formatInteger(totalOrdersSum, 1, 'WHITESPACE') + ' ֏'}">0</span></div>
+            </div>
+            <div style="margin-bottom: 20px; display:flex; gap:15px;">
+                <form method="get" th:action="@{/admin}">
+                    <input type="hidden" name="activeTab" value="tab-orders">
+                    <select name="orderManagerId" onchange="this.form.submit()" style="padding:8px; border-radius:8px; border:1px solid #ddd;">
+                        <option value="">Все менеджеры (Заказы)</option>
+                        <option th:each="m : ${managers}" th:value="${m}" th:text="${m}" th:selected="${m == selectedOrderManager}"></option>
+                    </select>
+                </form>
+                <button class="btn-primary" onclick="alert('Создание заказа...')">+ Создать заказ</button>
+            </div>
+            <div class="card">
+                <table class="table">
+                    <thead><tr><th>Дата</th><th>Менеджер</th><th>Магазин</th><th>Сумма</th><th>Статус</th><th>Действие</th></tr></thead>
+                    <tbody>
+                    <tr th:each="o : ${orders}" th:onclick="'openOrderDetails(' + ${o.id} + ')'" style="cursor:pointer;">
+                        <td th:text="${#temporals.format(o.createdAt, 'dd.MM.yyyy HH:mm')}"></td>
+                        <td th:text="${o.managerId}" style="font-weight:600; color:var(--accent);"></td>
+                        <td th:text="${o.shopName}" style="font-weight:700;"></td>
+                        <td class="price-up" th:text="${o.totalAmount + ' ֏'}"></td>
+                        <td><span class="badge" th:text="${o.status}"></span></td>
+                        <td onclick="event.stopPropagation()">
+                            <form th:if="${o.invoiceId == null}" th:action="@{'/admin/invoices/create-from-order/' + ${o.id}}" method="post">
+                                <button type="submit" class="btn-primary" style="padding:5px 10px; font-size:11px;">Счет</button>
+                            </form>
+                            <span th:if="${o.invoiceId != null}"><i class="bi bi-lock-fill" style="color:#cbd5e1"></i></span>
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
 
-        // 2. Убираем активный класс у всех ссылок
-        const links = document.querySelectorAll('.nav-link');
-        links.forEach(link => link.classList.remove('active'));
+        <!-- ВКЛАДКА ВОЗВРАТЫ -->
+        <div id="tab-returns" class="tab-pane">
+            <div class="summary-card" style="background: #fff1f2; border-color: #fecdd3;">
+                <div class="summary-item"><small>Возвратов всего:</small> <span th:text="${totalReturnsCount}">0</span></div>
+                <div class="summary-item"><small>Сумма возвратов:</small> <span class="price-down" th:text="${#numbers.formatInteger(totalReturnsSum, 1, 'WHITESPACE') + ' ֏'}">0</span></div>
+            </div>
+            <div style="margin-bottom: 20px;">
+                <form method="get" th:action="@{/admin}">
+                    <input type="hidden" name="activeTab" value="tab-returns">
+                    <select name="returnManagerId" onchange="this.form.submit()" style="padding:8px; border-radius:8px; border:1px solid #ddd;">
+                        <option value="">Все менеджеры (Возвраты)</option>
+                        <option th:each="m : ${managers}" th:value="${m}" th:text="${m}" th:selected="${m == selectedReturnManager}"></option>
+                    </select>
+                </form>
+            </div>
+            <div class="card">
+                <table class="table">
+                    <thead><tr><th>Дата</th><th>Менеджер</th><th>Магазин</th><th>Причина</th><th>Сумма</th></tr></thead>
+                    <tbody>
+                    <tr th:each="r : ${returns}" th:onclick="'openReturnDetails(' + ${r.id} + ')'" style="cursor:pointer;">
+                        <td th:text="${r.returnDate}"></td>
+                        <td th:text="${r.managerId}" style="font-weight:600; color:var(--accent);"></td>
+                        <td th:text="${r.shopName}" style="font-weight:700;"></td>
+                        <td th:text="${r.returnReason}"></td>
+                        <td class="price-down" th:text="${r.totalAmount + ' ֏'}"></td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
 
-        // 3. Показываем нужную вкладку и подсвечиваем ссылку
-        document.getElementById(tabId).classList.add('active');
-        event.currentTarget.classList.add('active');
-    }
+        <!-- ВКЛАДКА КЛИЕНТЫ -->
+        <div id="tab-clients" class="tab-pane">
+            <button class="btn-primary" style="margin-bottom:20px;" onclick="openModal('modal-client')">+ Добавить клиента</button>
+            <div class="card">
+                <table class="table">
+                    <thead><tr><th>Магазин</th><th>Адрес</th><th>Долг</th></tr></thead>
+                    <tbody>
+                    <tr th:each="c : ${clients}"><td th:text="${c.name}"></td><td th:text="${c.address}"></td><td class="price-down" th:text="${c.debt + ' ֏'}"></td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ВКЛАДКА СКЛАД -->
+        <div id="tab-products" class="tab-pane">
+            <div class="card">
+                <table class="table">
+                    <thead><tr><th>Товар</th><th>Цена</th><th>Остаток</th><th>Упак.</th><th>Штрих-код</th><th>Действие</th></tr></thead>
+                    <tbody>
+                    <tr th:each="p : ${products}">
+                        <td th:text="${p.name}" style="font-weight:600"></td>
+                        <td th:text="${p.price + ' ֏'}"></td>
+                        <td th:text="${p.stockQuantity + ' шт.'}"></td>
+                        <td th:text="${p.itemsPerBox}"></td>
+                        <td th:text="${p.barcode}"></td>
+                        <td><button class="btn-primary" style="padding:5px 10px;" th:onclick="'editProduct(' + ${p.id} + ')'">Изменить</button></td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<!-- МОДАЛЬНЫЕ ОКНА -->
+
+<!-- 1. ПРОСМОТР -->
+<div id="modal-order-view" class="modal">
+    <div class="modal-content" style="width: 850px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h2 id="modal-title" style="margin: 0;">Детали операции</h2>
+            <button onclick="closeModal('modal-order-view')" style="background: none; border: none; font-size: 24px; cursor: pointer;">&times;</button>
+        </div>
+        <div id="order-info" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 20px; background: #f8fafc; padding: 15px; border-radius: 10px;"></div>
+
+        <table class="table">
+            <thead>
+            <tr><th>Продукт</th><th>Кол-во</th><th>Прайс</th><th>Итог</th><th>Категория</th></tr>
+            </thead>
+            <tbody id="order-items-body"></tbody>
+        </table>
+
+        <div style="text-align: right; margin-top: 20px; font-size: 18px; font-weight: 700;" id="order-total-price"></div>
+        <div id="order-footer-actions" style="margin-top: 30px; display: flex; gap: 10px; justify-content: flex-end;"></div>
+    </div>
+</div>
+
+<!-- 2. ИЗМЕНЕНИЕ ЗАКАЗА -->
+<div id="modal-order-edit" class="modal">
+    <div class="modal-content">
+        <h3>Редактирование состава</h3>
+        <input type="hidden" id="edit-order-id">
+        <div id="edit-items-list" style="margin-bottom:20px; max-height: 400px; overflow-y: auto;"></div>
+        <div style="display:flex; gap:10px;">
+            <button class="btn-primary" onclick="saveOrderChanges()" style="flex:1">Сохранить</button>
+            <button class="btn-primary" style="background:#64748b; flex:1;" onclick="closeModal('modal-order-edit')">Отмена</button>
+        </div>
+    </div>
+</div>
+
+<!-- 3. НОВЫЙ КЛИЕНТ -->
+<div id="modal-client" class="modal">
+    <div class="modal-content">
+        <h3>Новый магазин</h3>
+        <form th:action="@{/admin/clients/create}" method="post">
+            <input type="text" name="name" placeholder="Название магазина" required style="width:100%; padding:11px; margin-bottom:15px; border-radius:8px; border:1px solid #ddd; box-sizing:border-box;">
+            <input type="text" name="address" placeholder="Адрес" style="width:100%; padding:11px; margin-bottom:15px; border-radius:8px; border:1px solid #ddd; box-sizing:border-box;">
+            <input type="text" name="phone" placeholder="Телефон" style="width:100%; padding:11px; margin-bottom:15px; border-radius:8px; border:1px solid #ddd; box-sizing:border-box;">
+            <div style="display:flex; gap:10px;">
+                <button type="submit" class="btn-primary" style="flex:1">Сохранить</button>
+                <button type="button" onclick="closeModal('modal-client')" style="flex:1; background:#eee; color:#333; border:none; padding:10px; border-radius:8px; cursor:pointer;">Отмена</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 4. ИЗМЕНЕНИЕ ТОВАРА -->
+<div id="modal-product-edit" class="modal">
+    <div class="modal-content">
+        <h3>Редактирование товара</h3>
+        <input type="hidden" id="edit-product-id">
+        <div style="display:grid; gap:10px;">
+            <div><small>Название</small><br><input type="text" id="edit-product-name" style="width:100%; padding:8px;"></div>
+            <div><small>Цена (֏)</small><br><input type="number" id="edit-product-price" style="width:100%; padding:8px;"></div>
+            <div><small>Остаток (шт)</small><br><input type="number" id="edit-product-stock" style="width:100%; padding:8px;"></div>
+            <div><small>В упаковке</small><br><input type="number" id="edit-product-box" style="width:100%; padding:8px;"></div>
+            <div><small>Штрих-код</small><br><input type="text" id="edit-product-barcode" style="width:100%; padding:8px;"></div>
+        </div>
+        <div style="display:flex; gap:10px; margin-top:20px;">
+            <button class="btn-primary" onclick="saveProductChanges()" style="flex:1">Обновить</button>
+            <button class="btn-primary" style="background:#64748b; flex:1;" onclick="closeModal('modal-product-edit')">Отмена</button>
+        </div>
+    </div>
+</div>
+
+<!-- ДАННЫЕ И СКРИПТ -->
+<script th:inline="javascript">
+    const ordersData = [[${orders}]];
+    const returnsData = [[${returns}]];
+    const productsData = [[${products}]];
 </script>
-<script src="cdn.jsdelivr.net"></script>
+<script th:src="@{/js/script.js}"></script>
 </body>
 </html>

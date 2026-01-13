@@ -1,6 +1,7 @@
 package com.sellion.sellionserver.api;
 
 import com.sellion.sellionserver.entity.ReturnOrder;
+import com.sellion.sellionserver.entity.ReturnStatus;
 import com.sellion.sellionserver.repository.ReturnOrderRepository;
 import jakarta.transaction.Transactional;
 import org.springframework.http.ResponseEntity;
@@ -30,19 +31,15 @@ public class ReturnApiController {
      */
     @Transactional
     @PostMapping("/sync")
-    public ResponseEntity<Map<String, String>> syncReturns(@RequestBody List<ReturnOrder> returns) {
-        // Логируем количество полученных записей для отладки в консоли сервера
-        System.out.println(">>> ПОЛУЧЕНО ВОЗВРАТОВ: " + (returns != null ? returns.size() : 0));
-
-        if (returns != null && !returns.isEmpty()) {
+    public ResponseEntity<?> syncReturns(@RequestBody List<ReturnOrder> returns) {
+        if (returns != null) {
             for (ReturnOrder ret : returns) {
-                // Обнуляем ID, чтобы MySQL использовал AUTO_INCREMENT
                 ret.setId(null);
+                // ИСПРАВЛЕНИЕ: Используйте DRAFT вместо PENDING
+                ret.setStatus(ReturnStatus.DRAFT);
             }
             returnOrderRepository.saveAll(returns);
         }
-
-        // Возвращаем JSON {"status": "success"}
-        return ResponseEntity.ok(Collections.singletonMap("status", "success"));
+        return ResponseEntity.ok(Map.of("status", "success"));
     }
 }

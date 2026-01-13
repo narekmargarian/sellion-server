@@ -1,6 +1,7 @@
 package com.sellion.sellionserver.controller;
 
 import com.sellion.sellionserver.repository.ProductRepository;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -10,32 +11,18 @@ import org.springframework.web.bind.annotation.RequestParam;
 
 @Controller
 @RequestMapping("/admin/products")
+@RequiredArgsConstructor
 public class ProductWebController {
-
     private final ProductRepository productRepository;
 
-    public ProductWebController(ProductRepository productRepository) {
-        this.productRepository = productRepository;
-    }
+    // ... listProducts метод не нужен ...
 
-    // 1. Отображение страницы со списком товаров
-    @GetMapping
-    public String listProducts(Model model) {
-        model.addAttribute("products", productRepository.findAll());
-        return "products-list"; // Имя твоего HTML файла (без .html)
-    }
-
-    // 2. Обработка формы обновления цены
     @PostMapping("/update-price")
-    public String updatePrice(@RequestParam("id") Long id,
-                              @RequestParam("newPrice") Double newPrice) {
-
-        productRepository.findById(id).ifPresent(product -> {
-            product.setPrice(newPrice);
-            productRepository.save(product);
+    public String updatePrice(@RequestParam("id") Long id, @RequestParam("newPrice") Double newPrice) {
+        productRepository.findById(id).ifPresent(p -> {
+            p.setPrice(newPrice);
+            productRepository.save(p);
         });
-
-        // После обновления возвращаем пользователя обратно на список товаров
-        return "redirect:/admin/products";
+        return "redirect:/admin?activeTab=tab-products";
     }
 }
