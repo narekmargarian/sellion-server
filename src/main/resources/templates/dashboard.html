@@ -55,11 +55,12 @@
                     </thead>
                     <tbody>
                     <tr th:each="o : ${orders}" th:onclick="'openOrderDetails(' + ${o.id} + ')'" style="cursor:pointer;">
-                        <td th:text="${#temporals.format(o.createdAt, 'dd.MM.yyyy HH:mm')}"></td>
+<!--                        <td th:text="${#temporals.format(o.createdAt, 'dd.MM.yyyy HH:mm')}"></td>-->
+                        <td th:text="${o.createdAt}"></td>
                         <td th:text="${o.managerId}" style="font-weight:600; color:var(--accent);"></td>
                         <td th:text="${o.shopName}" style="font-weight:700;"></td>
                         <td class="price-up" th:text="${o.totalAmount + ' ֏'}"></td>
-                        <td th:text="${o.deliveryDate}"></td> <!-- Дата доставки -->
+                        <td th:text="${o.deliveryDate}"></td>
                         <td><span class="badge" th:text="${o.status}"></span></td>
                         <td onclick="event.stopPropagation()">
                             <form th:if="${o.invoiceId == null}" th:action="@{'/admin/invoices/create-from-order/' + ${o.id}}" method="post">
@@ -140,74 +141,57 @@
 
 <!-- МОДАЛЬНЫЕ ОКНА -->
 
-<!-- 1. ПРОСМОТР -->
+<!-- 1. ПРОСМОТР И РЕДАКТИРОВАНИЕ -->
 <div id="modal-order-view" class="modal">
     <div class="modal-content" style="width: 850px;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
             <h2 id="modal-title" style="margin: 0;">Детали операции</h2>
             <button onclick="closeModal('modal-order-view')" style="background: none; border: none; font-size: 24px; cursor: pointer;">&times;</button>
         </div>
-        <div id="order-info" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 20px; background: #f8fafc; padding: 15px; border-radius: 10px;"></div>
+
+        <div id="order-info" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; background: #f8fafc; padding: 15px; border-radius: 10px; margin-bottom: 20px;">
+            <!-- Сюда JS вставит данные -->
+        </div>
 
         <table class="table">
             <thead>
-            <tr><th>Продукт</th><th>Кол-во</th><th>Прайс</th><th>Итог</th><th>Категория</th></tr>
+            <tr>
+                <th>Товар</th>
+                <th>Кол-во</th>
+                <th>Цена</th>
+                <th>Итого</th>
+                <th>Категория</th>
+            </tr>
             </thead>
-            <tbody id="order-items-body"></tbody>
+            <tbody id="order-items-body">
+            <!-- Сюда JS вставит список товаров -->
+            </tbody>
         </table>
 
-        <div style="text-align: right; margin-top: 20px; font-size: 18px; font-weight: 700;" id="order-total-price"></div>
-        <div id="order-footer-actions" style="margin-top: 30px; display: flex; gap: 10px; justify-content: flex-end;"></div>
-    </div>
-</div>
-
-<!-- 2. ИЗМЕНЕНИЕ ЗАКАЗА -->
-<div id="modal-order-edit" class="modal">
-    <div class="modal-content">
-        <h3>Редактирование состава</h3>
-        <input type="hidden" id="edit-order-id">
-        <div id="edit-items-list" style="margin-bottom:20px; max-height: 400px; overflow-y: auto;"></div>
-        <div style="display:flex; gap:10px;">
-            <button class="btn-primary" onclick="saveOrderChanges()" style="flex:1">Сохранить</button>
-            <button class="btn-primary" style="background:#64748b; flex:1;" onclick="closeModal('modal-order-edit')">Отмена</button>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 20px; padding-top: 20px; border-top: 2px solid #eee;">
+            <div id="order-total-price" style="font-size: 20px; font-weight: 800; color: var(--accent);"></div>
+            <div id="order-footer-actions" style="display: flex; gap: 10px;">
+                <!-- Кнопки управления -->
+            </div>
         </div>
     </div>
 </div>
 
-<!-- 3. НОВЫЙ КЛИЕНТ -->
-<div id="modal-client" class="modal">
-    <div class="modal-content">
-        <h3>Новый магазин</h3>
-        <form th:action="@{/admin/clients/create}" method="post">
-            <input type="text" name="name" placeholder="Название магазина" required style="width:100%; padding:11px; margin-bottom:15px; border-radius:8px; border:1px solid #ddd; box-sizing:border-box;">
-            <input type="text" name="address" placeholder="Адрес" style="width:100%; padding:11px; margin-bottom:15px; border-radius:8px; border:1px solid #ddd; box-sizing:border-box;">
-            <input type="text" name="phone" placeholder="Телефон" style="width:100%; padding:11px; margin-bottom:15px; border-radius:8px; border:1px solid #ddd; box-sizing:border-box;">
-            <div style="display:flex; gap:10px;">
-                <button type="submit" class="btn-primary" style="flex:1">Сохранить</button>
-                <button type="button" onclick="closeModal('modal-client')" style="flex:1; background:#eee; color:#333; border:none; padding:10px; border-radius:8px; cursor:pointer;">Отмена</button>
-            </div>
-        </form>
-    </div>
-</div>
-
-<!-- 4. ИЗМЕНЕНИЕ ТОВАРА -->
+<!-- МОДАЛКА СКЛАДА (ПРОДУКТЫ) -->
 <div id="modal-product-edit" class="modal">
     <div class="modal-content">
-        <h3>Редактирование товара</h3>
+        <h2>Изменить товар</h2>
         <input type="hidden" id="edit-product-id">
-        <div style="display:grid; gap:10px;">
-            <div><small>Название</small><br><input type="text" id="edit-product-name" style="width:100%; padding:8px;"></div>
-            <div><small>Цена (֏)</small><br><input type="number" id="edit-product-price" style="width:100%; padding:8px;"></div>
-            <div><small>Остаток (шт)</small><br><input type="number" id="edit-product-stock" style="width:100%; padding:8px;"></div>
-            <div><small>В упаковке</small><br><input type="number" id="edit-product-box" style="width:100%; padding:8px;"></div>
-            <div><small>Штрих-код</small><br><input type="text" id="edit-product-barcode" style="width:100%; padding:8px;"></div>
-        </div>
-        <div style="display:flex; gap:10px; margin-top:20px;">
-            <button class="btn-primary" onclick="saveProductChanges()" style="flex:1">Обновить</button>
-            <button class="btn-primary" style="background:#64748b; flex:1;" onclick="closeModal('modal-product-edit')">Отмена</button>
+        <label>Название</label><input type="text" id="edit-product-name" class="qty-input" style="width:100%; text-align:left; margin-bottom:10px;">
+        <label>Цена</label><input type="number" id="edit-product-price" class="qty-input" style="width:100%; text-align:left; margin-bottom:10px;">
+        <label>Остаток</label><input type="number" id="edit-product-stock" class="qty-input" style="width:100%; text-align:left; margin-bottom:10px;">
+        <div style="margin-top:20px; display:flex; gap:10px;">
+            <button class="btn-primary" onclick="saveProductChanges()">Сохранить</button>
+            <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-product-edit')">Отмена</button>
         </div>
     </div>
 </div>
+
 
 
 <!-- ДАННЫЕ И СКРИПТ -->
@@ -215,6 +199,7 @@
     const ordersData = [[${orders}]];
     const returnsData = [[${returns}]];
     const productsData = [[${products}]];
+    const clientsData = [[${clients}]];
 </script>
 <script th:src="@{/js/script.js}"></script>
 </body>

@@ -13,6 +13,8 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 
+import java.time.LocalDateTime;
+
 @Controller
 @RequestMapping("/admin/invoices")
 @RequiredArgsConstructor
@@ -42,5 +44,21 @@ public class InvoiceWebController {
 
         // Возвращаемся на главную, открывая вкладку счетов
         return "redirect:/admin?activeTab=tab-invoices";
+    }
+
+    @GetMapping("/print/{id}")
+    public String printInvoice(@PathVariable Long id, Model model) {
+        Invoice invoice = invoiceRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Счет не найден"));
+
+        // Получаем оригинальный заказ, чтобы вытащить список товаров
+        Order order = invoice.getOrder();
+
+        model.addAttribute("invoice", invoice);
+        model.addAttribute("order", order);
+        model.addAttribute("items", order.getItems());
+        model.addAttribute("now", LocalDateTime.now());
+
+        return "invoice-print"; // Создадим этот шаблон ниже
     }
 }

@@ -33,8 +33,9 @@ public class Order {
     private String deliveryDate;
 
 
+    @Enumerated(EnumType.STRING) // Храним название Enum в базе как строку
     @JsonProperty("paymentMethod")
-    private String paymentMethod;
+    private PaymentMethod paymentMethod;
 
     @JsonProperty("needsSeparateInvoice")
     private boolean needsSeparateInvoice;
@@ -52,5 +53,11 @@ public class Order {
     private Long invoiceId;
 
     // НОВОЕ ПОЛЕ: Дата создания заказа (нужно для фильтров оператора)
-    private LocalDateTime createdAt = LocalDateTime.now();
+
+    private String createdAt;
+
+
+
+
 }
+
