@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="ru" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: sans-serif; padding: 20px; }
+        .header { display: flex; justify-content: space-between; border-bottom: 2px solid #000; }
+        .items-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        .items-table th, .items-table td { border: 1px solid #333; padding: 8px; }
+        .total { text-align: right; margin-top: 20px; font-weight: bold; font-size: 1.2em; }
+    </style>
+</head>
+<body>
+<div class="header">
+    <div>
+        <h2>СЧЕТ № <span th:text="${invoice.invoiceNumber}"></span></h2>
+        <p>Клиент: <b th:text="${invoice.shopName}"></b></p>
+    </div>
+    <div style="text-align: right;">
+        <p>Дата: <span th:text="${#temporals.format(invoice.createdAt, 'dd.MM.yyyy')}"></span></p>
+    </div>
+</div>
+
+<table class="items-table">
+    <thead>
+    <tr><th>Товар</th><th>Кол-во</th></tr>
+    </thead>
+    <tbody>
+    <tr th:each="entry : ${items}">
+        <td th:text="${entry.key}"></td>
+        <td th:text="${entry.value}"></td>
+    </tr>
+    </tbody>
+</table>
+
+<div class="total">
+    ИТОГО: <span th:text="${#numbers.formatInteger(invoice.totalAmount, 1, 'WHITESPACE') + ' ֏'}"></span>
+</div>
+</body>
+</html>

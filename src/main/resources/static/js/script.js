@@ -101,36 +101,42 @@ function updateRowInTable(order) {
 
 // --- 2. Логика состава (общая) ---
 
-async function applySingleQty(encodedName) {
+function applySingleQty(encodedName) {
     const name = decodeURIComponent(encodedName);
     const input = document.getElementById(`input-qty-${encodedName}`);
+
     if (!input) return;
 
     let newVal = parseInt(input.value);
-    if (isNaN(newVal) || newVal < 0) {
-        newVal = 0;
-        input.value = 0;
-        showStatus("Количество не может быть отрицательным", true);
-    }
 
-    const product = productsData.find(p => p.name === name);
-    const row = input.closest('tr');
-
-    if (product && newVal > product.stockQuantity) {
-        row.style.backgroundColor = "#fee2e2";
-        showStatus(`Недостаточно товара: ${name}. На складе: ${product.stockQuantity}`, true);
-        return;
+    // 1. Логика удаления при 0 или пустом вводе
+    if (isNaN(newVal) || newVal <= 0) {
+        delete tempItems[name];
+        showStatus(`Товар "${name}" удален`);
     } else {
-        row.style.backgroundColor = "";
+        // 2. Проверка остатка на складе (стандарт 2026)
+        const product = productsData.find(p => p.name === name);
+        if (product && newVal > product.stockQuantity) {
+            showStatus(`Недостаточно товара! Доступно: ${product.stockQuantity}`, true);
+            input.value = product.stockQuantity; // Сбрасываем до максимума
+            tempItems[name] = product.stockQuantity;
+        } else {
+            tempItems[name] = newVal;
+            showStatus(`Товар "${name}" обновлен ✅`);
+        }
     }
 
-    tempItems[name] = newVal;
-    let newTotal = calculateCurrentTempTotal();
-
-    document.getElementById('order-total-price').innerText = "Предварительно: " + newTotal.toLocaleString() + " ֏";
+    // 3. Перерисовываем таблицу
     renderItemsTable(tempItems, true);
-    showStatus(`Товар "${name}" зафиксирован ✅`);
+
+    // 4. Обновляем сумму (используем вашу функцию расчета)
+    let newTotal = calculateCurrentTempTotal();
+    const totalPriceElement = document.getElementById('order-total-price');
+    if (totalPriceElement) {
+        totalPriceElement.innerText = "Предварительно: " + newTotal.toLocaleString() + " ֏";
+    }
 }
+
 
 function addItemToEdit() {
     const name = document.getElementById('add-item-select').value;
@@ -209,6 +215,7 @@ function renderItemsTable(itemsMap, isEdit) {
 
 // --- 4. Основные функции карточки заказа ---
 
+
 function openOrderDetails(id) {
     const order = ordersData.find(o => o.id == id);
     if (!order) return;
@@ -236,14 +243,30 @@ function openOrderDetails(id) {
     document.getElementById('order-total-price').innerText = "Итого: " + (order.totalAmount || 0).toLocaleString() + " ֏";
 
     const footer = document.getElementById('order-footer-actions');
-    footer.innerHTML = (order.invoiceId) ?
-        `<div style="color:#991b1b; font-weight:700; background:#fee2e2; padding:10px; border-radius:8px; flex:1; text-align:center;">СЧЕТ ВЫСТАВЛЕН</div>
-         <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-order-view')">Закрыть</button>` :
-        `<button class="btn-primary" onclick="enableOrderEdit(${order.id})">Изменить данные</button>
-         <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-order-view')">Закрыть</button>`;
+
+    // Формируем кнопки в зависимости от статуса инвойса
+    if (order.invoiceId) {
+        // Если СЧЕТ ВЫСТАВЛЕН: только История и Закрыть
+        footer.innerHTML = `
+            <button class="btn-primary" style="background:#6366f1" onclick="showOrderHistory(${order.id})">📜 История</button>
+            <div style="color:#991b1b; font-weight:700; background:#fee2e2; padding:10px; border-radius:8px; flex:1; text-align:center;">СЧЕТ ВЫСТАВЛЕН</div>
+            <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-order-view')">Закрыть</button>
+        `;
+    } else {
+        // Если СЧЕТА НЕТ: История, Изменить, Отменить, Закрыть
+        footer.innerHTML = `
+            <button class="btn-primary" style="background:#6366f1" onclick="showOrderHistory(${order.id})">📜 История</button>
+            <button class="btn-primary" onclick="enableOrderEdit(${order.id})">Изменить</button>
+            <button class="btn-primary" style="background:#ef4444" onclick="cancelOrder(${order.id})">Отменить заказ</button>
+            <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-order-view')">Закрыть</button>
+        `;
+    }
 
     openModal('modal-order-view');
 }
+
+
+
 
 function enableOrderEdit(id) {
     const order = ordersData.find(o => o.id == id);
@@ -332,6 +355,15 @@ function openReturnDetails(id) {
     info.style.gridTemplateColumns = '1fr';
 
     const displayReason = translateReason(ret.returnReason);
+    const footer = document.getElementById('order-footer-actions');
+    if (ret.status === 'DRAFT') {
+        footer.innerHTML = `
+        <button class="btn-primary" style="background:#10b981" onclick="confirmReturn(${ret.id})">✅ Подтвердить и уменьшить долг</button>
+        <button class="btn-primary" onclick="enableReturnEdit(${ret.id})">Изменить</button>
+        <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-order-view')">Закрыть</button>`;
+    } else {
+        footer.innerHTML = `<b style="color:green">ПОДТВЕРЖДЕНО</b> <button class="btn-primary" onclick="closeModal('modal-order-view')">Закрыть</button>`;
+    }
 
     info.innerHTML = `
         <div class="modal-info-row">
@@ -349,6 +381,15 @@ function openReturnDetails(id) {
         <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-order-view')">Закрыть</button>`;
 
     openModal('modal-order-view');
+}
+
+async function confirmReturn(id) {
+    if(!confirm("Подтвердить возврат? Сумма будет вычтена из долга клиента.")) return;
+    const response = await fetch(`/api/admin/returns/${id}/confirm`, { method: 'POST' });
+    if (response.ok) {
+        alert("Возврат подтвержден!");
+        location.reload();
+    }
 }
 
 function enableReturnEdit(id) {
@@ -431,58 +472,66 @@ function cancelClientEdit(id) {
     openClientDetails(id);
 }
 
+// 2. Полная карточка клиента (все поля)
 function openClientDetails(id) {
-    window.currentClientId = id;
     const client = clientsData.find(c => c.id == id);
     if (!client) return;
+    window.currentClientId = id;
 
-    document.getElementById('modal-client-title').innerHTML = `Детали клиента <span class="badge" style="margin-left:10px;">${client.name}</span>`;
+    document.getElementById('modal-client-title').innerHTML = `Детали клиента <span class="badge">${client.name}</span>`;
 
     const info = document.getElementById('client-info');
-    info.style.gridTemplateColumns = '1fr';
-
     info.innerHTML = `
         <div class="modal-info-row">
             <div><small>Название магазина:</small><br><b>${client.name}</b></div>
-            <div><small>Адрес:</small><br><b>${client.address}</b></div>
-            <div><small>Долг:</small><br><b class="price-down">${(client.debt || 0).toLocaleString()} ֏</b></div>
+            <div><small>Владелец / ИП:</small><br><b>${client.ownerName || '---'}</b></div>
+            <div><small>ИНН:</small><br><b>${client.inn || '---'}</b></div>
+        </div>
+        <div class="modal-info-row">
+            <div><small>Телефон:</small><br><b>${client.phone || '---'}</b></div>
+            <div><small>Адрес:</small><br><b>${client.address || '---'}</b></div>
+            <div><small>Текущий долг:</small><br><b class="price-down">${(client.debt || 0).toLocaleString()} ֏</b></div>
         </div>
     `;
 
-    const footer = document.getElementById('client-footer-actions');
-    footer.innerHTML = `
+    document.getElementById('client-footer-actions').innerHTML = `
         <button class="btn-primary" onclick="enableClientEdit()">Изменить данные</button>
         <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-client-view')">Закрыть</button>`;
 
     openModal('modal-client-view');
 }
 
+
 function enableClientEdit() {
-    const id = window.currentClientId;
-    const client = clientsData.find(c => c.id == id);
+    const client = clientsData.find(c => c.id == window.currentClientId);
     if (!client) return;
 
-    document.getElementById('modal-client-title').innerText = "Редактирование клиента";
     const info = document.getElementById('client-info');
-    info.style.gridTemplateColumns = '1fr';
-
     info.innerHTML = `
         <div class="modal-info-row">
-            <div><label>Название магазина</label><input type="text" id="edit-client-name" value="${client.name}"></div>
-            <div><label>Адрес</label><input type="text" id="edit-client-address" value="${client.address}"></div>
+            <div><label>Магазин</label><input type="text" id="edit-client-name" value="${client.name}"></div>
+            <div><label>Владелец</label><input type="text" id="edit-client-owner" value="${client.ownerName || ''}"></div>
+            <div><label>ИНН</label><input type="text" id="edit-client-inn" value="${client.inn || ''}"></div>
+        </div>
+        <div class="modal-info-row">
+            <div><label>Телефон</label><input type="text" id="edit-client-phone" value="${client.phone || ''}"></div>
+            <div><label>Адрес</label><input type="text" id="edit-client-address" value="${client.address || ''}"></div>
             <div><label>Долг</label><input type="number" id="edit-client-debt" value="${client.debt || 0}"></div>
         </div>
     `;
 
-    const footer = document.getElementById('client-footer-actions');
-    footer.innerHTML = `
+    document.getElementById('client-footer-actions').innerHTML = `
         <button class="btn-primary" style="background:#10b981" onclick="saveClientChanges(${client.id})">Сохранить</button>
-        <button class="btn-primary" style="background:#64748b" onclick="cancelClientEdit(${client.id})">Отмена</button>`;
+        <button class="btn-primary" style="background:#64748b" onclick="openClientDetails(${client.id})">Отмена</button>`;
 }
+
 
 async function saveClientChanges(id) {
     const data = {
         name: document.getElementById('edit-client-name').value,
+        ownerName: document.getElementById('edit-client-owner').value,
+        inn: document.getElementById('edit-client-inn').value,
+        phone: document.getElementById('edit-client-phone').value,
         address: document.getElementById('edit-client-address').value,
         debt: parseFloat(document.getElementById('edit-client-debt').value) || 0
     };
@@ -494,22 +543,20 @@ async function saveClientChanges(id) {
             body: JSON.stringify(data)
         });
 
-        const result = await response.json();
-
         if (response.ok) {
+            // СРАЗУ ОБНОВЛЯЕМ ДАННЫЕ В ЛОКАЛЬНОМ МАССИВЕ
             const idx = clientsData.findIndex(c => c.id == id);
-            if (idx !== -1) {
-                clientsData[idx] = { ...clientsData[idx], ...data };
-                updateClientRowInTable(clientsData[idx]); // <--- Вызов обновления строки
-            }
-            showStatus("✅ Данные клиента успешно обновлены!");
-            setTimeout(() => openClientDetails(id), 1000);
+            if (idx !== -1) clientsData[idx] = { ...clientsData[idx], ...data };
+
+            // Обновляем строку в таблице
+            updateClientRowInTable(clientsData[idx]);
+            // Показываем обновленную карточку
+            openClientDetails(id);
+            showStatus("✅ Данные клиента обновлены в базе");
         } else {
-            showStatus(result.error || result.message || "Ошибка сохранения", true);
+            alert("Ошибка сохранения на сервере");
         }
-    } catch (e) {
-        showStatus("❌ Ошибка соединения", true);
-    }
+    } catch (e) { alert("Ошибка сети"); }
 }
 
 // Обновление строки клиента в главной таблице
@@ -632,6 +679,234 @@ function updateProductRowInTable(product) {
         row.cells[2].innerText = (product.stockQuantity || 0) + ' шт.';
         row.cells[3].innerText = product.itemsPerBox;
         row.cells[4].innerText = product.barcode;
+    }
+}
+function openPaymentModal(invoiceId) {
+    document.getElementById('pay-invoice-id').value = invoiceId;
+    openModal('modal-payment');
+}
+
+async function submitPayment() {
+    const data = {
+        invoiceId: document.getElementById('pay-invoice-id').value,
+        amount: parseFloat(document.getElementById('pay-amount').value),
+        comment: document.getElementById('pay-comment').value
+    };
+
+    const response = await fetch('/api/payments/register', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+    });
+
+    if (response.ok) {
+        alert("Оплата принята, долг клиента обновлен!");
+        location.reload();
+    } else {
+        alert("Ошибка при регистрации оплаты");
+    }
+}
+
+// Универсальная функция поиска
+function filterTable(inputId, tableBodyId) {
+    const input = document.getElementById(inputId);
+    const filter = input.value.toUpperCase();
+    const tbody = document.getElementById(tableBodyId);
+    if (!tbody) return;
+    const tr = tbody.getElementsByTagName("tr");
+
+    for (let i = 0; i < tr.length; i++) {
+        const text = tr[i].textContent || tr[i].innerText;
+        tr[i].style.display = text.toUpperCase().includes(filter) ? "" : "none";
+    }
+}
+
+
+// Функция отправки нового товара на сервер
+async function submitCreateProduct() {
+    const data = {
+        name: document.getElementById('new-p-name').value,
+        price: parseFloat(document.getElementById('new-p-price').value) || 0,
+        stockQuantity: parseInt(document.getElementById('new-p-qty').value) || 0,
+        itemsPerBox: parseInt(document.getElementById('new-p-box').value) || 1,
+        barcode: document.getElementById('new-p-code').value,
+        category: document.getElementById('new-p-cat').value
+    };
+
+    if(!data.name) { alert("Введите название товара!"); return; }
+
+    try {
+        const response = await fetch('/api/admin/products/create', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data)
+        });
+        if (response.ok) {
+            location.reload(); // Обновляем страницу после создания
+        } else {
+            alert("Ошибка при сохранении товара");
+        }
+    } catch (e) {
+        console.error(e);
+        alert("Ошибка сети");
+    }
+}
+// --- НОВЫЙ ЗАКАЗ ---
+function openCreateOrderModal() {
+    tempItems = {};
+    document.getElementById('modal-title').innerText = "Создание нового заказа";
+
+    let shopOptions = clientsData.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
+    let paymentOptions = paymentMethods.map(m => `<option value="${m.name || m}">${translatePayment(m)}</option>`).join('');
+
+    document.getElementById('order-info').innerHTML = `
+        <div class="modal-info-row">
+            <div><label>Магазин</label><select id="new-op-shop">${shopOptions}</select></div>
+            <div><label>Менеджер</label><input type="text" id="new-op-manager" value="ADMIN"></div>
+            <div><label>Доставка</label><input type="date" id="new-op-date" value="${new Date().toISOString().split('T')[0]}"></div>
+        </div>
+        <div class="modal-info-row">
+            <div><label>Оплата</label><select id="new-op-payment">${paymentOptions}</select></div>
+            <div><label>Фактура</label>
+                <select id="new-op-invoice">
+                    <option value="false">НЕТ</option>
+                    <option value="true">ДА</option>
+                </select>
+            </div>
+        </div>
+    `;
+    renderItemsTable(tempItems, true);
+    openModal('modal-order-view');
+}
+
+// --- НОВЫЙ ВОЗВРАТ ---
+function openCreateReturnModal() {
+    tempItems = {};
+    document.getElementById('modal-title').innerText = "Оформление нового возврата";
+
+    let shopOptions = clientsData.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
+    let reasonOptions = returnReasons.map(r => `<option value="${r.name || r}">${translateReason(r)}</option>`).join('');
+
+    document.getElementById('order-info').innerHTML = `
+        <div class="modal-info-row">
+            <div><label>Магазин</label><select id="new-op-shop">${shopOptions}</select></div>
+            <div><label>Менеджер</label><input type="text" id="new-op-manager" value="ADMIN"></div>
+        </div>
+        <div class="modal-info-row">
+            <div><label>Причина</label><select id="new-op-reason">${reasonOptions}</select></div>
+            <div><label>Дата возврата</label><input type="date" id="new-op-date" value="${new Date().toISOString().split('T')[0]}"></div>
+        </div>
+    `;
+    renderItemsTable(tempItems, true);
+    openModal('modal-order-view');
+}
+
+// --- УНИВЕРСАЛЬНОЕ СОХРАНЕНИЕ ---
+async function saveNewManualOperation(type) {
+    if (Object.keys(tempItems).length === 0) { alert("Добавьте хотя бы один товар!"); return; }
+
+    const url = type === 'order' ? '/api/admin/orders/create-manual' : '/api/admin/returns/sync';
+    const data = {
+        shopName: document.getElementById('new-op-shop').value,
+        managerId: document.getElementById('new-op-manager').value,
+        items: tempItems,
+        totalAmount: calculateCurrentTempTotal(),
+        createdAt: new Date().toISOString()
+    };
+
+    if (type === 'order') {
+        data.deliveryDate = document.getElementById('new-op-date').value;
+        data.status = "ACCEPTED";
+    } else {
+        data.returnReason = document.getElementById('new-op-reason').value;
+        data.returnDate = new Date().toISOString();
+        // Для синхронизации возвратов бэкенд ждет список объектов
+    }
+
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(type === 'order' ? data : [data]) // Возврат оборачиваем в массив
+        });
+        if (response.ok) location.reload();
+        else alert("Ошибка сервера при создании");
+    } catch (e) { alert("Ошибка сети"); }
+}
+
+function printInvoiceInline(invoiceId) {
+    // 1. Создаем iframe
+    const iframe = document.createElement('iframe');
+    iframe.style.display = "none";
+    iframe.src = "/admin/invoices/print/" + invoiceId;
+    document.body.appendChild(iframe);
+
+    // 2. Печатаем правильно через контентное окно
+    iframe.onload = function() {
+        try {
+            // В 2026 году это самый надежный способ вызова печати из фрейма
+            iframe.contentWindow.print();
+
+            // Удаляем фрейм после закрытия окна печати
+            setTimeout(() => {
+                document.body.removeChild(iframe);
+            }, 1000);
+        } catch (e) {
+            console.error("Ошибка печати:", e);
+            // Если фрейм все равно блокируется, открываем в новом окне как запасной вариант
+            window.open("/admin/invoices/print/" + invoiceId, '_blank');
+        }
+    };
+}
+
+async function cancelOrder(id) {
+    if(!confirm("Отменить заказ? Товар вернется на склад.")) return;
+    const response = await fetch(`/api/admin/orders/${id}/cancel`, { method: 'POST' });
+    if (response.ok) location.reload();
+}
+
+// Функция отмены заказа
+async function cancelOrder(id) {
+    if (!confirm("Отменить заказ? Товар вернется на склад.")) return;
+
+    try {
+        const response = await fetch(`/api/admin/orders/${id}/cancel`, { method: 'POST' });
+        if (response.ok) {
+            alert("Заказ отменен");
+            location.reload();
+        } else {
+            alert("Ошибка при отмене");
+        }
+    } catch (e) { alert("Ошибка сети"); }
+}
+
+// Функция просмотра истории (Аудит)
+async function showOrderHistory(orderId) {
+    // Для 2026 года: мы можем запрашивать логи по конкретному объекту
+    // Предполагаем, что у нас есть эндпоинт /api/admin/audit/order/{id}
+    try {
+        const response = await fetch(`/api/admin/audit/order/${orderId}`);
+        const logs = await response.json();
+
+        let historyHtml = logs.length > 0 ? logs.map(log => `
+            <div style="border-bottom:1px solid #eee; padding:10px 0;">
+                <small style="color:gray">${fmt(log.timestamp)}</small><br>
+                <b>${log.username}:</b> ${log.action}<br>
+                <i style="font-size:12px">${log.details || ''}</i>
+            </div>
+        `).join('') : '<p>История изменений пуста</p>';
+
+        // Показываем историю вместо таблицы товаров на время
+        const body = document.getElementById('order-items-body');
+        document.getElementById('modal-title').innerText = `История заказа #${orderId}`;
+        body.innerHTML = `<tr><td colspan="5">${historyHtml}</td></tr>`;
+
+        // Кнопка возврата к составу заказа
+        document.getElementById('order-footer-actions').innerHTML = `
+            <button class="btn-primary" onclick="openOrderDetails(${orderId})">🔙 Назад к заказу</button>
+        `;
+    } catch (e) {
+        alert("Эндпоинт аудита не найден. Сначала создайте контроллер для AuditLog!");
     }
 }
 

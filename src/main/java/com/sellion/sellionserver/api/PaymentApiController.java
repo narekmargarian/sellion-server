@@ -55,6 +55,7 @@ public class PaymentApiController {
             clientRepository.save(client);
         });
 
+
         return ResponseEntity.ok(Map.of(
                 "message", "Платеж успешно зарегистрирован",
                 "newInvoiceStatus", invoice.getStatus()

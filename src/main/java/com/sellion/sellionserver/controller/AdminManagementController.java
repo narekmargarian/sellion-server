@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
 import java.util.Map;
 
 @RestController
@@ -144,12 +145,17 @@ public class AdminManagementController {
         return clientRepository.findById(id).map(c -> {
             c.setName((String) payload.get("name"));
             c.setAddress((String) payload.get("address"));
-            // Обработка числа из payload
             c.setDebt(((Number) payload.get("debt")).doubleValue());
+            // ДОБАВЛЯЕМ НОВЫЕ ПОЛЯ:
+            c.setOwnerName((String) payload.get("ownerName"));
+            c.setInn((String) payload.get("inn"));
+            c.setPhone((String) payload.get("phone"));
+
             clientRepository.save(c);
             return ResponseEntity.ok(Map.of("message", "Данные клиента обновлены"));
         }).orElse(ResponseEntity.notFound().build());
     }
+
 
 
     // --- УТИЛИТЫ ---
@@ -163,4 +169,45 @@ public class AdminManagementController {
         }
         return total;
     }
+
+
+    @PostMapping("/products/create")
+    @Transactional
+    public ResponseEntity<?> createProduct(@RequestBody Product product) {
+        if (product.getStockQuantity() == null) product.setStockQuantity(0);
+        Product saved = productRepository.save(product);
+        return ResponseEntity.ok(Map.of("message", "Товар создан", "id", saved.getId()));
+    }
+
+    @PostMapping("/orders/create-manual")
+    @Transactional
+    public ResponseEntity<?> createOrderManual(@RequestBody Order order) {
+        order.setStatus(OrderStatus.ACCEPTED);
+        order.setCreatedAt(LocalDateTime.now().toString());
+        // Списание со склада
+        stockService.deductItemsFromStock(order.getItems());
+        orderRepository.save(order);
+        return ResponseEntity.ok(Map.of("message", "Заказ создан и списан со склада"));
+    }
+
+    @PostMapping("/returns/{id}/confirm")
+    @Transactional
+    public ResponseEntity<?> confirmReturn(@PathVariable Long id) {
+        ReturnOrder ret = returnOrderRepository.findById(id).orElseThrow();
+
+        if (ret.getStatus() != ReturnStatus.CONFIRMED) {
+            // Уменьшаем долг клиента на сумму возврата
+            clientRepository.findByName(ret.getShopName()).ifPresent(client -> {
+                double currentDebt = client.getDebt() != null ? client.getDebt() : 0.0;
+                client.setDebt(Math.max(0, currentDebt - ret.getTotalAmount()));
+                clientRepository.save(client);
+            });
+
+            ret.setStatus(ReturnStatus.CONFIRMED);
+            returnOrderRepository.save(ret);
+        }
+
+        return ResponseEntity.ok(Map.of("message", "Возврат подтвержден, долг клиента уменьшен"));
+    }
+
 }

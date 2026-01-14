@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -31,6 +32,10 @@ public class SyncController {
             orders.forEach(order -> {
                 order.setId(null);
                 order.setStatus(OrderStatus.NEW);
+                // ДОБАВЛЕНО: Устанавливаем текущую дату, если Android не прислал
+                if (order.getCreatedAt() == null || order.getCreatedAt().isEmpty()) {
+                    order.setCreatedAt(LocalDateTime.now().toString());
+                }
             });
             orderRepository.saveAll(orders);
             return ResponseEntity.ok(Map.of("status", "success", "count", orders.size()));
@@ -46,6 +51,10 @@ public class SyncController {
             returns.forEach(ret -> {
                 ret.setId(null);
                 ret.setStatus(ReturnStatus.DRAFT);
+                // ДОБАВЛЕНО: Устанавливаем текущую дату, если Android не прислал
+                if (ret.getCreatedAt() == null || ret.getCreatedAt().isEmpty()) {
+                    ret.setCreatedAt(LocalDateTime.now().toString());
+                }
             });
             returnOrderRepository.saveAll(returns);
             return ResponseEntity.ok(Map.of("status", "success", "count", returns.size()));

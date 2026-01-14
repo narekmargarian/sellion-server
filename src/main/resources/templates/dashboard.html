@@ -11,12 +11,25 @@
 <div class="sidebar">
     <div class="brand">SELLION 2026</div>
     <div onclick="showTab('tab-orders')" class="nav-link" id="btn-orders"><i class="bi bi-cart"></i> Заказы</div>
-    <div onclick="showTab('tab-returns')" class="nav-link" id="btn-returns"><i class="bi bi-arrow-counterclockwise"></i> Возвраты</div>
+    <div onclick="showTab('tab-returns')" class="nav-link" id="btn-returns"><i class="bi bi-arrow-counterclockwise"></i>
+        Возвраты
+    </div>
     <div onclick="showTab('tab-clients')" class="nav-link" id="btn-clients"><i class="bi bi-people"></i> Клиенты</div>
-    <div onclick="showTab('tab-products')" class="nav-link" id="btn-products"><i class="bi bi-box-seam"></i> Склад / Цены</div>
+    <div onclick="showTab('tab-products')" class="nav-link" id="btn-products"><i class="bi bi-box-seam"></i> Склад /
+        Цены
+    </div>
+
+    <div onclick="showTab('tab-invoices')" class="nav-link" id="btn-invoices">
+        <i class="bi bi-file-earmark-text"></i> Счета / Оплата
+    </div>
+    <div onclick="showTab('tab-users')" class="nav-link" id="btn-users"><i class="bi bi-person-badge"></i> Персонал</div>
+
 
     <form th:action="@{/logout}" method="post" style="margin-top:auto; padding:20px;">
-        <button type="submit" style="width:100%; background:#ef4444; color:white; border:none; padding:10px; border-radius:8px; cursor:pointer; font-weight:700;">ВЫХОД</button>
+        <button type="submit"
+                style="width:100%; background:#ef4444; color:white; border:none; padding:10px; border-radius:8px; cursor:pointer; font-weight:700;">
+            ВЫХОД
+        </button>
     </form>
 </div>
 
@@ -26,24 +39,33 @@
         <!-- ВКЛАДКА ЗАКАЗЫ -->
         <div id="tab-orders" class="tab-pane">
             <div class="summary-card">
-                <div class="summary-item"><small>Заказов всего:</small> <span th:text="${totalOrdersCount}">0</span></div>
-                <div class="summary-item"><small>Общая сумма:</small> <span class="price-up" th:text="${#numbers.formatInteger(totalOrdersSum, 1, 'WHITESPACE') + ' ֏'}">0</span></div>
+                <div class="summary-item"><small>Заказов всего:</small> <span th:text="${totalOrdersCount}">0</span>
+                </div>
+                <div class="summary-item"><small>Общая сумма:</small> <span class="price-up"
+                                                                            th:text="${#numbers.formatInteger(totalOrdersSum, 1, 'WHITESPACE') + ' ֏'}">0</span>
+                </div>
             </div>
 
             <div class="filter-bar">
-                <form method="get" th:action="@{/admin}">
+                <input type="text" id="search-orders" onkeyup="filterTable('search-orders', 'orders-table-body')"
+                       placeholder="🔎 Поиск по магазину..." class="form-control w-25">
+
+                <form method="get" th:action="@{/admin}" class="d-inline-flex gap-2">
                     <input type="hidden" name="activeTab" value="tab-orders">
-                    <select name="orderManagerId" onchange="this.form.submit()" style="padding:8px; border-radius:8px; border:1px solid #ddd; width: auto;">
+                    <select name="orderManagerId" onchange="this.form.submit()" class="form-select">
                         <option value="">Все менеджеры (Заказы)</option>
-                        <option th:each="m : ${managers}" th:value="${m}" th:text="${m}" th:selected="${m == selectedOrderManager}"></option>
+                        <option th:each="m : ${managers}" th:value="${m}" th:text="${m}"
+                                th:selected="${m == selectedOrderManager}"></option>
                     </select>
                 </form>
-                <button class="btn-primary" onclick="alert('Создание заказа...')">+ Создать заказ</button>
+                <button class="btn-primary" onclick="openCreateOrderModal()">+ Создать заказ</button>
+
             </div>
 
             <div class="table-container">
                 <table class="table">
                     <thead>
+
                     <tr>
                         <th>Дата заказа</th>
                         <th>Менеджер</th>
@@ -54,23 +76,28 @@
                         <th>Действие</th>
                     </tr>
                     </thead>
-                    <tbody>
-                    <tr th:each="o : ${orders}" th:onclick="'openOrderDetails(' + ${o.id} + ')'" style="cursor:pointer;">
+                    <tbody id="orders-table-body">
+                    <tr th:each="o : ${orders}" th:onclick="'openOrderDetails(' + ${o.id} + ')'"
+                        style="cursor:pointer;">
                         <!-- ИСПРАВЛЕНО: Безопасное форматирование createdAt -->
                         <td th:with="dt=${o.createdAt}"
                             th:text="${dt != null ? #strings.replace(dt.length() > 16 ? dt.substring(0,16) : dt, 'T', ' ') : ''}"></td>
 
                         <td th:text="${o.managerId}" style="font-weight:600; color:var(--accent);"></td>
                         <td th:text="${o.shopName}" style="font-weight:700;"></td>
-                        <td class="price-up" th:text="${#numbers.formatInteger(o.totalAmount, 1, 'WHITESPACE') + ' ֏'}"></td>
+                        <td class="price-up"
+                            th:text="${#numbers.formatInteger(o.totalAmount, 1, 'WHITESPACE') + ' ֏'}"></td>
                         <td th:text="${o.deliveryDate}"></td>
 
                         <!-- ИСПРАВЛЕНО: TRANSFER -> Перевод -->
                         <td><span class="badge" th:text="${o.status == 'TRANSFER' ? 'Перевод' : o.status}"></span></td>
 
                         <td onclick="event.stopPropagation()">
-                            <form th:if="${o.invoiceId == null}" th:action="@{'/admin/invoices/create-from-order/' + ${o.id}}" method="post">
-                                <button type="submit" class="btn-primary" style="padding:5px 10px; font-size:11px;">Счет</button>
+                            <form th:if="${o.invoiceId == null}"
+                                  th:action="@{'/admin/invoices/create-from-order/' + ${o.id}}" method="post">
+                                <button type="submit" class="btn-primary" style="padding:5px 10px; font-size:11px;">
+                                    Счет
+                                </button>
                             </form>
                         </td>
                     </tr>
@@ -79,17 +106,103 @@
             </div>
         </div>
 
-        <!-- ВКЛАДКА ВОЗВРАТЫ -->
-        <div id="tab-returns" class="tab-pane">
-            <div class="summary-card" style="background: #fff1f2; border-color: #fecdd3;">
-                <div class="summary-item"><small>Возвратов всего:</small> <span th:text="${totalReturnsCount}">0</span></div>
-                <div class="summary-item"><small>Сумма возвратов:</small> <span class="price-down" th:text="${#numbers.formatInteger(totalReturnsSum, 1, 'WHITESPACE') + ' ֏'}">0</span></div>
+        <div id="tab-invoices" class="tab-pane">
+            <div class="summary-card" style="background: #f0fdf4; border-color: #bbf7d0; display: flex; gap: 50px;">
+                <div class="filter-bar">
+
+                    <input type="text" id="search-invoices"
+                           onkeyup="filterTable('search-invoices', 'invoices-table-body')"
+                           placeholder="🔎 Поиск по номеру счета или магазину..."
+                           class="form-control w-25">
+                </div>
+
+                <div class="summary-item">
+
+                    <small>Общий долг по счетам:</small><br>
+                    <span class="price-down" th:text="${#numbers.formatInteger(totalInvoiceDebt, 1, 'WHITESPACE') + ' ֏'}"></span>
+                </div>
+                <div class="summary-item">
+                    <small>Оплаченный долг по счетам:</small><br>
+                    <span class="price-up" th:text="${#numbers.formatInteger(totalPaidSum, 1, 'WHITESPACE') + ' ֏'}"></span>
+                </div>
             </div>
             <div class="table-container">
                 <table class="table">
-                    <thead><tr><th>Дата</th><th>Менеджер</th><th>Магазин</th><th>Причина</th><th>Сумма</th></tr></thead>
+                    <thead>
+                    <tr>
+                        <th>№ Счета</th>
+                        <th>Магазин</th>
+                        <th>Сумма</th>
+                        <th>Оплачено</th>
+                        <th>Статус</th>
+                        <th>Действие</th>
+                    </tr>
+                    </thead>
+                    <tbody id="invoices-table-body">
+                    <tr th:each="inv : ${invoices}">
+                        <td th:text="${inv.invoiceNumber}"></td>
+                        <td th:text="${inv.shopName}" style="font-weight:700;"></td>
+                        <td th:text="${#numbers.formatInteger(inv.totalAmount, 1, 'WHITESPACE') + ' ֏'}"></td>
+                        <td class="price-up"
+                            th:text="${#numbers.formatInteger(inv.paidAmount, 1, 'WHITESPACE') + ' ֏'}"></td>
+                        <td>
+                        <span th:class="'badge ' + (${inv.status} == 'PAID' ? 'bg-success text-white' : 'bg-warning')"
+                              th:text="${inv.status}"></span>
+                        </td>
+                        <td>
+                            <div style="display: flex; gap: 5px;">
+                                <button class="btn-primary" style="padding:5px;"
+                                        th:onclick="'openPaymentModal(' + ${inv.id} + ')'">💳 Оплата
+                                </button>
+                                <button class="btn-primary" style="background:#64748b; padding:5px;"
+                                        th:onclick="'printInvoiceInline(' + ${inv.id} + ')'">
+                                    🖨 Печать
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+
+        <!-- ВКЛАДКА ВОЗВРАТЫ -->
+        <div id="tab-returns" class="tab-pane">
+
+            <div class="summary-card" style="background: #fff1f2; border-color: #fecdd3;">
+                <div class="summary-item"><small>Возвратов всего:</small> <span th:text="${totalReturnsCount}">0</span>
+                </div>
+                <div class="summary-item"><small>Сумма возвратов:</small> <span class="price-down"
+                                                                                th:text="${#numbers.formatInteger(totalReturnsSum, 1, 'WHITESPACE') + ' ֏'}">0</span>
+                </div>
+            </div>
+            <div class="filter-bar">
+                <form method="get" th:action="@{/admin}" class="d-inline-flex gap-2">
+                    <input type="hidden" name="activeTab" value="tab-returns">
+                    <select name="returnManagerId" onchange="this.form.submit()" class="form-select">
+                        <option value="">Все менеджеры (Возвраты)</option>
+                        <option th:each="m : ${managers}" th:value="${m}" th:text="${m}"
+                                th:selected="${m == selectedReturnManager}"></option>
+                    </select>
+                </form>
+                <button class="btn-primary" onclick="openCreateReturnModal()">+ Добавить возврат</button>
+            </div>
+
+            <div class="table-container">
+                <table class="table">
+                    <thead>
+                    <tr>
+                        <th>Дата</th>
+                        <th>Менеджер</th>
+                        <th>Магазин</th>
+                        <th>Причина</th>
+                        <th>Сумма</th>
+                    </tr>
+                    </thead>
                     <tbody>
-                    <tr th:each="r : ${returns}" th:onclick="'openReturnDetails(' + ${r.id} + ')'" style="cursor:pointer;">
+                    <tr th:each="r : ${returns}" th:onclick="'openReturnDetails(' + ${r.id} + ')'"
+                        style="cursor:pointer;">
                         <!-- ИСПРАВЛЕНО: Безопасное форматирование returnDate -->
                         <td th:with="rd=${r.returnDate}"
                             th:text="${rd != null ? #strings.replace(rd.length() > 16 ? rd.substring(0,16) : rd, 'T', ' ') : ''}"></td>
@@ -100,7 +213,8 @@
                         <!-- ИСПРАВЛЕНО: EXPIRED -> Просрочка -->
                         <td th:text="${r.returnReason != null && r.returnReason.toString() == 'EXPIRED' ? 'Просрочка' : (r.returnReason != null ? r.returnReason : '')}"></td>
 
-                        <td class="price-down" th:text="${#numbers.formatInteger(r.totalAmount, 1, 'WHITESPACE') + ' ֏'}"></td>
+                        <td class="price-down"
+                            th:text="${#numbers.formatInteger(r.totalAmount, 1, 'WHITESPACE') + ' ֏'}"></td>
                     </tr>
                     </tbody>
                 </table>
@@ -110,13 +224,22 @@
         <!-- ВКЛАДКА КЛИЕНТЫ -->
         <div id="tab-clients" class="tab-pane">
             <div class="filter-bar">
+                <input type="text" id="search-clients" onkeyup="filterTable('search-clients', 'clients-table-body')"
+                       placeholder="🔎 Поиск клиента или адреса..." class="form-control w-25">
                 <button class="btn-primary" onclick="openModal('modal-client')">+ Добавить клиента</button>
             </div>
             <div class="table-container">
                 <table class="table">
-                    <thead><tr><th>Магазин</th><th>Адрес</th><th>Долг</th></tr></thead>
-                    <tbody>
-                    <tr th:each="c : ${clients}" th:onclick="'openClientDetails(' + ${c.id} + ')'" style="cursor:pointer;">
+                    <thead>
+                    <tr>
+                        <th>Магазин</th>
+                        <th>Адрес</th>
+                        <th>Долг</th>
+                    </tr>
+                    </thead>
+                    <tbody id="clients-table-body">
+                    <tr th:each="c : ${clients}" th:onclick="'openClientDetails(' + ${c.id} + ')'"
+                        style="cursor:pointer;">
                         <td th:text="${c.name}" style="font-weight:700;"></td>
                         <td th:text="${c.address}"></td>
                         <td class="price-down" th:text="${#numbers.formatInteger(c.debt, 1, 'WHITESPACE') + ' ֏'}"></td>
@@ -129,19 +252,36 @@
         <!-- ВКЛАДКА СКЛАД -->
         <div id="tab-products" class="tab-pane">
             <div class="filter-bar">
-                <button class="btn-primary" onclick="alert('Добавить товар...')">+ Новый товар</button>
+                <input type="text" id="search-products" onkeyup="filterTable('search-products', 'products-table-body')"
+                       placeholder="🔎 Поиск товара или штрих-кода..."
+                       style="padding:8px; border-radius:8px; border:1px solid #ddd; flex-grow:1; margin-right:10px;">
+                <button class="btn-primary" onclick="openModal('modal-product-create-new')">+ Новый товар</button>
             </div>
             <div class="table-container">
                 <table class="table">
-                    <thead><tr><th>Товар</th><th>Цена</th><th>Остаток</th><th>Упак.</th><th>Штрих-код</th><th>Действие</th></tr></thead>
-                    <tbody>
-                    <tr th:each="p : ${products}" th:onclick="'openProductDetails(' + ${p.id} + ')'" style="cursor:pointer;">
+                    <thead>
+                    <tr>
+                        <th>Товар</th>
+                        <th>Цена</th>
+                        <th>Остаток</th>
+                        <th>Упак.</th>
+                        <th>Штрих-код</th>
+                        <th>Действие</th>
+                    </tr>
+                    </thead>
+                    <tbody id="products-table-body">
+                    <tr th:each="p : ${products}" th:onclick="'openProductDetails(' + ${p.id} + ')'"
+                        style="cursor:pointer;">
                         <td th:text="${p.name}" style="font-weight:600"></td>
                         <td th:text="${#numbers.formatInteger(p.price, 1, 'WHITESPACE') + ' ֏'}"></td>
                         <td th:text="${p.stockQuantity + ' шт.'}"></td>
                         <td th:text="${p.itemsPerBox}"></td>
                         <td th:text="${p.barcode}"></td>
-                        <td><button class="btn-primary" style="padding:5px 10px;" th:onclick="'event.stopPropagation(); editProduct(' + ${p.id} + ')'">Изменить</button></td>
+                        <td>
+                            <button class="btn-primary" style="padding:5px 10px;"
+                                    th:onclick="'event.stopPropagation(); editProduct(' + ${p.id} + ')'">Изменить
+                            </button>
+                        </td>
                     </tr>
                     </tbody>
                 </table>
@@ -154,12 +294,23 @@
     <div class="modal-content">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;">
             <h2 id="modal-title" style="margin: 0;">Детали операции</h2>
-            <button onclick="closeModal('modal-order-view')" style="background: none; border: none; font-size: 24px; cursor: pointer;">&times;</button>
+            <button onclick="closeModal('modal-order-view')"
+                    style="background: none; border: none; font-size: 24px; cursor: pointer;">&times;
+            </button>
         </div>
-        <div id="order-info" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; background: #f8fafc; padding: 15px; border-radius: 10px; margin-top: 20px; flex-shrink: 0;"></div>
+        <div id="order-info"
+             style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; background: #f8fafc; padding: 15px; border-radius: 10px; margin-top: 20px; flex-shrink: 0;"></div>
         <div id="table-scroll-container">
             <table class="table">
-                <thead><tr><th>Товар</th><th>Кол-во</th><th>Цена</th><th>Итого</th><th>Кат.</th></tr></thead>
+                <thead>
+                <tr>
+                    <th>Товар</th>
+                    <th>Кол-во</th>
+                    <th>Цена</th>
+                    <th>Итого</th>
+                    <th>Кат.</th>
+                </tr>
+                </thead>
                 <tbody id="order-items-body"></tbody>
             </table>
         </div>
@@ -171,27 +322,29 @@
 </div>
 
 
-
-
-
 <!-- МОДАЛЬНОЕ ОКНО ДЕТАЛЕЙ КЛИЕНТА (НОВОЕ) -->
 <div id="modal-client-view" class="modal">
     <div class="modal-content">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;">
             <h2 id="modal-client-title" style="margin: 0;">Детали клиента</h2>
-            <button onclick="closeModal('modal-client-view')" style="background: none; border: none; font-size: 24px; cursor: pointer;">&times;</button>
+            <button onclick="closeModal('modal-client-view')"
+                    style="background: none; border: none; font-size: 24px; cursor: pointer;">&times;
+            </button>
         </div>
         <!-- Используем тот же контейнер для информации, стили уже готовы -->
-        <div id="client-info" style="display: grid; gap: 15px; background: #f8fafc; padding: 15px; border-radius: 10px; margin-top: 10px; flex-shrink: 0;"></div>
+        <div id="client-info"
+             style="display: grid; gap: 15px; background: #f8fafc; padding: 15px; border-radius: 10px; margin-top: 10px; flex-shrink: 0;"></div>
 
         <!-- Здесь можно добавить таблицу заказов клиента, если нужно. Пока оставим пусто -->
         <div id="table-scroll-container-client" style="flex-grow: 1; overflow-y: auto; margin: 10px 0;">
             <!-- Таблица заказов клиента будет здесь -->
         </div>
 
-        <div id="client-footer-actions" style="display: flex; justify-content: flex-end; align-items: center; margin-top: auto; padding-top: 10px; border-top: 2px solid #eee; flex-shrink: 0; gap: 10px;">
+        <div id="client-footer-actions"
+             style="display: flex; justify-content: flex-end; align-items: center; margin-top: auto; padding-top: 10px; border-top: 2px solid #eee; flex-shrink: 0; gap: 10px;">
             <button class="btn-primary" onclick="enableClientEdit()">Изменить данные</button>
-            <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-client-view')">Закрыть</button>
+            <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-client-view')">Закрыть
+            </button>
         </div>
     </div>
 </div>
@@ -201,24 +354,119 @@
     <div class="modal-content">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;">
             <h2 id="modal-product-title" style="margin: 0;">Детали товара</h2>
-            <button onclick="closeModal('modal-product-view')" style="background: none; border: none; font-size: 24px; cursor: pointer;">&times;</button>
+            <button onclick="closeModal('modal-product-view')"
+                    style="background: none; border: none; font-size: 24px; cursor: pointer;">&times;
+            </button>
         </div>
 
-        <div id="product-info" style="display: grid; gap: 15px; background: #f8fafc; padding: 15px; border-radius: 10px; margin-top: 10px; flex-shrink: 0;"></div>
+        <div id="product-info"
+             style="display: grid; gap: 15px; background: #f8fafc; padding: 15px; border-radius: 10px; margin-top: 10px; flex-shrink: 0;"></div>
 
-        <div id="product-footer-actions" style="display: flex; justify-content: flex-end; align-items: center; margin-top: auto; padding-top: 10px; border-top: 2px solid #eee; flex-shrink: 0; gap: 10px;">
+        <div id="product-footer-actions"
+             style="display: flex; justify-content: flex-end; align-items: center; margin-top: auto; padding-top: 10px; border-top: 2px solid #eee; flex-shrink: 0; gap: 10px;">
             <button class="btn-primary" onclick="enableProductEdit()">Изменить товар</button>
-            <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-product-view')">Закрыть</button>
+            <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-product-view')">Закрыть
+            </button>
         </div>
     </div>
 </div>
 
+<div id="modal-payment" class="modal">
+    <div class="modal-content" style="width: 400px;">
+        <h3>Регистрация оплаты</h3>
+        <input type="hidden" id="pay-invoice-id">
+        <label>Сумма оплаты (֏)</label>
+        <input type="number" id="pay-amount" class="form-control">
+        <label style="margin-top:10px;">Комментарий</label>
+        <select id="pay-comment" class="form-control">
+            <option value="Наличные">Наличные</option>
+            <option value="Перевод">Перевод</option>
+        </select>
+        <div style="margin-top:20px; display:flex; gap:10px;">
+            <button class="btn-primary" onclick="submitPayment()" style="flex:1">Подтвердить</button>
+            <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-payment')">Отмена</button>
+        </div>
+    </div>
+</div>
+<div id="modal-order-create" class="modal">
+    <div class="modal-content" style="width: 700px;">
+        <h2>Новый заказ (Ручной ввод)</h2>
+        <div class="modal-info-row">
+            <div style="flex:2">
+                <label>Выберите магазин</label>
+                <select id="new-order-shop" style="width:100%">
+                    <option th:each="c : ${clients}" th:value="${c.name}" th:text="${c.name}"></option>
+                </select>
+            </div>
+            <div style="flex:1">
+                <label>Менеджер</label>
+                <input type="text" id="new-order-manager" value="ADMIN">
+            </div>
+        </div>
 
+        <div id="new-order-items-area" style="margin-top:15px; border:1px solid #ddd; padding:10px; border-radius:8px;">
+            <!-- Сюда будем добавлять товары через JS как в редактировании -->
+            <table class="table">
+                <tbody id="new-order-body"></tbody>
+            </table>
+        </div>
 
+        <div style="display:flex; justify-content: space-between; margin-top:15px;">
+            <button class="btn-primary" onclick="submitManualOrder()">Создать заказ и списать со склада</button>
+            <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-order-create')">Отмена
+            </button>
+        </div>
+    </div>
+</div>
+<div id="modal-product-create-new" class="modal">
+    <div class="modal-content" style="width: 500px;">
+        <h2 style="margin-bottom:20px;">📦 Добавление нового товара</h2>
+        <div class="modal-info-row">
+            <div style="flex:1">
+                <label>Название</label><input type="text" id="new-p-name" placeholder="Название товара">
+                <label>Цена (֏)</label><input type="number" id="new-p-price" placeholder="0">
+                <label>Категория</label><input type="text" id="new-p-cat" placeholder="Напитки, Еда...">
+            </div>
+        </div>
+        <div class="modal-info-row" style="margin-top:10px;">
+            <div style="flex:1">
+                <label>Остаток</label><input type="number" id="new-p-qty" value="0">
+                <label>Штрих-код</label><input type="text" id="new-p-code" placeholder="000000">
+                <label>В коробке</label><input type="number" id="new-p-box" value="1">
+            </div>
+        </div>
+        <div style="display: flex; gap: 10px; margin-top: 25px; justify-content: flex-end;">
+            <button class="btn-primary" onclick="submitCreateProduct()" style="background:#10b981">Создать товар
+            </button>
+            <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-product-create-new')">
+                Отмена
+            </button>
+        </div>
+    </div>
+</div>
 
+<div id="tab-users" class="tab-pane">
+    <div class="table-container">
+        <table class="table">
+            <thead><tr><th>Логин</th><th>ФИО</th><th>Роль</th><th>Действие</th></tr></thead>
+            <tbody>
+            <tr th:each="u : ${users}">
+                <td th:text="${u.username}"></td>
+                <td th:text="${u.fullName}"></td>
+                <td><span class="badge" th:text="${u.role}"></span></td>
+                <td>
+                    <button class="btn-primary" style="background:#f59e0b"
+                            th:onclick="'resetPassword(' + ${u.id} + ')'">Сброс пароля (1111)</button>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
 
-
-
+<div class="summary-item"><small>Средний чек:</small> <br>
+    <b th:text="${#numbers.formatInteger(avgOrder, 1, 'WHITESPACE') + ' ֏'}"></b>
+</div>
 
 
 <script th:inline="javascript">
@@ -246,5 +494,6 @@
     const returnReasons = [[${returnReasons}]];
 </script>
 <script th:src="@{/js/script.js}"></script>
+<iframe id="printFrame" style="display:none;"></iframe>
 </body>
 </html>

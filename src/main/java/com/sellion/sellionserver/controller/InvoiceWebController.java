@@ -3,8 +3,10 @@ package com.sellion.sellionserver.controller;
 import com.sellion.sellionserver.entity.Invoice;
 import com.sellion.sellionserver.entity.Order;
 import com.sellion.sellionserver.entity.OrderStatus;
+import com.sellion.sellionserver.repository.ClientRepository;
 import com.sellion.sellionserver.repository.InvoiceRepository;
 import com.sellion.sellionserver.repository.OrderRepository;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -22,29 +24,37 @@ public class InvoiceWebController {
 
     private final InvoiceRepository invoiceRepository;
     private final OrderRepository orderRepository;
+    private final ClientRepository clientRepository;
 
     @PostMapping("/create-from-order/{orderId}")
+    @Transactional // Добавь эту аннотацию
     public String createFromOrder(@PathVariable Long orderId) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new RuntimeException("Заказ не найден"));
 
+        // ... твой существующий код создания Invoice ...
         Invoice invoice = new Invoice();
         invoice.setOrder(order);
         invoice.setShopName(order.getShopName());
         invoice.setTotalAmount(order.getTotalAmount());
-        invoice.setManagerId(order.getManagerId());
         invoice.setInvoiceNumber("INV-" + System.currentTimeMillis());
         invoice.setStatus("UNPAID");
+        invoiceRepository.save(invoice);
 
-        Invoice saved = invoiceRepository.save(invoice);
+        // НОВАЯ ЛОГИКА: Увеличиваем долг клиента
+        clientRepository.findByName(order.getShopName()).ifPresent(client -> {
+            double currentDebt = (client.getDebt() != null) ? client.getDebt() : 0.0;
+            client.setDebt(currentDebt + order.getTotalAmount()); // Прибавили сумму счета к долгу
+            clientRepository.save(client);
+        });
 
         order.setStatus(OrderStatus.INVOICED);
-        order.setInvoiceId(saved.getId());
+        order.setInvoiceId(invoice.getId());
         orderRepository.save(order);
 
-        // Возвращаемся на главную, открывая вкладку счетов
         return "redirect:/admin?activeTab=tab-invoices";
     }
+
 
     @GetMapping("/print/{id}")
     public String printInvoice(@PathVariable Long id, Model model) {
