@@ -112,7 +112,11 @@
                 <table class="table">
                     <thead><tr><th>Магазин</th><th>Адрес</th><th>Долг</th></tr></thead>
                     <tbody>
-                    <tr th:each="c : ${clients}"><td th:text="${c.name}"></td><td th:text="${c.address}"></td><td class="price-down" th:text="${c.debt + ' ֏'}"></td></tr>
+                    <tr th:each="c : ${clients}" th:onclick="'openClientDetails(' + ${c.id} + ')'" style="cursor:pointer;">
+                        <td th:text="${c.name}" style="font-weight:700;"></td>
+                        <td th:text="${c.address}"></td>
+                        <td class="price-down" th:text="${c.debt + ' ֏'}"></td>
+                    </tr>
                     </tbody>
                 </table>
             </div>
@@ -124,7 +128,7 @@
                 <table class="table">
                     <thead><tr><th>Товар</th><th>Цена</th><th>Остаток</th><th>Упак.</th><th>Штрих-код</th><th>Действие</th></tr></thead>
                     <tbody>
-                    <tr th:each="p : ${products}">
+                    <tr th:each="p : ${products}" th:onclick="'openProductDetails(' + ${p.id} + ')'" style="cursor:pointer;">
                         <td th:text="${p.name}" style="font-weight:600"></td>
                         <td th:text="${p.price + ' ֏'}"></td>
                         <td th:text="${p.stockQuantity + ' шт.'}"></td>
@@ -132,6 +136,8 @@
                         <td th:text="${p.barcode}"></td>
                         <td><button class="btn-primary" style="padding:5px 10px;" th:onclick="'editProduct(' + ${p.id} + ')'">Изменить</button></td>
                     </tr>
+
+
                     </tbody>
                 </table>
             </div>

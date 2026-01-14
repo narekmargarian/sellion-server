@@ -279,6 +279,74 @@ async function saveFullChanges(id) {
     }
 }
 
+// --- СКЛАД / ЦЕНЫ ---
+function openProductDetails(id) {
+    const p = productsData.find(prod => prod.id == id);
+    if (!p) return;
+
+    const info = document.getElementById('order-info');
+    info.innerHTML = `
+        <div style="margin-bottom: 15px;">
+            <span class="badge" style="background: #f0fdf4; color: #166534; border-color: #bbf7d0;">ТОВАР №${p.id}</span>
+        </div>
+        <div><small>Наименование:</small><br><b>${p.name}</b></div>
+        <div><small>Категория:</small><br><b>${p.category || 'Общее'}</b></div>
+        <div><small>Текущий остаток:</small><br><b style="color: var(--accent);">${p.stockQuantity} шт.</b></div>
+        <div><small>Штрих-код:</small><br><b>${p.barcode || '---'}</b></div>
+    `;
+
+    // Вместо таблицы заказов показываем только цену (или историю цен)
+    document.getElementById('order-items-body').innerHTML = `
+        <tr>
+            <td colspan="2">Базовая цена продажи</td>
+            <td colspan="3" style="font-size: 18px; font-weight: 800; color: var(--accent); text-align: right;">${p.price.toLocaleString()} ֏</td>
+        </tr>
+    `;
+
+    document.getElementById('order-total-price').innerText = "Статус: " + (p.stockQuantity > 0 ? "В наличии" : "Нет на складе");
+
+    const footer = document.getElementById('order-footer-actions');
+    footer.innerHTML = `
+        <button class="btn-primary" onclick="editProduct(${p.id})">Изменить цену/остаток</button>
+        <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-order-view')">Закрыть</button>
+    `;
+
+    openModal('modal-order-view');
+}
+
+// --- КЛИЕНТЫ ---
+function openClientDetails(id) {
+    const c = clientsData.find(client => client.id == id);
+    if (!c) return;
+
+    const info = document.getElementById('order-info');
+    info.innerHTML = `
+        <div style="margin-bottom: 15px;">
+            <span class="badge" style="background: #eff6ff; color: #1e40af; border-color: #dbeafe;">КЛИЕНТ №${c.id}</span>
+        </div>
+        <div><small>Название магазина:</small><br><b>${c.name}</b></div>
+        <div><small>Адрес:</small><br><b>${c.address || 'Не указан'}</b></div>
+        <div><small>Телефон:</small><br><b>${c.phone || '---'}</b></div>
+    `;
+
+    document.getElementById('order-items-body').innerHTML = `
+        <tr style="background: #fef2f2;">
+            <td colspan="2">Текущая задолженность</td>
+            <td colspan="3" style="font-size: 18px; font-weight: 800; color: #ef4444; text-align: right;">${(c.debt || 0).toLocaleString()} ֏</td>
+        </tr>
+    `;
+
+    document.getElementById('order-total-price').innerText = "Статус: " + (c.debt > 0 ? "Есть долг" : "Оплачено");
+
+    const footer = document.getElementById('order-footer-actions');
+    footer.innerHTML = `
+        <button class="btn-primary" onclick="alert('Логика акта сверки...')">Акт сверки</button>
+        <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-order-view')">Закрыть</button>
+    `;
+
+    openModal('modal-order-view');
+}
+
 // --- ВОЗВРАТЫ ---
 
 function openReturnDetails(id) {
