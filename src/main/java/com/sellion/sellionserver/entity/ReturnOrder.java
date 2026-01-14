@@ -42,5 +42,5 @@ public class ReturnOrder {
     @JsonProperty("totalAmount")
     private Double totalAmount;
 
-    private LocalDateTime createdAt = LocalDateTime.now();
+    private String createdAt;
 }

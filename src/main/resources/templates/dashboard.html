@@ -94,11 +94,12 @@
                     <tbody>
                     <tr th:each="r : ${returns}" th:onclick="'openReturnDetails(' + ${r.id} + ')'" style="cursor:pointer;">
                         <td th:text="${r.returnDate}"></td>
-                        <td th:text="${r.managerId}" style="font-weight:600; color:var(--accent);"></td>
-                        <td th:text="${r.shopName}" style="font-weight:700;"></td>
+                        <td th:text="${r.managerId}"></td>
+                        <td th:text="${r.shopName}"></td>
                         <td th:text="${r.returnReason}"></td>
                         <td class="price-down" th:text="${r.totalAmount + ' ֏'}"></td>
                     </tr>
+
                     </tbody>
                 </table>
             </div>
@@ -191,6 +192,7 @@
         </div>
     </div>
 </div>
+
 
 
 
