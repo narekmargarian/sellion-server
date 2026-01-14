@@ -34,6 +34,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/**").permitAll()
                         .requestMatchers("/login", "/css/**", "/js/**", "/error").permitAll()
                         .requestMatchers("/admin/**").authenticated()
+                        .requestMatchers("/favicon.ico").permitAll()
+
                         .anyRequest().authenticated()
                 )
                 .formLogin(form -> form

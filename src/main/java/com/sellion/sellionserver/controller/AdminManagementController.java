@@ -95,6 +95,25 @@ public class AdminManagementController {
         }).orElse(ResponseEntity.notFound().build());
     }
 
+    // --- НОВОЕ API: ОБНОВЛЕНИЕ ТОВАРА (для новой JS-логики) ---
+    @PutMapping("/products/{id}/edit")
+    @Transactional
+    public ResponseEntity<?> editProduct(@PathVariable Long id, @RequestBody Map<String, Object> payload) {
+        return productRepository.findById(id).map(p -> {
+            p.setName((String) payload.get("name"));
+            // Обработка чисел из payload, так как они могут прийти как Integer
+            p.setPrice(((Number) payload.get("price")).doubleValue());
+            p.setStockQuantity(((Number) payload.get("stockQuantity")).intValue());
+            p.setBarcode((String) payload.get("barcode"));
+            p.setItemsPerBox(((Number) payload.get("itemsPerBox")).intValue());
+            p.setCategory((String) payload.get("category"));
+
+            productRepository.save(p);
+            return ResponseEntity.ok(Map.of("message", "Данные товара обновлены"));
+        }).orElse(ResponseEntity.notFound().build());
+    }
+
+
     // --- ВОЗВРАТЫ ---
 
     @PutMapping("/returns/{id}/edit")
@@ -117,6 +136,21 @@ public class AdminManagementController {
 
         return ResponseEntity.ok(Map.of("newTotal", newTotal, "message", "Возврат изменен"));
     }
+
+    // --- НОВОЕ API: ОБНОВЛЕНИЕ КЛИЕНТА ---
+    @PutMapping("/clients/{id}/edit")
+    @Transactional
+    public ResponseEntity<?> editClient(@PathVariable Long id, @RequestBody Map<String, Object> payload) {
+        return clientRepository.findById(id).map(c -> {
+            c.setName((String) payload.get("name"));
+            c.setAddress((String) payload.get("address"));
+            // Обработка числа из payload
+            c.setDebt(((Number) payload.get("debt")).doubleValue());
+            clientRepository.save(c);
+            return ResponseEntity.ok(Map.of("message", "Данные клиента обновлены"));
+        }).orElse(ResponseEntity.notFound().build());
+    }
+
 
     // --- УТИЛИТЫ ---
 

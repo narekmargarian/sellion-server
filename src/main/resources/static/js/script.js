@@ -7,7 +7,6 @@ function showTab(tabId) {
     const target = document.getElementById(tabId);
     if (target) {
         target.classList.add('active');
-        // Сбрасываем скролл таблицы во вкладке при переключении
         const tableContainer = target.querySelector('.table-container');
         if (tableContainer) tableContainer.scrollTop = 0;
     }
@@ -22,16 +21,41 @@ function showTab(tabId) {
 function openModal(id) {
     const modal = document.getElementById(id);
     modal.classList.add('active');
-    // Сброс скролла внутреннего контейнера при открытии
     const sc = modal.querySelector('#table-scroll-container');
     if (sc) sc.scrollTop = 0;
 }
 
 function closeModal(id) { document.getElementById(id).classList.remove('active'); }
 
+// Безопасное форматирование даты (убирает T и секунды)
 function formatOrderDate(dateStr) {
-    if (!dateStr || dateStr.length < 16) return dateStr;
-    return dateStr.replace('T', ' ').substring(0, 16);
+    if (!dateStr || typeof dateStr !== 'string') return dateStr;
+    let clean = dateStr.replace('T', ' ');
+    return clean.length > 16 ? clean.substring(0, 16) : clean;
+}
+
+// Утилита для перевода методов оплаты
+function translatePayment(m) {
+    if (!m) return '';
+    const val = (typeof m === 'object') ? (m.name || m) : m;
+    const mapping = {
+        'CASH': 'Наличный',
+        'TRANSFER': 'Перевод'
+    };
+    return mapping[val] || val;
+}
+
+// Утилита для перевода причин возврата
+function translateReason(r) {
+    if (!r) return '';
+    const val = (typeof r === 'object') ? (r.name || r) : r;
+    const mapping = {
+        'EXPIRED': 'Просрочка',
+        'DAMAGED': 'Поврежденная упаковка',
+        'WAREHOUSE': 'На склад',
+        'OTHER': 'Другое'
+    };
+    return mapping[val] || val;
 }
 
 function showStatus(text, isError = false) {
@@ -44,7 +68,7 @@ function showStatus(text, isError = false) {
     statusDiv.id = "status-notify";
 
     if (text.includes("Недостаточно товара")) {
-        let cleanMessage = text.split('\n')[0].split(': ').pop();
+        let cleanMessage = text.split('\n').pop().split(': ').pop();
         statusDiv.className = "stock-error-box";
         statusDiv.innerHTML = `
             <div style="font-size: 20px; margin-bottom: 5px;">⚠️</div>
@@ -62,6 +86,7 @@ function showStatus(text, isError = false) {
     setTimeout(() => { if(statusDiv) statusDiv.remove(); }, 6000);
 }
 
+// Обновление строки заказа в главной таблице
 function updateRowInTable(order) {
     const row = document.querySelector(`tr[onclick*="openOrderDetails(${order.id})"]`);
     if (row) {
@@ -69,10 +94,12 @@ function updateRowInTable(order) {
         row.cells[2].innerText = order.shopName;
         row.cells[3].innerText = (order.totalAmount || 0).toLocaleString() + ' ֏';
         row.cells[4].innerText = order.deliveryDate || '---';
+        const statusText = translatePayment(order.status || order.paymentMethod);
+        row.cells[5].innerHTML = `<span class="badge">${statusText}</span>`;
     }
 }
 
-// --- 2. Логика состава (с Кнопкой ✅) ---
+// --- 2. Логика состава (общая) ---
 
 async function applySingleQty(encodedName) {
     const name = decodeURIComponent(encodedName);
@@ -180,7 +207,7 @@ function renderItemsTable(itemsMap, isEdit) {
     }
 }
 
-// --- 4. Основные функции карточки ---
+// --- 4. Основные функции карточки заказа ---
 
 function openOrderDetails(id) {
     const order = ordersData.find(o => o.id == id);
@@ -190,14 +217,19 @@ function openOrderDetails(id) {
     document.getElementById('modal-title').innerHTML = `Детали операции <span class="badge" style="margin-left:10px;">ЗАКАЗ №${order.id}</span>`;
 
     const info = document.getElementById('order-info');
-    info.style.gridTemplateColumns = 'repeat(3, 1fr)';
+    info.style.gridTemplateColumns = '1fr';
+
     info.innerHTML = `
-        <div><small>Магазин:</small><br><b>${order.shopName}</b></div>
-        <div><small>Дата заказа:</small><br><b>${formatOrderDate(order.createdAt)}</b></div>
-        <div><small>Менеджер:</small><br><b>${order.managerId}</b></div>
-        <div><small>Доставка:</small><br><b>${order.deliveryDate || '---'}</b></div>
-        <div><small>Оплата:</small><br><b>${order.paymentMethod}</b></div>
-        <div><small>Фактура:</small><br><b>${order.needsSeparateInvoice ? 'ДА' : 'НЕТ'}</b></div>
+        <div class="modal-info-row">
+            <div><small>Магазин:</small><br><b>${order.shopName}</b></div>
+            <div><small>Дата заказа:</small><br><b>${formatOrderDate(order.createdAt)}</b></div>
+            <div><small>Менеджер:</small><br><b>${order.managerId}</b></div>
+        </div>
+        <div class="modal-info-row">
+            <div><small>Доставка:</small><br><b>${order.deliveryDate || '---'}</b></div>
+            <div><small>Оплата:</small><br><b>${translatePayment(order.paymentMethod)}</b></div>
+            <div><small>Фактура:</small><br><b>${order.needsSeparateInvoice ? 'ДА' : 'НЕТ'}</b></div>
+        </div>
     `;
 
     renderItemsTable(tempItems, false);
@@ -218,30 +250,40 @@ function enableOrderEdit(id) {
     document.getElementById('modal-title').innerText = "Режим редактирования заказа #" + id;
 
     const info = document.getElementById('order-info');
-    info.style.gridTemplateColumns = 'repeat(3, 1fr)';
+    info.style.gridTemplateColumns = '1fr';
 
     let clientOptions = clientsData.map(c => `<option value="${c.name}" ${c.name === order.shopName ? 'selected' : ''}>${c.name}</option>`).join('');
 
-    // Используем paymentMethods из контроллера
-    let paymentOptions = paymentMethods.map(m => `<option value="${m}" ${order.paymentMethod === m ? 'selected' : ''}>${m}</option>`).join('');
+    let paymentOptions = paymentMethods.map(m => {
+        const val = (typeof m === 'object') ? m.name : m;
+        const label = translatePayment(m);
+        return `<option value="${val}" ${order.paymentMethod === val ? 'selected' : ''}>${label}</option>`;
+    }).join('');
 
     info.innerHTML = `
-        <div><label>Магазин</label><select id="edit-shop">${clientOptions}</select></div>
-        <div><label>Доставка</label><input type="text" id="edit-delivery" value="${order.deliveryDate || ''}"></div>
-        <div><label>Оплата</label><select id="edit-payment">${paymentOptions}</select></div>
-        <div><label>Отд. Фактура</label>
-            <select id="edit-invoice-type">
-                <option value="false" ${!order.needsSeparateInvoice ? 'selected' : ''}>НЕТ</option>
-                <option value="true" ${order.needsSeparateInvoice ? 'selected' : ''}>ДА</option>
+        <div class="modal-info-row">
+            <div><label>Магазин</label><select id="edit-shop">${clientOptions}</select></div>
+            <div><label>Доставка</label><input type="text" id="edit-delivery" value="${order.deliveryDate || ''}"></div>
+            <div><label>Оплата</label><select id="edit-payment">${paymentOptions}</select></div>
+            <div><label>Отд. Фактура</label>
+                <select id="edit-invoice-type">
+                    <option value="false" ${!order.needsSeparateInvoice ? 'selected' : ''}>НЕТ</option>
+                    <option value="true" ${order.needsSeparateInvoice ? 'selected' : ''}>ДА</option>
             </select>
+            </div>
         </div>`;
 
     renderItemsTable(tempItems, true);
     document.getElementById('order-total-price').innerText = "Редактирование состава...";
     document.getElementById('order-footer-actions').innerHTML = `
         <button class="btn-primary" style="background:#10b981" onclick="saveFullChanges(${id})">Сохранить</button>
-        <button class="btn-primary" style="background:#64748b" onclick="openOrderDetails(${id})">Отмена</button>`;
+        <button class="btn-primary" style="background:#64748b" onclick="cancelOrderEdit(${id})">Отмена</button>`;
 }
+
+function cancelOrderEdit(id) {
+    openOrderDetails(id);
+}
+
 
 async function saveFullChanges(id) {
     const data = {
@@ -287,11 +329,16 @@ function openReturnDetails(id) {
     document.getElementById('modal-title').innerHTML = `Детали операции <span class="badge" style="margin-left:10px;">ВОЗВРАТ №${ret.id}</span>`;
 
     const info = document.getElementById('order-info');
-    info.style.gridTemplateColumns = 'repeat(3, 1fr)';
+    info.style.gridTemplateColumns = '1fr';
+
+    const displayReason = translateReason(ret.returnReason);
+
     info.innerHTML = `
-        <div><small>Магазин:</small><br><b>${ret.shopName}</b></div>
-        <div><small>Дата возврата:</small><br><b>${ret.returnDate}</b></div>
-        <div><small>Причина:</small><br><b style="color: #ef4444;">${ret.returnReason}</b></div>
+        <div class="modal-info-row">
+            <div><small>Магазин:</small><br><b>${ret.shopName}</b></div>
+            <div><small>Дата возврата:</small><br><b>${formatOrderDate(ret.returnDate)}</b></div>
+            <div><small>Причина:</small><br><b style="color: #ef4444;">${displayReason}</b></div>
+        </div>
     `;
 
     renderItemsTable(tempItems, false);
@@ -306,29 +353,47 @@ function openReturnDetails(id) {
 
 function enableReturnEdit(id) {
     const ret = returnsData.find(r => r.id == id);
+    if (!ret) return;
     document.getElementById('modal-title').innerText = "Редактирование возврата #" + id;
 
     const info = document.getElementById('order-info');
-    let reasonOptions = returnReasons.map(r => `<option value="${r}" ${ret.returnReason === r ? 'selected' : ''}>${r}</option>`).join('');
+    info.style.gridTemplateColumns = '1fr';
+
+    let reasonOptions = returnReasons.map(r => {
+        const val = (typeof r === 'object') ? r.name : r;
+        const label = translateReason(r);
+        return `<option value="${val}" ${ret.returnReason === val ? 'selected' : ''}>${label}</option>`;
+    }).join('');
+
+    let clientOptions = clientsData.map(c => `<option value="${c.name}" ${c.name === ret.shopName ? 'selected' : ''}>${c.name}</option>`).join('');
 
     info.innerHTML = `
-        <div><label>Магазин</label><input type="text" value="${ret.shopName}" disabled></div>
-        <div><label>Дата возврата</label><input type="text" id="edit-ret-date" value="${ret.returnDate}"></div>
-        <div><label>Причина</label><select id="edit-ret-reason">${reasonOptions}</select></div>`;
+        <div class="modal-info-row">
+            <div><label>Магазин</label><select id="edit-ret-shop">${clientOptions}</select></div>
+            <div><label>Дата возврата</label><input type="text" id="edit-ret-date" value="${ret.returnDate || ''}"></div>
+            <div><label>Причина</label><select id="edit-ret-reason">${reasonOptions}</select></div>
+        </div>`;
 
     renderItemsTable(tempItems, true);
+    document.getElementById('order-total-price').innerText = "Редактирование состава...";
     document.getElementById('order-footer-actions').innerHTML = `
         <button class="btn-primary" style="background:#10b981" onclick="saveReturnChanges(${id})">Сохранить</button>
-        <button class="btn-primary" style="background:#64748b" onclick="openReturnDetails(${id})">Отмена</button>`;
+        <button class="btn-primary" style="background:#64748b" onclick="cancelReturnEdit(${id})">Отмена</button>`;
 }
+
+function cancelReturnEdit(id) {
+    openReturnDetails(id);
+}
+
 
 async function saveReturnChanges(id) {
     const data = {
-        shopName: returnsData.find(r => r.id == id).shopName,
+        shopName: document.getElementById('edit-ret-shop').value,
         returnDate: document.getElementById('edit-ret-date').value,
         returnReason: document.getElementById('edit-ret-reason').value,
         items: tempItems
     };
+
     try {
         const response = await fetch(`/api/admin/returns/${id}/edit`, {
             method: 'PUT',
@@ -340,7 +405,7 @@ async function saveReturnChanges(id) {
             const idx = returnsData.findIndex(r => r.id == id);
             if (idx !== -1) {
                 returnsData[idx] = { ...returnsData[idx], ...data, totalAmount: result.newTotal };
-                updateReturnRowInTable(returnsData[idx]);
+                updateReturnRowInTable(returnsData[idx]); // <--- Вызов обновления строки
             }
             showStatus("✅ Возврат обновлен!");
             setTimeout(() => openReturnDetails(id), 1000);
@@ -348,14 +413,228 @@ async function saveReturnChanges(id) {
     } catch (e) { showStatus("❌ Ошибка сети", true); }
 }
 
+// Обновление строки возврата в главной таблице
 function updateReturnRowInTable(ret) {
     const row = document.querySelector(`tr[onclick*="openReturnDetails(${ret.id})"]`);
     if (row) {
-        row.cells[0].innerText = ret.returnDate;
-        row.cells[3].innerText = ret.returnReason;
+        row.cells[0].innerText = formatOrderDate(ret.returnDate);
+        row.cells[1].innerText = ret.managerId; // Менеджер обычно не меняется при редактировании возврата
+        row.cells[2].innerText = ret.shopName;
+        row.cells[3].innerText = translateReason(ret.returnReason);
         row.cells[4].innerText = (ret.totalAmount || 0).toLocaleString() + ' ֏';
     }
 }
+
+// --- НОВАЯ ЛОГИКА ДЛЯ КЛИЕНТОВ (CLIENTS) ---
+
+function cancelClientEdit(id) {
+    openClientDetails(id);
+}
+
+function openClientDetails(id) {
+    window.currentClientId = id;
+    const client = clientsData.find(c => c.id == id);
+    if (!client) return;
+
+    document.getElementById('modal-client-title').innerHTML = `Детали клиента <span class="badge" style="margin-left:10px;">${client.name}</span>`;
+
+    const info = document.getElementById('client-info');
+    info.style.gridTemplateColumns = '1fr';
+
+    info.innerHTML = `
+        <div class="modal-info-row">
+            <div><small>Название магазина:</small><br><b>${client.name}</b></div>
+            <div><small>Адрес:</small><br><b>${client.address}</b></div>
+            <div><small>Долг:</small><br><b class="price-down">${(client.debt || 0).toLocaleString()} ֏</b></div>
+        </div>
+    `;
+
+    const footer = document.getElementById('client-footer-actions');
+    footer.innerHTML = `
+        <button class="btn-primary" onclick="enableClientEdit()">Изменить данные</button>
+        <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-client-view')">Закрыть</button>`;
+
+    openModal('modal-client-view');
+}
+
+function enableClientEdit() {
+    const id = window.currentClientId;
+    const client = clientsData.find(c => c.id == id);
+    if (!client) return;
+
+    document.getElementById('modal-client-title').innerText = "Редактирование клиента";
+    const info = document.getElementById('client-info');
+    info.style.gridTemplateColumns = '1fr';
+
+    info.innerHTML = `
+        <div class="modal-info-row">
+            <div><label>Название магазина</label><input type="text" id="edit-client-name" value="${client.name}"></div>
+            <div><label>Адрес</label><input type="text" id="edit-client-address" value="${client.address}"></div>
+            <div><label>Долг</label><input type="number" id="edit-client-debt" value="${client.debt || 0}"></div>
+        </div>
+    `;
+
+    const footer = document.getElementById('client-footer-actions');
+    footer.innerHTML = `
+        <button class="btn-primary" style="background:#10b981" onclick="saveClientChanges(${client.id})">Сохранить</button>
+        <button class="btn-primary" style="background:#64748b" onclick="cancelClientEdit(${client.id})">Отмена</button>`;
+}
+
+async function saveClientChanges(id) {
+    const data = {
+        name: document.getElementById('edit-client-name').value,
+        address: document.getElementById('edit-client-address').value,
+        debt: parseFloat(document.getElementById('edit-client-debt').value) || 0
+    };
+
+    try {
+        const response = await fetch(`/api/admin/clients/${id}/edit`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data)
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+            const idx = clientsData.findIndex(c => c.id == id);
+            if (idx !== -1) {
+                clientsData[idx] = { ...clientsData[idx], ...data };
+                updateClientRowInTable(clientsData[idx]); // <--- Вызов обновления строки
+            }
+            showStatus("✅ Данные клиента успешно обновлены!");
+            setTimeout(() => openClientDetails(id), 1000);
+        } else {
+            showStatus(result.error || result.message || "Ошибка сохранения", true);
+        }
+    } catch (e) {
+        showStatus("❌ Ошибка соединения", true);
+    }
+}
+
+// Обновление строки клиента в главной таблице
+function updateClientRowInTable(client) {
+    const row = document.querySelector(`tr[onclick*="openClientDetails(${client.id})"]`);
+    if (row) {
+        row.cells[0].innerText = client.name;
+        row.cells[1].innerText = client.address;
+        row.cells[2].innerText = (client.debt || 0).toLocaleString() + ' ֏';
+    }
+}
+
+
+// --- НОВАЯ ЛОГИКА ДЛЯ СКЛАДА (PRODUCTS) ---
+
+function cancelProductEdit(id) {
+    openProductDetails(id);
+}
+
+function openProductDetails(id) {
+    window.currentProductId = id;
+    const product = productsData.find(p => p.id == id);
+    if (!product) return;
+
+    document.getElementById('modal-product-title').innerHTML = `Детали товара <span class="badge" style="margin-left:10px;">${product.name}</span>`;
+
+    const info = document.getElementById('product-info');
+    info.style.gridTemplateColumns = '1fr';
+
+    info.innerHTML = `
+        <div class="modal-info-row">
+            <div><small>Название:</small><br><b>${product.name}</b></div>
+            <div><small>Цена:</small><br><b class="price-up">${(product.price || 0).toLocaleString()} ֏</b></div>
+            <div><small>Категория:</small><br><b>${product.category || '---'}</b></div>
+        </div>
+        <div class="modal-info-row">
+            <div><small>Остаток на складе:</small><br><b>${product.stockQuantity || 0} шт.</b></div>
+            <div><small>Штрих-код:</small><br><b>${product.barcode || '---'}</b></div>
+            <div><small>Упаковка (шт. в коробке):</small><br><b>${product.itemsPerBox || '---'}</b></div>
+        </div>
+    `;
+
+    const footer = document.getElementById('product-footer-actions');
+    footer.innerHTML = `
+        <button class="btn-primary" onclick="enableProductEdit()">Изменить товар</button>
+        <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-product-view')">Закрыть</button>`;
+
+    openModal('modal-product-view');
+}
+
+function enableProductEdit() {
+    const id = window.currentProductId;
+    const product = productsData.find(p => p.id == id);
+    if (!product) return;
+
+    document.getElementById('modal-product-title').innerText = "Редактирование товара";
+    const info = document.getElementById('product-info');
+    info.style.gridTemplateColumns = '1fr';
+
+    info.innerHTML = `
+         <div class="modal-info-row">
+            <div><label>Название</label><input type="text" id="edit-product-name" value="${product.name}"></div>
+            <div><label>Цена</label><input type="number" id="edit-product-price" value="${product.price}"></div>
+            <div><label>Категория</label><input type="text" id="edit-product-category" value="${product.category || ''}"></div>
+        </div>
+        <div class="modal-info-row">
+            <div><label>Остаток</label><input type="number" id="edit-product-qty" value="${product.stockQuantity || 0}"></div>
+            <div><label>Штрих-код</label><input type="text" id="edit-product-barcode" value="${product.barcode || ''}"></div>
+            <div><label>Упаковка</label><input type="number" id="edit-product-perbox" value="${product.itemsPerBox || 0}"></div>
+        </div>
+    `;
+
+    const footer = document.getElementById('product-footer-actions');
+    footer.innerHTML = `
+        <button class="btn-primary" style="background:#10b981" onclick="saveProductChanges(${product.id})">Сохранить</button>
+        <button class="btn-primary" style="background:#64748b" onclick="cancelProductEdit(${product.id})">Отмена</button>`;
+}
+
+async function saveProductChanges(id) {
+    const data = {
+        name: document.getElementById('edit-product-name').value,
+        price: parseFloat(document.getElementById('edit-product-price').value) || 0,
+        stockQuantity: parseInt(document.getElementById('edit-product-qty').value) || 0,
+        barcode: document.getElementById('edit-product-barcode').value,
+        itemsPerBox: parseInt(document.getElementById('edit-product-perbox').value) || 0,
+        category: document.getElementById('edit-product-category').value
+    };
+
+    try {
+        const response = await fetch(`/api/admin/products/${id}/edit`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data)
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+            const idx = productsData.findIndex(p => p.id == id);
+            if (idx !== -1) {
+                productsData[idx] = { ...productsData[idx], ...data };
+                updateProductRowInTable(productsData[idx]); // <--- Вызов обновления строки
+            }
+            showStatus("✅ Данные товара успешно обновлены!");
+            setTimeout(() => openProductDetails(id), 1000);
+        } else {
+            showStatus(result.error || result.message || "Ошибка сохранения", true);
+        }
+    } catch (e) {
+        showStatus("❌ Ошибка соединения", true);
+    }
+}
+
+// Обновление строки товара в главной таблице
+function updateProductRowInTable(product) {
+    const row = document.querySelector(`tr[onclick*="openProductDetails(${product.id})"]`);
+    if (row) {
+        row.cells[0].innerText = product.name;
+        row.cells[1].innerText = (product.price || 0).toLocaleString() + ' ֏';
+        row.cells[2].innerText = (product.stockQuantity || 0) + ' шт.';
+        row.cells[3].innerText = product.itemsPerBox;
+        row.cells[4].innerText = product.barcode;
+    }
+}
+
 
 // --- 6. Инициализация ---
 
