@@ -7,12 +7,14 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-import java.time.LocalDateTime;
 import java.util.Map;
 
 @Entity
 @Table(name = "returns")
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
 public class ReturnOrder {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -27,8 +29,8 @@ public class ReturnOrder {
     @Column(name = "quantity")
     private Map<String, Integer> items;
 
-    @JsonProperty("returnReason")
-    private String returnReason;
+
+    private ReasonsReturn returnReason;
 
     @JsonProperty("returnDate")
     private String returnDate;

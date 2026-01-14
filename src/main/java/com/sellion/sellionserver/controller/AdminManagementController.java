@@ -30,24 +30,34 @@ public class AdminManagementController {
     @Transactional
     public ResponseEntity<?> fullEditOrder(@PathVariable Long id, @RequestBody Map<String, Object> payload) {
         Order order = orderRepository.findById(id).orElseThrow();
+
+        // Запрет редактирования, если есть счет
         if (order.getInvoiceId() != null) {
             return ResponseEntity.badRequest().body(Map.of("error", "Заказ со счетом нельзя менять!"));
         }
 
-        // 1. Возврат старого товара на склад
+        // 1. Возврат старого товара на склад ПЕРЕД изменением состава
         stockService.returnItemsToStock(order.getItems());
 
-        // 2. Обновление мета-данных
+        // 2. Обновление полей
         order.setShopName((String) payload.get("shopName"));
         order.setDeliveryDate((String) payload.get("deliveryDate"));
         order.setNeedsSeparateInvoice((Boolean) payload.get("needsSeparateInvoice"));
-        order.setPaymentMethod(PaymentMethod.valueOf((String) payload.get("paymentMethod")));
+
+        // ИСПОЛЬЗУЕМ БЕЗОПАСНЫЙ ENUM
+        order.setPaymentMethod(PaymentMethod.fromString((String) payload.get("paymentMethod")));
 
         // 3. Списание нового состава
         Map<String, Integer> newItems = (Map<String, Integer>) payload.get("items");
-        stockService.deductItemsFromStock(newItems);
+        try {
+            stockService.deductItemsFromStock(newItems);
+        } catch (RuntimeException e) {
+            // Если на складе нет места для НОВОГО состава — возвращаем старый назад и выдаем ошибку
+            stockService.deductItemsFromStock(order.getItems());
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
 
-        // 4. Пересчет суммы
+        // 4. Пересчет и сохранение
         double newTotal = calculateTotal(newItems);
         order.setItems(newItems);
         order.setTotalAmount(newTotal);
@@ -55,6 +65,7 @@ public class AdminManagementController {
 
         return ResponseEntity.ok(Map.of("finalSum", newTotal, "message", "Заказ обновлен"));
     }
+
 
     @PostMapping("/orders/{id}/cancel")
     @Transactional
@@ -93,7 +104,9 @@ public class AdminManagementController {
 
         ret.setShopName((String) payload.get("shopName"));
         ret.setReturnDate((String) payload.get("returnDate"));
-        ret.setReturnReason((String) payload.get("returnReason"));
+
+        // ИСПРАВЛЕНО: Используем безопасный метод и правильный Enum
+        ret.setReturnReason(ReasonsReturn.fromString((String) payload.get("returnReason")));
 
         Map<String, Integer> newItems = (Map<String, Integer>) payload.get("items");
         double newTotal = calculateTotal(newItems);
@@ -102,7 +115,6 @@ public class AdminManagementController {
         ret.setTotalAmount(newTotal);
         returnOrderRepository.save(ret);
 
-        // Как вы просили: возврат НЕ влияет на остатки склада в этом методе
         return ResponseEntity.ok(Map.of("newTotal", newTotal, "message", "Возврат изменен"));
     }
 
@@ -111,7 +123,7 @@ public class AdminManagementController {
     private double calculateTotal(Map<String, Integer> items) {
         double total = 0;
         for (Map.Entry<String, Integer> entry : items.entrySet()) {
-            Product p = productRepository.findByName(entry.getKey())
+            Product p = productRepository.findByNameWithLock(entry.getKey())
                     .orElseThrow(() -> new RuntimeException("Товар не найден: " + entry.getKey()));
             total += p.getPrice() * entry.getValue();
         }

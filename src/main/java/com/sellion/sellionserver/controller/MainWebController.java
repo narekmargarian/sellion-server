@@ -1,7 +1,6 @@
 package com.sellion.sellionserver.controller;
 
-import com.sellion.sellionserver.entity.Order;
-import com.sellion.sellionserver.entity.ReturnOrder;
+import com.sellion.sellionserver.entity.*; // Импорт всех сущностей и Enum
 import com.sellion.sellionserver.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Controller;
@@ -12,7 +11,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 
 import java.util.List;
 import java.util.Objects;
-
 
 @Controller
 @RequestMapping("/admin")
@@ -60,21 +58,26 @@ public class MainWebController {
         model.addAttribute("orders", filteredOrders);
         model.addAttribute("totalOrdersCount", filteredOrders.size());
         model.addAttribute("totalOrdersSum", totalOrdersSum);
-        model.addAttribute("selectedOrderManager", orderManagerId); // Для подсветки в select
+        model.addAttribute("selectedOrderManager", orderManagerId);
 
         // 5. ПЕРЕДАЧА ДАННЫХ ВОЗВРАТОВ
         model.addAttribute("returns", filteredReturns);
         model.addAttribute("totalReturnsCount", filteredReturns.size());
         model.addAttribute("totalReturnsSum", totalReturnsSum);
-        model.addAttribute("selectedReturnManager", returnManagerId); // Для подсветки в select
+        model.addAttribute("selectedReturnManager", returnManagerId);
 
-        // 6. СПИСОК МЕНЕДЖЕРОВ (берем уникальных из всех заказов)
+        // 6. СПИСОК МЕНЕДЖЕРОВ
         List<String> managers = allOrders.stream()
                 .map(Order::getManagerId)
                 .filter(Objects::nonNull)
                 .distinct()
                 .toList();
         model.addAttribute("managers", managers);
+
+        // --- НОВОЕ (ИСПРАВЛЕНИЕ ДЛЯ THYMELEAF И ENUMS) ---
+        // Передаем значения Enum, чтобы в HTML не использовать #enums.names()
+        model.addAttribute("paymentMethods", PaymentMethod.values());
+        model.addAttribute("returnReasons", ReasonsReturn.values());
 
         // Вкладка
         model.addAttribute("activeTab", activeTab);

@@ -7,13 +7,15 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-import java.time.LocalDateTime;
 import java.util.Map;
 
 
 @Entity
 @Table(name = "orders")
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
 public class Order {
 
     @Id
@@ -33,8 +35,6 @@ public class Order {
     private String deliveryDate;
 
 
-    @Enumerated(EnumType.STRING) // Храним название Enum в базе как строку
-    @JsonProperty("paymentMethod")
     private PaymentMethod paymentMethod;
 
     @JsonProperty("needsSeparateInvoice")
@@ -55,8 +55,6 @@ public class Order {
     // НОВОЕ ПОЛЕ: Дата создания заказа (нужно для фильтров оператора)
 
     private String createdAt;
-
-
 
 
 }

@@ -1,17 +1,32 @@
 let tempItems = {};
 
 // --- 1. Навигация и Утилиты ---
+
 function showTab(tabId) {
     document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
     const target = document.getElementById(tabId);
-    if (target) target.classList.add('active');
+    if (target) {
+        target.classList.add('active');
+        // Сбрасываем скролл таблицы во вкладке при переключении
+        const tableContainer = target.querySelector('.table-container');
+        if (tableContainer) tableContainer.scrollTop = 0;
+    }
+
     document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
     const btnId = tabId.replace('tab-', 'btn-');
     if (document.getElementById(btnId)) document.getElementById(btnId).classList.add('active');
+
     localStorage.setItem('sellion_tab', tabId);
 }
 
-function openModal(id) { document.getElementById(id).classList.add('active'); }
+function openModal(id) {
+    const modal = document.getElementById(id);
+    modal.classList.add('active');
+    // Сброс скролла внутреннего контейнера при открытии
+    const sc = modal.querySelector('#table-scroll-container');
+    if (sc) sc.scrollTop = 0;
+}
+
 function closeModal(id) { document.getElementById(id).classList.remove('active'); }
 
 function formatOrderDate(dateStr) {
@@ -29,16 +44,13 @@ function showStatus(text, isError = false) {
     statusDiv.id = "status-notify";
 
     if (text.includes("Недостаточно товара")) {
-        // Берем текст только после двоеточия и до первой технической детали (at ...)
         let cleanMessage = text.split('\n')[0].split(': ').pop();
-
         statusDiv.className = "stock-error-box";
         statusDiv.innerHTML = `
             <div style="font-size: 20px; margin-bottom: 5px;">⚠️</div>
             <div style="font-weight: 800; text-transform: uppercase;">Ошибка склада</div>
             <div style="font-weight: 600;">${cleanMessage}</div>
         `;
-
         modalContent.classList.add('shake-it');
         setTimeout(() => modalContent.classList.remove('shake-it'), 500);
     } else {
@@ -62,18 +74,12 @@ function updateRowInTable(order) {
 
 // --- 2. Логика состава (с Кнопкой ✅) ---
 
-// Функция для мгновенного обновления одного товара и пересчета суммы
-// Функция для мгновенного обновления одного товара и пересчета суммы
 async function applySingleQty(encodedName) {
-    // --- Изменение здесь: декодируем имя обратно ---
     const name = decodeURIComponent(encodedName);
-    // ---------------------------------------------
-
     const input = document.getElementById(`input-qty-${encodedName}`);
-    if (!input) return; // Если инпут не найден, выходим
+    if (!input) return;
 
     let newVal = parseInt(input.value);
-
     if (isNaN(newVal) || newVal < 0) {
         newVal = 0;
         input.value = 0;
@@ -92,28 +98,21 @@ async function applySingleQty(encodedName) {
     }
 
     tempItems[name] = newVal;
-
-    let newTotal = 0;
-    Object.entries(tempItems).forEach(([pName, pQty]) => {
-        const prod = productsData.find(p => p.name === pName);
-        if (prod) newTotal += prod.price * pQty;
-    });
+    let newTotal = calculateCurrentTempTotal();
 
     document.getElementById('order-total-price').innerText = "Предварительно: " + newTotal.toLocaleString() + " ֏";
-    renderItemsTable(tempItems, true); // Перерисовываем с учетом новых сумм
+    renderItemsTable(tempItems, true);
     showStatus(`Товар "${name}" зафиксирован ✅`);
 }
-
 
 function addItemToEdit() {
     const name = document.getElementById('add-item-select').value;
     const qty = parseInt(document.getElementById('add-item-qty').value) || 1;
 
-    // Проверка склада перед добавлением в список
     const product = productsData.find(p => p.name === name);
     if (product && qty > product.stockQuantity) {
         showStatus(`Нельзя добавить ${qty} шт. товара "${name}". На складе всего ${product.stockQuantity}`, true);
-        return; // Блокируем добавление
+        return;
     }
 
     tempItems[name] = (tempItems[name] || 0) + qty;
@@ -121,14 +120,22 @@ function addItemToEdit() {
     showStatus(`Товар "${name}" добавлен в список`);
 }
 
-
 function removeItemFromEdit(encodedName) {
-    // Декодируем имя обратно перед удалением из списка
     const name = decodeURIComponent(encodedName);
-
     delete tempItems[name];
     renderItemsTable(tempItems, true);
 }
+
+function calculateCurrentTempTotal() {
+    let total = 0;
+    Object.entries(tempItems).forEach(([pName, pQty]) => {
+        const prod = productsData.find(p => p.name === pName);
+        if (prod) total += prod.price * pQty;
+    });
+    return total;
+}
+
+// --- 3. Рендеринг таблицы состава ---
 
 function renderItemsTable(itemsMap, isEdit) {
     const container = document.getElementById('table-scroll-container');
@@ -136,73 +143,60 @@ function renderItemsTable(itemsMap, isEdit) {
 
     const body = document.getElementById('order-items-body');
     body.innerHTML = '';
+
     Object.entries(itemsMap).forEach(([name, qty]) => {
         const pInfo = productsData.find(p => p.name === name);
         const price = pInfo ? pInfo.price : 0;
         const total = price * qty;
-
-        // --- Изменение здесь: кодируем имя для безопасного использования в HTML/JS ---
         const encodedName = encodeURIComponent(name);
-        // -------------------------------------------------------------------------
 
         let qtyDisplay = isEdit ?
             `<div style="display:flex; align-items:center; gap:5px;">
                 <input type="number" id="input-qty-${encodedName}" class="qty-input-active" 
-                       value="${qty}" min="0" oninput="if(this.value<0)this.value=0" style="width:60px;">
-                <button onclick="applySingleQty('${encodedName}')" style="border:none; background:transparent; cursor:pointer; font-size:16px; padding:0; display:flex; align-items:center;">
-                    ✅
-                </button>
+                       value="${qty}" min="0" style="width:65px;">
+                <button onclick="applySingleQty('${encodedName}')" style="border:none; background:transparent; cursor:pointer;">✅</button>
             </div>` : `<b>${qty} шт.</b>`;
-
-
 
         body.innerHTML += `<tr>
             <td>${name} ${isEdit ? `<button onclick="removeItemFromEdit('${encodedName}')" style="color:#ef4444; border:none; background:none; cursor:pointer;">&times;</button>` : ''}</td>
             <td>${qtyDisplay}</td>
             <td>${price.toLocaleString()} ֏</td>
             <td style="font-weight:700;">${total.toLocaleString()} ֏</td>
-            <td>${pInfo ? pInfo.category : '---'}</td>
+            <td><small>${pInfo ? pInfo.category : '---'}</small></td>
         </tr>`;
     });
 
     if (isEdit) {
-        // Здесь используем безопасное экранирование для value select'а
-        let options = productsData.map(p => {
-            const safeName = p.name.replace(/"/g, '&quot;');
-            return `<option value="${safeName}">${p.name} (${p.price} ֏)</option>`;
-        }).join('');
-
-        body.innerHTML += `<tr style="background:#f8fafc">
-        <td><select id="add-item-select" style="width:100%; max-width:300px;">${options}</select></td>
-        <td><input type="number" id="add-item-qty" value="1" min="1"></td>
-        <td colspan="3"><button class="btn-primary" onclick="addItemToEdit()">+ Добавить</button></td>
-    </tr>`;
+        let options = productsData.map(p => `<option value="${p.name.replace(/"/g, '&quot;')}">${p.name} (${p.price} ֏)</option>`).join('');
+        body.innerHTML += `<tr style="background:#f8fafc; position: sticky; bottom: 0;">
+            <td><select id="add-item-select" style="width:100%">${options}</select></td>
+            <td><input type="number" id="add-item-qty" value="1" min="1" style="width:65px;"></td>
+            <td colspan="3"><button class="btn-primary" onclick="addItemToEdit()" style="width:100%">+ Добавить</button></td>
+        </tr>`;
     }
 
     if (container) {
-        requestAnimationFrame(() => {
-            container.scrollTop = scrollPos;
-        });
+        requestAnimationFrame(() => { container.scrollTop = scrollPos; });
     }
 }
 
-// --- 3. Основные функции карточки ---
+// --- 4. Основные функции карточки ---
+
 function openOrderDetails(id) {
     const order = ordersData.find(o => o.id == id);
     if (!order) return;
     tempItems = JSON.parse(JSON.stringify(order.items));
 
+    document.getElementById('modal-title').innerHTML = `Детали операции <span class="badge" style="margin-left:10px;">ЗАКАЗ №${order.id}</span>`;
+
     const info = document.getElementById('order-info');
+    info.style.gridTemplateColumns = 'repeat(3, 1fr)';
     info.innerHTML = `
-        <div style="margin-bottom: 15px;">
-            <span style="background: #eef2ff; color: var(--accent); padding: 4px 12px; border-radius: 6px; font-weight: 800; font-size: 12px; border: 1px solid #e0e7ff;">
-                ДОКУМЕНТ: ЗАКАЗ №${order.id}
-            </span>
-        </div>
         <div><small>Магазин:</small><br><b>${order.shopName}</b></div>
         <div><small>Дата заказа:</small><br><b>${formatOrderDate(order.createdAt)}</b></div>
+        <div><small>Менеджер:</small><br><b>${order.managerId}</b></div>
         <div><small>Доставка:</small><br><b>${order.deliveryDate || '---'}</b></div>
-        <div><small>Оплата:</small><br><b>${order.paymentMethod || 'Наличный'}</b></div>
+        <div><small>Оплата:</small><br><b>${order.paymentMethod}</b></div>
         <div><small>Фактура:</small><br><b>${order.needsSeparateInvoice ? 'ДА' : 'НЕТ'}</b></div>
     `;
 
@@ -217,39 +211,24 @@ function openOrderDetails(id) {
          <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-order-view')">Закрыть</button>`;
 
     openModal('modal-order-view');
-    adjustModalHeight(); // <--- ДОБАВЛЕНО/
-
-    const container = document.getElementById('table-scroll-container');
-    if (container) {
-        container.style.maxHeight = '250px';
-    }
 }
-
-
 
 function enableOrderEdit(id) {
     const order = ordersData.find(o => o.id == id);
-    const info = document.getElementById('order-info');
+    document.getElementById('modal-title').innerText = "Режим редактирования заказа #" + id;
 
-    // Конвертер даты "15 января 2026" -> "2026-01-15"
-    let dForInp = "";
-    if (order.deliveryDate && order.deliveryDate.includes(' ')) {
-        const ms = {"января":"01","февраля":"02","марта":"03","апреля":"04","мая":"05","июня":"06","июля":"07","августа":"08","сентября":"09","октября":"10","ноября":"11","декабря":"12"};
-        const p = order.deliveryDate.split(' ');
-        if(p.length >= 3) dForInp = `${p[2]}-${ms[p[1].toLowerCase()]}-${p[0].padStart(2, '0')}`;
-    } else { dForInp = order.deliveryDate || ''; }
+    const info = document.getElementById('order-info');
+    info.style.gridTemplateColumns = 'repeat(3, 1fr)';
 
     let clientOptions = clientsData.map(c => `<option value="${c.name}" ${c.name === order.shopName ? 'selected' : ''}>${c.name}</option>`).join('');
 
+    // Используем paymentMethods из контроллера
+    let paymentOptions = paymentMethods.map(m => `<option value="${m}" ${order.paymentMethod === m ? 'selected' : ''}>${m}</option>`).join('');
+
     info.innerHTML = `
         <div><label>Магазин</label><select id="edit-shop">${clientOptions}</select></div>
-        <div><label>Доставка</label><input type="date" id="edit-delivery" value="${dForInp}"></div>
-        <div><label>Оплата</label>
-            <select id="edit-payment">
-                <option value="Наличный" ${order.paymentMethod === 'Наличный' ? 'selected' : ''}>Наличный</option>
-                <option value="Перевод" ${order.paymentMethod === 'Перевод' ? 'selected' : ''}>Перевод</option>
-            </select>
-        </div>
+        <div><label>Доставка</label><input type="text" id="edit-delivery" value="${order.deliveryDate || ''}"></div>
+        <div><label>Оплата</label><select id="edit-payment">${paymentOptions}</select></div>
         <div><label>Отд. Фактура</label>
             <select id="edit-invoice-type">
                 <option value="false" ${!order.needsSeparateInvoice ? 'selected' : ''}>НЕТ</option>
@@ -258,13 +237,7 @@ function enableOrderEdit(id) {
         </div>`;
 
     renderItemsTable(tempItems, true);
-
-    const container = document.getElementById('table-scroll-container');
-    if (container) {
-        container.style.maxHeight = '200px';
-    }
-
-    document.getElementById('order-total-price').innerText = "Режим редактирования";
+    document.getElementById('order-total-price').innerText = "Редактирование состава...";
     document.getElementById('order-footer-actions').innerHTML = `
         <button class="btn-primary" style="background:#10b981" onclick="saveFullChanges(${id})">Сохранить</button>
         <button class="btn-primary" style="background:#64748b" onclick="openOrderDetails(${id})">Отмена</button>`;
@@ -286,134 +259,45 @@ async function saveFullChanges(id) {
             body: JSON.stringify(data)
         });
 
-        // 1. Сначала проверяем, не пустой ли ответ
-        const text = await response.text();
-        let result;
-        try {
-            result = JSON.parse(text); // Пытаемся превратить текст в объект
-        } catch (e) {
-            // Если сервер прислал не JSON (а просто текст ошибки)
-            showStatus(text || "Ошибка сервера", true);
-            return;
-        }
+        const result = await response.json();
 
         if (response.ok) {
-            const orderIdx = ordersData.findIndex(o => o.id == id);
-            if (orderIdx !== -1) {
-                ordersData[orderIdx] = {
-                    ...ordersData[orderIdx],
-                    ...data,
-                    items: JSON.parse(JSON.stringify(tempItems)),
-                    totalAmount: result.finalSum || result.newTotal
-                };
-                updateRowInTable(ordersData[orderIdx]);
+            const idx = ordersData.findIndex(o => o.id == id);
+            if (idx !== -1) {
+                ordersData[idx] = { ...ordersData[idx], ...data, totalAmount: result.finalSum };
+                updateRowInTable(ordersData[idx]);
             }
             showStatus("✅ Заказ успешно обновлен!");
             setTimeout(() => openOrderDetails(id), 1000);
         } else {
-            // 2. Если сервер прислал ошибку (StockService), передаем её в чистильщик
-            showStatus(result.error || result.message || text, true);
+            showStatus(result.error || result.message || "Ошибка сохранения", true);
         }
     } catch (e) {
-        // 3. Сюда попадем только если ВООБЩЕ нет связи (сервер выключен)
-        console.error(e);
-        showStatus("❌ Ошибка соединения или критический сбой", true);
+        showStatus("❌ Ошибка соединения", true);
     }
 }
 
-// --- СКЛАД / ЦЕНЫ ---
-function openProductDetails(id) {
-    const p = productsData.find(prod => prod.id == id);
-    if (!p) return;
-
-    const info = document.getElementById('order-info');
-    info.innerHTML = `
-        <div style="margin-bottom: 15px;">
-            <span class="badge" style="background: #f0fdf4; color: #166534; border-color: #bbf7d0;">ТОВАР №${p.id}</span>
-        </div>
-        <div><small>Наименование:</small><br><b>${p.name}</b></div>
-        <div><small>Категория:</small><br><b>${p.category || 'Общее'}</b></div>
-        <div><small>Текущий остаток:</small><br><b style="color: var(--accent);">${p.stockQuantity} шт.</b></div>
-        <div><small>Штрих-код:</small><br><b>${p.barcode || '---'}</b></div>
-    `;
-
-    // Вместо таблицы заказов показываем только цену (или историю цен)
-    document.getElementById('order-items-body').innerHTML = `
-        <tr>
-            <td colspan="2">Базовая цена продажи</td>
-            <td colspan="3" style="font-size: 18px; font-weight: 800; color: var(--accent); text-align: right;">${p.price.toLocaleString()} ֏</td>
-        </tr>
-    `;
-
-    document.getElementById('order-total-price').innerText = "Статус: " + (p.stockQuantity > 0 ? "В наличии" : "Нет на складе");
-
-    const footer = document.getElementById('order-footer-actions');
-    footer.innerHTML = `
-        <button class="btn-primary" onclick="editProduct(${p.id})">Изменить цену/остаток</button>
-        <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-order-view')">Закрыть</button>
-    `;
-
-    openModal('modal-order-view');
-}
-
-// --- КЛИЕНТЫ ---
-function openClientDetails(id) {
-    const c = clientsData.find(client => client.id == id);
-    if (!c) return;
-
-    const info = document.getElementById('order-info');
-    info.innerHTML = `
-        <div style="margin-bottom: 15px;">
-            <span class="badge" style="background: #eff6ff; color: #1e40af; border-color: #dbeafe;">КЛИЕНТ №${c.id}</span>
-        </div>
-        <div><small>Название магазина:</small><br><b>${c.name}</b></div>
-        <div><small>Адрес:</small><br><b>${c.address || 'Не указан'}</b></div>
-        <div><small>Телефон:</small><br><b>${c.phone || '---'}</b></div>
-    `;
-
-    document.getElementById('order-items-body').innerHTML = `
-        <tr style="background: #fef2f2;">
-            <td colspan="2">Текущая задолженность</td>
-            <td colspan="3" style="font-size: 18px; font-weight: 800; color: #ef4444; text-align: right;">${(c.debt || 0).toLocaleString()} ֏</td>
-        </tr>
-    `;
-
-    document.getElementById('order-total-price').innerText = "Статус: " + (c.debt > 0 ? "Есть долг" : "Оплачено");
-
-    const footer = document.getElementById('order-footer-actions');
-    footer.innerHTML = `
-        <button class="btn-primary" onclick="alert('Логика акта сверки...')">Акт сверки</button>
-        <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-order-view')">Закрыть</button>
-    `;
-
-    openModal('modal-order-view');
-}
-
-// --- ВОЗВРАТЫ ---
+// --- 5. Возвраты ---
 
 function openReturnDetails(id) {
     const ret = returnsData.find(r => r.id == id);
     if (!ret) return;
     tempItems = JSON.parse(JSON.stringify(ret.items));
 
+    document.getElementById('modal-title').innerHTML = `Детали операции <span class="badge" style="margin-left:10px;">ВОЗВРАТ №${ret.id}</span>`;
+
     const info = document.getElementById('order-info');
+    info.style.gridTemplateColumns = 'repeat(3, 1fr)';
     info.innerHTML = `
-        <div style="margin-bottom: 15px;">
-            <span class="badge" style="background: #fff1f2; color: #991b1b; border-color: #fecdd3; padding: 4px 12px; border-radius: 6px; font-weight: 800; font-size: 12px;">
-                ДОКУМЕНТ: ВОЗВРАТ №${ret.id}
-            </span>
-        </div>
         <div><small>Магазин:</small><br><b>${ret.shopName}</b></div>
         <div><small>Дата возврата:</small><br><b>${ret.returnDate}</b></div>
-        <div><small>Причина:</small><br><b style="color: #ef4444;">${ret.returnReason || 'Не указана'}</b></div>
+        <div><small>Причина:</small><br><b style="color: #ef4444;">${ret.returnReason}</b></div>
     `;
 
     renderItemsTable(tempItems, false);
     document.getElementById('order-total-price').innerText = "Сумма возврата: " + (ret.totalAmount || 0).toLocaleString() + " ֏";
-    document.getElementById('order-total-price').className = "price-down";
 
-    const footer = document.getElementById('order-footer-actions');
-    footer.innerHTML = `
+    document.getElementById('order-footer-actions').innerHTML = `
         <button class="btn-primary" onclick="enableReturnEdit(${ret.id})">Изменить возврат</button>
         <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-order-view')">Закрыть</button>`;
 
@@ -422,29 +306,25 @@ function openReturnDetails(id) {
 
 function enableReturnEdit(id) {
     const ret = returnsData.find(r => r.id == id);
+    document.getElementById('modal-title').innerText = "Редактирование возврата #" + id;
+
     const info = document.getElementById('order-info');
-    let clientOptions = clientsData.map(c => `<option value="${c.name}" ${c.name === ret.shopName ? 'selected' : ''}>${c.name}</option>`).join('');
+    let reasonOptions = returnReasons.map(r => `<option value="${r}" ${ret.returnReason === r ? 'selected' : ''}>${r}</option>`).join('');
 
     info.innerHTML = `
-        <div><label>Магазин</label><select id="edit-ret-shop">${clientOptions}</select></div>
+        <div><label>Магазин</label><input type="text" value="${ret.shopName}" disabled></div>
         <div><label>Дата возврата</label><input type="text" id="edit-ret-date" value="${ret.returnDate}"></div>
-        <div><label>Причина возврата</label>
-            <select id="edit-ret-reason">
-                <option value="Брак" ${ret.returnReason === 'Брак' ? 'selected' : ''}>Брак</option>
-                <option value="Просрочка" ${ret.returnReason === 'Просрочка' ? 'selected' : ''}>Просрочка</option>
-                <option value="Ошибка заказа" ${ret.returnReason === 'Ошибка заказа' ? 'selected' : ''}>Ошибка заказа</option>
-            </select>
-        </div>`;
+        <div><label>Причина</label><select id="edit-ret-reason">${reasonOptions}</select></div>`;
 
     renderItemsTable(tempItems, true);
     document.getElementById('order-footer-actions').innerHTML = `
-        <button class="btn-primary" style="background:#10b981" onclick="saveReturnChanges(${id})">Сохранить возврат</button>
+        <button class="btn-primary" style="background:#10b981" onclick="saveReturnChanges(${id})">Сохранить</button>
         <button class="btn-primary" style="background:#64748b" onclick="openReturnDetails(${id})">Отмена</button>`;
 }
 
 async function saveReturnChanges(id) {
     const data = {
-        shopName: document.getElementById('edit-ret-shop').value,
+        shopName: returnsData.find(r => r.id == id).shopName,
         returnDate: document.getElementById('edit-ret-date').value,
         returnReason: document.getElementById('edit-ret-reason').value,
         items: tempItems
@@ -459,57 +339,25 @@ async function saveReturnChanges(id) {
             const result = await response.json();
             const idx = returnsData.findIndex(r => r.id == id);
             if (idx !== -1) {
-                returnsData[idx] = { ...returnsData[idx], ...data, items: JSON.parse(JSON.stringify(tempItems)), totalAmount: result.newTotal };
+                returnsData[idx] = { ...returnsData[idx], ...data, totalAmount: result.newTotal };
                 updateReturnRowInTable(returnsData[idx]);
             }
-            showStatus("✅ Возврат успешно обновлен!");
+            showStatus("✅ Возврат обновлен!");
             setTimeout(() => openReturnDetails(id), 1000);
-        } else {
-            const err = await response.json();
-            showStatus(err.error || "Ошибка сохранения", true);
         }
     } catch (e) { showStatus("❌ Ошибка сети", true); }
 }
-
-
-function adjustModalHeight() {
-    const modalContent = document.querySelector('#modal-order-view .modal-content');
-    const scrollContainer = document.getElementById('table-scroll-container');
-
-    if (!modalContent || !scrollContainer) return;
-
-    // Высота всего видимого окна браузера (viewport height)
-    const viewportHeight = window.innerHeight;
-
-    // Получаем вертикальные отступы модального контента (32px padding top + 32px padding bottom)
-    const modalPadding = 64;
-
-    // Рассчитываем высоту, которую занимают фиксированные элементы:
-    const fixedElementsHeight = (
-        document.getElementById('order-info').offsetHeight +
-        document.querySelector('.modal-content h2').offsetHeight + // Заголовок "Детали операции"
-        document.querySelector('.modal-content .modal-content > div:last-child').offsetHeight + // Футер с кнопками
-        modalPadding
-    );
-
-    // Рассчитываем, сколько места осталось для таблицы товаров
-    // Вычитаем 100px запаса
-    const availableHeight = viewportHeight - fixedElementsHeight - 100;
-
-    // Устанавливаем высоту контейнеру с товарами
-    scrollContainer.style.maxHeight = `${availableHeight}px`;
-}
-
 
 function updateReturnRowInTable(ret) {
     const row = document.querySelector(`tr[onclick*="openReturnDetails(${ret.id})"]`);
     if (row) {
         row.cells[0].innerText = ret.returnDate;
-        row.cells[2].innerText = ret.shopName;
         row.cells[3].innerText = ret.returnReason;
         row.cells[4].innerText = (ret.totalAmount || 0).toLocaleString() + ' ֏';
     }
 }
+
+// --- 6. Инициализация ---
 
 document.addEventListener("DOMContentLoaded", () => {
     showTab(localStorage.getItem('sellion_tab') || 'tab-orders');
