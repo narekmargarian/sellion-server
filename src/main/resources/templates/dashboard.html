@@ -149,6 +149,7 @@
 <!-- МОДАЛЬНЫЕ ОКНА -->
 
 <!-- 1. ПРОСМОТР И РЕДАКТИРОВАНИЕ -->
+<!-- 1. ПРОСМОТР И РЕДАКТИРОВАНИЕ -->
 <div id="modal-order-view" class="modal">
     <div class="modal-content" style="width: 850px;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
@@ -160,20 +161,25 @@
             <!-- Сюда JS вставит данные -->
         </div>
 
+        <!-- ИСПРАВЛЕННЫЙ БЛОК: Контейнер с прокруткой для таблицы товаров -->
+        <div id="table-scroll-container" style="overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 10px;">
+
         <table class="table">
-            <thead>
-            <tr>
-                <th>Товар</th>
-                <th>Кол-во</th>
-                <th>Цена</th>
-                <th>Итого</th>
-                <th>Категория</th>
-            </tr>
-            </thead>
-            <tbody id="order-items-body">
-            <!-- Сюда JS вставит список товаров -->
-            </tbody>
-        </table>
+                <thead>
+                <tr>
+                    <th>Товар</th>
+                    <th>Кол-во</th>
+                    <th>Цена</th>
+                    <th>Итого</th>
+                    <th>Категория</th>
+                </tr>
+                </thead>
+                <tbody id="order-items-body">
+                <!-- Сюда JS вставит список товаров -->
+                </tbody>
+            </table>
+        </div>
+        <!-- КОНЕЦ ИСПРАВЛЕННОГО БЛОКА -->
 
         <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 20px; padding-top: 20px; border-top: 2px solid #eee;">
             <div id="order-total-price" style="font-size: 20px; font-weight: 800; color: var(--accent);"></div>
@@ -198,7 +204,6 @@
         </div>
     </div>
 </div>
-
 
 
 

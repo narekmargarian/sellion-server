@@ -63,11 +63,17 @@ function updateRowInTable(order) {
 // --- 2. Логика состава (с Кнопкой ✅) ---
 
 // Функция для мгновенного обновления одного товара и пересчета суммы
-async function applySingleQty(name) {
-    const input = document.getElementById(`input-qty-${name}`);
+// Функция для мгновенного обновления одного товара и пересчета суммы
+async function applySingleQty(encodedName) {
+    // --- Изменение здесь: декодируем имя обратно ---
+    const name = decodeURIComponent(encodedName);
+    // ---------------------------------------------
+
+    const input = document.getElementById(`input-qty-${encodedName}`);
+    if (!input) return; // Если инпут не найден, выходим
+
     let newVal = parseInt(input.value);
 
-    // Если ввели минус или не число — сбрасываем в 0
     if (isNaN(newVal) || newVal < 0) {
         newVal = 0;
         input.value = 0;
@@ -87,7 +93,6 @@ async function applySingleQty(name) {
 
     tempItems[name] = newVal;
 
-    // Пересчет общей суммы в интерфейсе
     let newTotal = 0;
     Object.entries(tempItems).forEach(([pName, pQty]) => {
         const prod = productsData.find(p => p.name === pName);
@@ -95,8 +100,8 @@ async function applySingleQty(name) {
     });
 
     document.getElementById('order-total-price').innerText = "Предварительно: " + newTotal.toLocaleString() + " ֏";
-    renderItemsTable(tempItems, true);
-    showStatus(`Товар зафиксирован ✅`);
+    renderItemsTable(tempItems, true); // Перерисовываем с учетом новых сумм
+    showStatus(`Товар "${name}" зафиксирован ✅`);
 }
 
 
@@ -117,12 +122,18 @@ function addItemToEdit() {
 }
 
 
-function removeItemFromEdit(name) {
+function removeItemFromEdit(encodedName) {
+    // Декодируем имя обратно перед удалением из списка
+    const name = decodeURIComponent(encodedName);
+
     delete tempItems[name];
     renderItemsTable(tempItems, true);
 }
 
 function renderItemsTable(itemsMap, isEdit) {
+    const container = document.getElementById('table-scroll-container');
+    const scrollPos = container ? container.scrollTop : 0;
+
     const body = document.getElementById('order-items-body');
     body.innerHTML = '';
     Object.entries(itemsMap).forEach(([name, qty]) => {
@@ -130,29 +141,48 @@ function renderItemsTable(itemsMap, isEdit) {
         const price = pInfo ? pInfo.price : 0;
         const total = price * qty;
 
+        // --- Изменение здесь: кодируем имя для безопасного использования в HTML/JS ---
+        const encodedName = encodeURIComponent(name);
+        // -------------------------------------------------------------------------
+
         let qtyDisplay = isEdit ?
             `<div style="display:flex; align-items:center; gap:5px;">
-                <input type="number" id="input-qty-${name}" class="qty-input-active" 
+                <input type="number" id="input-qty-${encodedName}" class="qty-input-active" 
                        value="${qty}" min="0" oninput="if(this.value<0)this.value=0" style="width:60px;">
-                <button onclick="applySingleQty('${name}')" style="border:none; background:none; cursor:pointer; font-size:16px;">✅</button>
+                <button onclick="applySingleQty('${encodedName}')" style="border:none; background:transparent; cursor:pointer; font-size:16px; padding:0; display:flex; align-items:center;">
+                    ✅
+                </button>
             </div>` : `<b>${qty} шт.</b>`;
 
+
+
         body.innerHTML += `<tr>
-            <td>${name} ${isEdit ? `<button onclick="removeItemFromEdit('${name}')" style="color:#ef4444; border:none; background:none; cursor:pointer;">&times;</button>` : ''}</td>
+            <td>${name} ${isEdit ? `<button onclick="removeItemFromEdit('${encodedName}')" style="color:#ef4444; border:none; background:none; cursor:pointer;">&times;</button>` : ''}</td>
             <td>${qtyDisplay}</td>
             <td>${price.toLocaleString()} ֏</td>
             <td style="font-weight:700;">${total.toLocaleString()} ֏</td>
             <td>${pInfo ? pInfo.category : '---'}</td>
         </tr>`;
     });
+
     if (isEdit) {
-        let options = productsData.map(p => `<option value="${p.name}">${p.name} (${p.price} ֏)</option>`).join('');
+        // Здесь используем безопасное экранирование для value select'а
+        let options = productsData.map(p => {
+            const safeName = p.name.replace(/"/g, '&quot;');
+            return `<option value="${safeName}">${p.name} (${p.price} ֏)</option>`;
+        }).join('');
+
         body.innerHTML += `<tr style="background:#f8fafc">
-            <td><select id="add-item-select">${options}</select></td>
-            <!-- Защита для поля добавления нового товара -->
-            <td><input type="number" id="add-item-qty" value="1" min="1" oninput="if(this.value<1)this.value=1"></td>
-            <td colspan="3"><button class="btn-primary" onclick="addItemToEdit()">+ Добавить</button></td>
-        </tr>`;
+        <td><select id="add-item-select" style="width:100%; max-width:300px;">${options}</select></td>
+        <td><input type="number" id="add-item-qty" value="1" min="1"></td>
+        <td colspan="3"><button class="btn-primary" onclick="addItemToEdit()">+ Добавить</button></td>
+    </tr>`;
+    }
+
+    if (container) {
+        requestAnimationFrame(() => {
+            container.scrollTop = scrollPos;
+        });
     }
 }
 
@@ -187,6 +217,12 @@ function openOrderDetails(id) {
          <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-order-view')">Закрыть</button>`;
 
     openModal('modal-order-view');
+    adjustModalHeight(); // <--- ДОБАВЛЕНО/
+
+    const container = document.getElementById('table-scroll-container');
+    if (container) {
+        container.style.maxHeight = '250px';
+    }
 }
 
 
@@ -222,6 +258,12 @@ function enableOrderEdit(id) {
         </div>`;
 
     renderItemsTable(tempItems, true);
+
+    const container = document.getElementById('table-scroll-container');
+    if (container) {
+        container.style.maxHeight = '200px';
+    }
+
     document.getElementById('order-total-price').innerText = "Режим редактирования";
     document.getElementById('order-footer-actions').innerHTML = `
         <button class="btn-primary" style="background:#10b981" onclick="saveFullChanges(${id})">Сохранить</button>
@@ -428,6 +470,36 @@ async function saveReturnChanges(id) {
         }
     } catch (e) { showStatus("❌ Ошибка сети", true); }
 }
+
+
+function adjustModalHeight() {
+    const modalContent = document.querySelector('#modal-order-view .modal-content');
+    const scrollContainer = document.getElementById('table-scroll-container');
+
+    if (!modalContent || !scrollContainer) return;
+
+    // Высота всего видимого окна браузера (viewport height)
+    const viewportHeight = window.innerHeight;
+
+    // Получаем вертикальные отступы модального контента (32px padding top + 32px padding bottom)
+    const modalPadding = 64;
+
+    // Рассчитываем высоту, которую занимают фиксированные элементы:
+    const fixedElementsHeight = (
+        document.getElementById('order-info').offsetHeight +
+        document.querySelector('.modal-content h2').offsetHeight + // Заголовок "Детали операции"
+        document.querySelector('.modal-content .modal-content > div:last-child').offsetHeight + // Футер с кнопками
+        modalPadding
+    );
+
+    // Рассчитываем, сколько места осталось для таблицы товаров
+    // Вычитаем 100px запаса
+    const availableHeight = viewportHeight - fixedElementsHeight - 100;
+
+    // Устанавливаем высоту контейнеру с товарами
+    scrollContainer.style.maxHeight = `${availableHeight}px`;
+}
+
 
 function updateReturnRowInTable(ret) {
     const row = document.querySelector(`tr[onclick*="openReturnDetails(${ret.id})"]`);

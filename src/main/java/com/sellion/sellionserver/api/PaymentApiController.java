@@ -28,19 +28,18 @@ public class PaymentApiController {
     @PostMapping("/register")
     @Transactional
     public ResponseEntity<?> registerPayment(@RequestBody Payment payment) {
-        // 1. Находим счет
+        // 1. Находим счет по ID
         Invoice invoice = invoiceRepository.findById(payment.getInvoiceId())
-                .orElseThrow(() -> new RuntimeException("Счет не найден"));
+                .orElseThrow(() -> new RuntimeException("Счет не найден: " + payment.getInvoiceId()));
 
-        // 2. Сохраняем платеж
+        // 2. Сохраняем информацию о платеже
         payment.setPaymentDate(LocalDateTime.now());
         paymentRepository.save(payment);
 
-        // 3. Обновляем сумму оплаты в инвойсе
-        double alreadyPaid = (invoice.getPaidAmount() != null) ? invoice.getPaidAmount() : 0.0;
-        invoice.setPaidAmount(alreadyPaid + payment.getAmount());
+        // 3. Обновляем статус оплаты в инвойсе
+        double currentPaid = (invoice.getPaidAmount() != null) ? invoice.getPaidAmount() : 0.0;
+        invoice.setPaidAmount(currentPaid + payment.getAmount());
 
-        // 4. Обновляем статус инвойса
         if (invoice.getPaidAmount() >= invoice.getTotalAmount()) {
             invoice.setStatus("PAID");
         } else {
@@ -48,17 +47,18 @@ public class PaymentApiController {
         }
         invoiceRepository.save(invoice);
 
-        // 5. Уменьшаем долг клиента (если клиент привязан через магазин)
-        // Ищем клиента по имени магазина из инвойса
-        clientRepository.findAll().stream()
-                .filter(c -> c.getName().equals(invoice.getShopName()))
-                .findFirst()
-                .ifPresent(client -> {
-                    double currentDebt = (client.getDebt() != null) ? client.getDebt() : 0.0;
-                    client.setDebt(Math.max(0, currentDebt - payment.getAmount()));
-                    clientRepository.save(client);
-                });
+        // 4. Оптимизированное списание долга клиента (стандарт 2026)
+        clientRepository.findByName(invoice.getShopName()).ifPresent(client -> {
+            double currentDebt = (client.getDebt() != null) ? client.getDebt() : 0.0;
+            // Долг не может быть меньше нуля
+            client.setDebt(Math.max(0, currentDebt - payment.getAmount()));
+            clientRepository.save(client);
+        });
 
-        return ResponseEntity.ok(Map.of("message", "Платеж принят", "newStatus", invoice.getStatus()));
+        return ResponseEntity.ok(Map.of(
+                "message", "Платеж успешно зарегистрирован",
+                "newInvoiceStatus", invoice.getStatus()
+        ));
     }
 }
+

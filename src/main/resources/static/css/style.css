@@ -41,7 +41,21 @@ body { font-family: 'Plus Jakarta Sans', sans-serif; background: var(--bg); marg
 /* Модальные окна */
 .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.6); align-items: center; justify-content: center; backdrop-filter: blur(8px); transition: all 0.3s; }
 .modal.active { display: flex; }
-.modal-content { background: white; padding: 32px; border-radius: 20px; width: 850px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); max-height: 90vh; overflow-y: auto; position: relative; border: 1px solid rgba(255,255,255,0.1); }
+
+/* ГЛАВНОЕ ИСПРАВЛЕНИЕ: Убрана общая прокрутка */
+.modal-content {
+    background: white;
+    padding: 32px;
+    border-radius: 20px;
+    width: 850px;
+    box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);
+    position: relative;
+    border: 1px solid rgba(255,255,255,0.1);
+
+    max-height: 90vh; /* Ограничивает высоту 90% от высоты экрана */
+    /*overflow-y: auto;*/
+    /* max-height и overflow-y удалены */
+}
 
 /* СОВРЕМЕННЫЕ ФОРМЫ (Исправление "Windows XP") */
 .modal-content label { display: block; font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 6px; margin-top: 12px; }
