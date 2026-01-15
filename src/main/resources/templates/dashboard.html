@@ -35,11 +35,13 @@
 
 
     <form th:action="@{/logout}" method="post" style="margin-top:auto; padding:20px;">
-        <button type="submit"
+        <button type="button"
+                onclick="showConfirmModal('Подтвердите выход', 'Вы уверены, что хотите покинуть систему?', () => document.forms[0].submit())"
                 style="width:100%; background:#ef4444; color:white; border:none; padding:10px; border-radius:8px; cursor:pointer; font-weight:700;">
             ВЫХОД
         </button>
     </form>
+
 </div>
 
 <div class="main">
@@ -618,6 +620,35 @@
                     </tr>
                     </tbody>
                 </table>
+            </div>
+        </div>
+
+        <!-- МОДАЛЬНОЕ ОКНО СОЗДАНИЯ СОТРУДНИКА -->
+        <div id="modal-user-create" class="modal">
+            <div class="modal-content" style="width: 500px;">
+                <h2 style="margin-bottom:20px;">🧑‍💻 Добавление нового сотрудника</h2>
+                <div class="modal-info-row">
+                    <div style="flex:1">
+                        <label>Логин (Username)</label><input type="text" id="new-u-username" placeholder="op1, acc1, boss">
+                        <label>Полное ФИО</label><input type="text" id="new-u-fullname" placeholder="Иванов Иван Иванович">
+                    </div>
+                </div>
+                <div class="modal-info-row" style="margin-top:10px;">
+                    <div style="flex:1">
+                        <label>Роль</label>
+                        <select id="new-u-role">
+                            <option value="OPERATOR">Оператор</option>
+                            <option value="ACCOUNTANT">Бухгалтер</option>
+                            <option value="ADMIN">Админ</option>
+                        </select>
+                        <label>Пароль (по умолчанию 'qwerty')</label>
+                        <input type="text" id="new-u-password" value="1111">
+                    </div>
+                </div>
+                <div style="display: flex; gap: 10px; margin-top: 25px; justify-content: flex-end;">
+                    <button class="btn-primary" onclick="submitCreateUser()" style="background:#10b981">Создать сотрудника</button>
+                    <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-user-create')">Отмена</button>
+                </div>
             </div>
         </div>
 

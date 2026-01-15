@@ -128,7 +128,7 @@ function addItemToEdit() {
 
     const productId = document.getElementById('add-item-select').value;
     const qty = parseInt(document.getElementById('add-item-qty').value) || 1;
-    const product = productsData.find(p => p.id == productId);
+    const product = productsData.find(p => p.id === productId);
     if (product) {
         // ПРОВЕРКА: Если мы в модалке заказа, проверяем остаток.
         // Если заголовок содержит "возврат", проверку пропускаем.
@@ -225,7 +225,7 @@ function renderItemsTable(itemsMap, isEdit) {
 
 // --- 4. Основные функции карточки заказа ---
 function openOrderDetails(id) {
-    const order = ordersData.find(o => o.id == id);
+    const order = ordersData.find(o => o.id === id);
     if (!order) return;
     tempItems = JSON.parse(JSON.stringify(order.items));
     document.getElementById('modal-title').innerHTML = `Детали операции <span class="badge" style="margin-left:10px;">ЗАКАЗ №${order.id}</span>`;
@@ -268,7 +268,7 @@ function openOrderDetails(id) {
 }
 
 function enableOrderEdit(id) {
-    const order = ordersData.find(o => o.id == id);
+    const order = ordersData.find(o => o.id === id);
     document.getElementById('modal-title').innerText = "Режим редактирования заказа #" + id;
     const info = document.getElementById('order-info');
     // info.style.gridTemplateColumns = '1fr';
@@ -320,7 +320,7 @@ async function saveFullChanges(id) {
         });
         const result = await response.json();
         if (response.ok) {
-            const idx = ordersData.findIndex(o => o.id == id);
+            const idx = ordersData.findIndex(o => o.id === id);
             if (idx !== -1) {
                 ordersData[idx] = {...ordersData[idx], ...data, totalAmount: result.finalSum};
                 updateRowInTable(ordersData[idx]);
@@ -410,7 +410,7 @@ async function confirmReturn(id) {
 
 
 function enableReturnEdit(id) {
-    const ret = returnsData.find(r => r.id == id);
+    const ret = returnsData.find(r => r.id === id);
     if (!ret) return;
     document.getElementById('modal-title').innerText = "Редактирование возврата #" + id;
     const info = document.getElementById('order-info');
@@ -457,7 +457,7 @@ async function saveReturnChanges(id) {
         });
         if (response.ok) {
             const result = await response.json();
-            const idx = returnsData.findIndex(r => r.id == id);
+            const idx = returnsData.findIndex(r => r.id === id);
             if (idx !== -1) {
                 returnsData[idx] = {...returnsData[idx], ...data, totalAmount: result.newTotal};
                 updateReturnRowInTable(returnsData[idx]); // <--- Вызов обновления строки
@@ -489,7 +489,7 @@ function cancelClientEdit(id) {
 
 // 2. Полная карточка клиента (все поля)
 function openClientDetails(id) {
-    const client = clientsData.find(c => c.id == id);
+    const client = clientsData.find(c => c.id === id);
     if (!client) return;
     window.currentClientId = id;
     document.getElementById('modal-client-title').innerHTML = `Детали клиента <span class="badge">${client.name}</span>`;
@@ -514,7 +514,7 @@ function openClientDetails(id) {
 }
 
 function enableClientEdit() {
-    const client = clientsData.find(c => c.id == window.currentClientId);
+    const client = clientsData.find(c => c.id === window.currentClientId);
     if (!client) return;
     const info = document.getElementById('client-info');
     info.innerHTML = `
@@ -554,7 +554,7 @@ async function saveClientChanges(id) {
 
         if (response.ok) {
             // СРАЗУ ОБНОВЛЯЕМ ДАННЫЕ В ЛОКАЛЬНОМ МАССИВЕ
-            const idx = clientsData.findIndex(c => c.id == id);
+            const idx = clientsData.findIndex(c => c.id === id);
             if (idx !== -1) clientsData[idx] = {...clientsData[idx], ...data};
             // Обновляем строку в таблице
             updateClientRowInTable(clientsData[idx]);
@@ -587,7 +587,7 @@ function cancelProductEdit(id) {
 
 function openProductDetails(id) {
     window.currentProductId = id;
-    const product = productsData.find(p => p.id == id);
+    const product = productsData.find(p => p.id === id);
     if (!product) return;
     document.getElementById('modal-product-title').innerHTML = `Детали товара <span class="badge" style="margin-left:10px;">${product.name}</span>`;
     const info = document.getElementById('product-info');
@@ -616,7 +616,7 @@ function openProductDetails(id) {
 
 function enableProductEdit() {
     const id = window.currentProductId;
-    const product = productsData.find(p => p.id == id);
+    const product = productsData.find(p => p.id === id);
     if (!product) return;
     document.getElementById('modal-product-title').innerText = "Редактирование товара";
     const info = document.getElementById('product-info');
@@ -660,7 +660,7 @@ async function saveProductChanges(id) {
         const result = await response.json();
 
         if (response.ok) {
-            const idx = productsData.findIndex(p => p.id == id);
+            const idx = productsData.findIndex(p => p.id === id);
             if (idx !== -1) {
                 productsData[idx] = {...productsData[idx], ...data};
                 updateProductRowInTable(productsData[idx]); // <--- Вызов обновления строки
@@ -1118,7 +1118,7 @@ function showToast(text, type = 'info') {
 
 
 function openUserDetailsModal(id) {
-    const user = usersData.find(u => u.id == id);
+    const user = usersData.find(u => u.id === id);
     if (!user) return;
 
     // Используем модальное окно, которое уже есть для клиентов
@@ -1182,14 +1182,54 @@ function showConfirmModal(title, text, onConfirm) {
     modal.showModal();
 }
 
+// script.js
+
+// Функция для открытия модалки создания пользователя
+function openCreateUserModal() {
+    openModal('modal-user-create');
+}
+
+// Функция отправки нового пользователя на сервер
+async function submitCreateUser() {
+    const data = {
+        username: document.getElementById('new-u-username').value,
+        fullName: document.getElementById('new-u-fullname').value,
+        role: document.getElementById('new-u-role').value,
+        password: document.getElementById('new-u-password').value
+    };
+
+    if (!data.username || !data.fullName) {
+        showToast("Заполните все обязательные поля!");
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/admin/users/create', { // Убедись, что этот API существует
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data)
+        });
+        if (response.ok) {
+            showToast("✅ Сотрудник успешно добавлен", "success");
+            location.reload(); // Обновляем страницу, чтобы увидеть нового пользователя в таблице
+        } else {
+            const error = await response.json();
+            showToast(error.error || "Ошибка при сохранении пользователя", "error");
+        }
+    } catch (e) {
+        console.error(e);
+        showToast("Ошибка сети", "error");
+    }
+}
+
 
 
 async function resetPassword(userId) {
-    showConfirmModal("Сброс пароля", "Сбросить пароль пользователю на стандартный '1111'?", async () => {
+    showConfirmModal("Сброс пароля", "Сбросить пароль пользователю на стандартный 'qwerty'?", async () => {
         try {
-            const response = await fetch(`/admin/users/reset-password/${userId}`, {method: 'POST'});
+            const response = await fetch(`/api/admin/users/reset-password/${userId}`, {method: 'POST'});
             if (response.ok) {
-                showToast("Пароль сброшен на '1111'", "success");
+                showToast("Пароль сброшен на 'qwerty'", "success");
             } else {
                 showToast("Ошибка при сбросе пароля", "error");
             }
