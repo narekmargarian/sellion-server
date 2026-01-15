@@ -56,6 +56,7 @@ public class Order {
 
     private String createdAt;
 
+    private String comment;
 
 }
 

@@ -146,7 +146,8 @@ function calculateCurrentTempTotal() {
     // Обновляем общую сумму в модалке при каждом расчете
     const totalPriceElement = document.getElementById('order-total-price');
     if (totalPriceElement) {
-        totalPriceElement.innerText = "Предварительно: " + total.toLocaleString() + " ֏";
+        // Замени "Предварительно:" на "Итого:"
+        totalPriceElement.innerText = "Итого: " + total.toLocaleString() + " ֏";
     }
     return total;
 }
@@ -208,7 +209,7 @@ function openOrderDetails(id) {
     tempItems = JSON.parse(JSON.stringify(order.items));
     document.getElementById('modal-title').innerHTML = `Детали операции <span class="badge" style="margin-left:10px;">ЗАКАЗ №${order.id}</span>`;
     const info = document.getElementById('order-info');
-    info.style.gridTemplateColumns = '1fr';
+    // info.style.gridTemplateColumns = '1fr';
     info.innerHTML = `
         <div class="modal-info-row">
             <div><small>Магазин:</small><br><b>${order.shopName}</b></div>
@@ -249,7 +250,7 @@ function enableOrderEdit(id) {
     const order = ordersData.find(o => o.id == id);
     document.getElementById('modal-title').innerText = "Режим редактирования заказа #" + id;
     const info = document.getElementById('order-info');
-    info.style.gridTemplateColumns = '1fr';
+    // info.style.gridTemplateColumns = '1fr';
     let clientOptions = clientsData.map(c => `<option value="${c.name}" ${c.name === order.shopName ? 'selected' : ''}>${c.name}</option>`).join('');
     let paymentOptions = paymentMethods.map(m => {
         const val = (typeof m === 'object') ? m.name : m;
@@ -320,7 +321,7 @@ function openReturnDetails(id) {
     tempItems = JSON.parse(JSON.stringify(ret.items));
     document.getElementById('modal-title').innerHTML = `Детали операции <span class="badge" style="margin-left:10px;">ВОЗВРАТ №${ret.id}</span>`;
     const info = document.getElementById('order-info');
-    info.style.gridTemplateColumns = '1fr';
+    // info.style.gridTemplateColumns = '1fr';
 
 
     const displayReason = translateReason(ret.returnReason);
@@ -377,7 +378,7 @@ function enableReturnEdit(id) {
     if (!ret) return;
     document.getElementById('modal-title').innerText = "Редактирование возврата #" + id;
     const info = document.getElementById('order-info');
-    info.style.gridTemplateColumns = '1fr';
+    // info.style.gridTemplateColumns = '1fr';
     let reasonOptions = returnReasons.map(r => {
         const val = (typeof r === 'object') ? r.name : r;
         const label = translateReason(r);
@@ -554,7 +555,7 @@ function openProductDetails(id) {
     if (!product) return;
     document.getElementById('modal-product-title').innerHTML = `Детали товара <span class="badge" style="margin-left:10px;">${product.name}</span>`;
     const info = document.getElementById('product-info');
-    info.style.gridTemplateColumns = '1fr';
+    // info.style.gridTemplateColumns = '1fr';
 
     info.innerHTML = `
         <div class="modal-info-row">
@@ -583,7 +584,7 @@ function enableProductEdit() {
     if (!product) return;
     document.getElementById('modal-product-title').innerText = "Редактирование товара";
     const info = document.getElementById('product-info');
-    info.style.gridTemplateColumns = '1fr';
+    // info.style.gridTemplateColumns = '1fr';
     info.innerHTML = `
          <div class="modal-info-row">
             <div><label>Название</label><input type="text" id="edit-product-name" value="${product.name}"></div>
@@ -723,6 +724,10 @@ async function submitCreateProduct() {
     }
 }
 
+function openCreateClientModal() { // Используй это имя в onclick
+    openModal('modal-client');
+}
+
 // --- НОВЫЙ ЗАКАЗ ---
 function openCreateOrderModal() {
     tempItems = {};
@@ -730,7 +735,8 @@ function openCreateOrderModal() {
 
     // Формируем список клиентов и менеджеров
     let clientOptions = clientsData.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
-    let managerOptions = usersData.map(u => `<option value="${u.username}">${u.fullName}</option>`).join('');
+    const managerUsernames = ["1011", "1012", "1013", "1014", "1015", "ADMIN"];
+
 
     // Горизонтальное отображение в 2 ряда:
     document.getElementById('order-info').innerHTML = `
@@ -814,6 +820,7 @@ async function saveNewManualOperation(type) {
 
     // Добавляем специфичные данные
     if (type === 'order') {
+        data.comment = document.getElementById('new-op-comment').value; // <-- Добавьте эту строку
         data.deliveryDate = document.getElementById('new-op-date').value;
         data.paymentMethod = document.getElementById('new-op-payment').value;
         data.needsSeparateInvoice = document.getElementById('new-op-invoice').value === "true";
@@ -966,7 +973,7 @@ async function deleteReturnOrder(id) {
     }
 }
 
-// Заглушка для импорта
+
 function triggerImport() {
     const input = document.createElement('input');
     input.type = 'file';

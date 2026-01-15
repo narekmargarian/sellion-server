@@ -75,7 +75,7 @@ public class MainWebController {
         model.addAttribute("invoices", invoices);
         model.addAttribute("totalInvoiceDebt", totalInvoiceDebt);
 
-
+        model.addAttribute("users", userRepository.findAll());
         // 4. ДАННЫЕ КЛИЕНТОВ И ПРОДУКТОВ
         model.addAttribute("clients", clientRepository.findAll());
         model.addAttribute("products", productRepository.findAll());
