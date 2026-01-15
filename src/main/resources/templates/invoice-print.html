@@ -8,6 +8,11 @@
         .items-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
         .items-table th, .items-table td { border: 1px solid #333; padding: 8px; }
         .total { text-align: right; margin-top: 20px; font-weight: bold; font-size: 1.2em; }
+
+        @media print {
+            body { padding: 0; margin: 0; }
+            @page { size: auto; margin: 10mm; } /* Убирает лишние отступы бумаги */
+        }
     </style>
 </head>
 <body>

@@ -4,11 +4,15 @@ let tempItems = {};
 function openModal(id) {
     const modal = document.getElementById(id);
     modal.classList.add('active');
+    document.getElementById(id).classList.add('active');
+    document.body.style.overflow = 'hidden'; // Блокируем фон
     const sc = modal.querySelector('#table-scroll-container');
     if (sc) sc.scrollTop = 0;
 }
 
 function closeModal(id) {
+    document.getElementById(id).classList.remove('active');
+    document.body.style.overflow = '';
     document.getElementById(id).classList.remove('active');
 }
 
@@ -776,11 +780,6 @@ function getManagerOptionsHTML() {
 
 // ОБРАТИТЕ ВНИМАНИЕ НА ЭТОТ БЛОК:
 // Он запускает загрузку данных при старте страницы и активирует табы
-document.addEventListener("DOMContentLoaded", async () => {
-    // Используем await, чтобы дождаться загрузки списка менеджеров перед переключением вкладок
-    await loadManagerIds();
-    showTab(localStorage.getItem('sellion_tab') || 'tab-orders');
-});
 
 // ... (остальная часть вашего script.js) ...
 
@@ -907,38 +906,34 @@ async function saveNewManualOperation(type) {
 }
 
 function printInvoiceInline(invoiceId) {
-    // Удаляем старый фрейм, если он остался
-    const oldFrame = document.getElementById('print-iframe');
-    if (oldFrame) oldFrame.remove();
+    const url = `/admin/invoices/print/${invoiceId}`;
 
+    // Пытаемся использовать метод с iframe (лучший вариант)
     const iframe = document.createElement('iframe');
-    iframe.id = 'print-iframe';
-    iframe.style.position = 'fixed';
-    iframe.style.right = '100%';
-    iframe.style.bottom = '100%';
-    iframe.style.width = '0';
-    iframe.style.height = '0';
-    iframe.style.border = 'none';
-
-    // Путь к контроллеру, который ты скинул
-    iframe.src = "/admin/invoices/print/" + invoiceId;
-
+    iframe.style.display = 'none';
+    iframe.src = url;
     document.body.appendChild(iframe);
 
     iframe.onload = function() {
         try {
-            // Ждем короткую паузу, чтобы стили успели примениться внутри фрейма
-            setTimeout(() => {
-                iframe.contentWindow.focus();
-                iframe.contentWindow.print();
-            }, 200);
+            iframe.contentWindow.focus();
+            iframe.contentWindow.print();
+            setTimeout(() => document.body.removeChild(iframe), 1000);
         } catch (e) {
-            console.error("Ошибка печати:", e);
-            // Резервный вариант, если iframe заблокирован
-            window.open("/admin/invoices/print/" + invoiceId, '_blank');
+            // Если сервер запрещает iframe (X-Frame-Options),
+            // используем резервный вариант — новое окно
+            console.warn("Фрейм заблокирован, открываю в новом окне...");
+            const printWin = window.open(url, '_blank', 'width=800,height=600');
+            printWin.onload = function() {
+                printWin.focus();
+                printWin.print();
+                // printWin.close(); // Можно раскомментировать, чтобы окно закрывалось само
+            };
         }
     };
 }
+
+
 
 
 // Функция отмены заказа
@@ -1091,6 +1086,7 @@ function triggerImport() {
     input.click();
 }
 
+//todo Toast//
 function showToast(text, type = 'info') {
     const container = document.getElementById('toast-container');
     const toast = document.createElement('div');
@@ -1120,6 +1116,9 @@ async function resetPassword(userId) {
     }
 }
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
+    // Используем await, чтобы дождаться загрузки списка менеджеров перед переключением вкладок
+    await loadManagerIds();
     showTab(localStorage.getItem('sellion_tab') || 'tab-orders');
 });
+

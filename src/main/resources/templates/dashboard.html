@@ -592,17 +592,6 @@
             </div>
         </div>
 
-        <script>
-            // Если страница открыта во фрейме, она просто подготовится.
-            // Если нужно, чтобы она сама инициировала печать:
-            window.onload = function() {
-                if (window.self !== window.top) {
-                    // Мы внутри iframe, ждем команду от родителя
-                } else {
-                    window.print(); // Если открыли вручную в новой вкладке
-                }
-            }
-        </script>
 
         <script th:inline="javascript">
             const fmt = (s) => {

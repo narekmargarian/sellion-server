@@ -22,36 +22,33 @@ import java.util.List;
 @EnableMethodSecurity
 public class SecurityConfig {
 
-    // --- ОБЩАЯ ЦЕПОЧКА ДЛЯ API и ФРОНТЕНДА (Без CSRF для Android/JS) ---
     @Bean
     public SecurityFilterChain apiSecurityFilterChain(HttpSecurity http) throws Exception {
         http.csrf(AbstractHttpConfigurer::disable)
                 .cors(Customizer.withDefaults())
+                // Разрешаем iframe для API (если нужно)
                 .headers(headers -> headers.frameOptions(HeadersConfigurer.FrameOptionsConfig::sameOrigin))
-
-                // Этот фильтр обрабатывает ТОЛЬКО /api/** запросы
                 .securityMatcher("/api/**")
                 .authorizeHttpRequests(auth -> auth
-                        // ВРЕМЕННО: Разрешаем полный доступ к аудиту для отладки
                         .requestMatchers("/api/admin/audit/**").permitAll()
                         .requestMatchers("/api/public/managers").permitAll()
-
-                        // Все остальные API открыты (permitAll)
                         .anyRequest().permitAll()
                 );
         return http.build();
     }
 
-    // --- ЦЕПОЧКА ДЛЯ HTML-СТРАНИЦ (Требует логина через форму) ---
     @Bean
     public SecurityFilterChain formLoginSecurityFilterChain(HttpSecurity http) throws Exception {
-        http.csrf(Customizer.withDefaults()) // CSRF включен для веб-форм
+        http.csrf(Customizer.withDefaults())
                 .cors(Customizer.withDefaults())
+                // ИСПРАВЛЕНО: Добавляем разрешение на SAMEORIGIN здесь!
+                // Теперь браузер позволит загрузить страницу печати в iframe
+                .headers(headers -> headers.frameOptions(HeadersConfigurer.FrameOptionsConfig::sameOrigin))
 
-                // ВАЖНО: Добавляем "/logout" в список matchers
-                .securityMatcher("/admin/**", "/login", "/css/**", "/js/**", "/error", "/", "/logout")
+                // Добавьте эндпоинт печати в список проверяемых путей
+                .securityMatcher("/admin/**", "/login", "/css/**", "/js/**", "/error", "/", "/logout", "/invoices/**")
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/admin/**").authenticated() // Админка требует авторизации
+                        .requestMatchers("/admin/**", "/invoices/**").authenticated()
                         .requestMatchers("/login", "/css/**", "/js/**", "/error", "/", "/favicon.ico", "/logout").permitAll()
                         .anyRequest().authenticated()
                 )
@@ -81,6 +78,8 @@ public class SecurityConfig {
 
     @Bean
     public PasswordEncoder passwordEncoder() {
+        // Рекомендуется в 2026 использовать BCryptPasswordEncoder,
+        // но оставляю как есть, чтобы не сбросить ваши пароли
         return NoOpPasswordEncoder.getInstance();
     }
 }
