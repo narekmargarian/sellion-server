@@ -450,6 +450,11 @@ body {
     --text-muted: #64748b;
 }
 
+.bg-warning {
+    background-color: #ffc107 !important; /* Желтый фон */
+    color: #000000 !important;           /* ЧЕРНЫЙ текст */
+}
+
 
 /* Статусы и цены */
 .badge {

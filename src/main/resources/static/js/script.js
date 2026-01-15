@@ -92,6 +92,8 @@ function updateRowInTable(order) {
 function applySingleQty(encodedName) {
     const name = decodeURIComponent(encodedName);
     const input = document.getElementById(`input-qty-${encodedName}`);
+    const modalTitle = document.getElementById('modal-title').innerText.toLowerCase();
+    const isReturn = modalTitle.includes("возврат");
 
     if (!input) return;
     let newVal = parseInt(input.value);
@@ -102,9 +104,9 @@ function applySingleQty(encodedName) {
     } else {
         // 2. Проверка остатка на складе (стандарт 2026)
         const product = productsData.find(p => p.name === name);
-        if (product && newVal > product.stockQuantity) {
-            showStatus(`Недостаточно товара! Доступно: ${product.stockQuantity}`, true);
-            input.value = product.stockQuantity; // Сбрасываем до максимума
+        if (!isReturn && product && newVal > product.stockQuantity) {
+            showStatus(`Недостаточно товара "${product.name}"! Доступно на складе: ${product.stockQuantity}`, true);
+            input.value = product.stockQuantity;
             tempItems[name] = product.stockQuantity;
         } else {
             tempItems[name] = newVal;
@@ -128,12 +130,13 @@ function addItemToEdit() {
     const qty = parseInt(document.getElementById('add-item-qty').value) || 1;
     const product = productsData.find(p => p.id == productId);
     if (product) {
-        if (qty > product.stockQuantity) {
+        // ПРОВЕРКА: Если мы в модалке заказа, проверяем остаток.
+        // Если заголовок содержит "возврат", проверку пропускаем.
+        const modalTitle = document.getElementById('modal-title').innerText.toLowerCase();
+        const isReturn = modalTitle.includes("возврат");
 
-            //Kareli e es tarberaknerl
-            // showStatus(`Нельзя добавить ${qty} шт. товара "${product.name}". На складе всего ${product.stockQuantity}`, true);
-
-            showStatus(`Недостаточно товара! Доступно: ${product.stockQuantity}`, true);
+        if (!isReturn && qty > product.stockQuantity) {
+            showStatus(`Недостаточно товара "${product.name}"! Доступно на складе: ${product.stockQuantity}`, true);
             return;
         }
 
@@ -334,7 +337,11 @@ async function saveFullChanges(id) {
 
 // --- 5. Возвраты ---
 function openReturnDetails(id) {
-    const ret = returnsData.find(r => r.id == id);
+    const ret = returnsData.find(r => r.id === id);
+
+    const statusText = ret.status === 'CONFIRMED' ? 'Проведено' : (ret.status === 'DRAFT' ? 'Черновик' : ret.status);
+
+    const statusClass = ret.status === 'CONFIRMED' ? 'bg-success' : 'bg-warning';
     if (!ret) return;
     tempItems = JSON.parse(JSON.stringify(ret.items));
     document.getElementById('modal-title').innerHTML = `Детали операции <span class="badge" style="margin-left:10px;">ВОЗВРАТ №${ret.id}</span>`;
@@ -346,11 +353,13 @@ function openReturnDetails(id) {
     const footer = document.getElementById('order-footer-actions');
     if (ret.status === 'DRAFT') {
         footer.innerHTML = `
-        <button class="btn-primary" style="background:#10b981" onclick="confirmReturn(${ret.id})">✅ Подтвердить и уменьшить долг</button>
+        <button class="btn-primary" style="background:#10b981" onclick="confirmReturn(${ret.id})">✅ Подтвердить</button>
         <button class="btn-primary" onclick="enableReturnEdit(${ret.id})">Изменить</button>
+        <button class="btn-primary" style="background:#ef4444" onclick="deleteReturnOrder(${ret.id})">❌ Удалить</button>
         <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-order-view')">Закрыть</button>`;
     } else {
-        footer.innerHTML = `<b style="color:green">ПОДТВЕРЖДЕНО</b> <button class="btn-primary" onclick="closeModal('modal-order-view')">Закрыть</button>`;
+        // ЗАМЕНА ЗДЕСЬ:
+        footer.innerHTML = `<b style="color:green;">✅ Проведено</b> <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-order-view')">Закрыть</button>`;
     }
 
     info.innerHTML = `
@@ -362,6 +371,12 @@ function openReturnDetails(id) {
     `;
 
     renderItemsTable(tempItems, false);
+
+    document.getElementById('modal-title').innerHTML = `
+    Детали операции 
+    <span class="badge ${statusClass}" style="margin-left:10px;">${statusText}</span>
+    <span class="badge" style="margin-left:5px;">ВОЗВРАТ №${ret.id}</span>
+`;
     document.getElementById('order-total-price').innerText = "Сумма возврата: " + (ret.totalAmount || 0).toLocaleString() + " ֏";
 
     document.getElementById('order-footer-actions').innerHTML = `
@@ -784,8 +799,6 @@ function getManagerOptionsHTML() {
 // ... (остальная часть вашего script.js) ...
 
 
-
-
 // --- НОВЫЙ ЗАКАЗ ---
 async function openCreateOrderModal() {
     await loadManagerIds();
@@ -914,7 +927,7 @@ function printInvoiceInline(invoiceId) {
     iframe.src = url;
     document.body.appendChild(iframe);
 
-    iframe.onload = function() {
+    iframe.onload = function () {
         try {
             iframe.contentWindow.focus();
             iframe.contentWindow.print();
@@ -924,7 +937,7 @@ function printInvoiceInline(invoiceId) {
             // используем резервный вариант — новое окно
             console.warn("Фрейм заблокирован, открываю в новом окне...");
             const printWin = window.open(url, '_blank', 'width=800,height=600');
-            printWin.onload = function() {
+            printWin.onload = function () {
                 printWin.focus();
                 printWin.print();
                 // printWin.close(); // Можно раскомментировать, чтобы окно закрывалось само
@@ -932,8 +945,6 @@ function printInvoiceInline(invoiceId) {
         }
     };
 }
-
-
 
 
 // Функция отмены заказа
