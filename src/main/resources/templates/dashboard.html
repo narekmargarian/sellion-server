@@ -579,7 +579,15 @@
             </div>
         </div>
 
+        <!-- ВКЛАДКА ПЕРСОНАЛ -->
         <div id="tab-users" class="tab-pane">
+            <div class="filter-bar">
+                <input type="text" id="search-users" onkeyup="filterTable('search-users', 'users-table-body')"
+                       placeholder="🔎 Поиск по логину или ФИО..." class="form-control w-25">
+                <!-- Современная панель администрирования обычно позволяет добавить пользователя через модальное окно -->
+                <button class="btn-primary" onclick="openCreateUserModal()">+ Новый сотрудник</button>
+            </div>
+
             <div class="table-container">
                 <table class="table">
                     <thead>
@@ -587,17 +595,20 @@
                         <th>Логин</th>
                         <th>ФИО</th>
                         <th>Роль</th>
-                        <th>Действие</th>
+                        <th style="width: 150px;">Действие</th>
                     </tr>
                     </thead>
-                    <tbody>
-                    <tr th:each="u : ${users}">
-                        <td th:text="${u.username}"></td>
+                    <tbody id="users-table-body">
+                    <tr th:each="u : ${users}" style="cursor:pointer;" onclick="openUserDetailsModal(/*[[${u.id}]]*/[])">
+                        <td th:text="${u.username}" style="font-weight:600;"></td>
                         <td th:text="${u.fullName}"></td>
-                        <td><span class="badge" th:text="${u.role}"></span></td>
                         <td>
-                            <button class="btn-warning" th:onclick="'resetPassword(' + ${u.id} + ')'">
-                                Сброс пароля (1111)
+                    <span th:class="'badge ' + (${u.role == 'ADMIN' ? 'bg-primary text-white' : 'bg-secondary text-white'})"
+                          th:text="${u.role}"></span>
+                        </td>
+                        <td onclick="event.stopPropagation()">
+                            <button class="btn-warning" onclick="resetPassword(/*[[${u.id}]]*/[])">
+                                Сброс пароля
                             </button>
                         </td>
                     </tr>
@@ -605,6 +616,25 @@
                 </table>
             </div>
         </div>
+
+
+        <!-- МОДАЛЬНОЕ ОКНО ПОДТВЕРЖДЕНИЯ (ТОЧНО КАК НА ИЗОБРАЖЕНИИ) -->
+        <dialog id="confirm-modal" class="confirm-modal-image-style">
+            <div class="confirm-modal-content">
+                <h3 id="confirm-title" class="confirm-title-image-style">Удалить возврат?</h3>
+                <p id="confirm-text" class="confirm-text-image-style">Вы уверены, что хотите удалить этот возврат?</p>
+
+                <div class="confirm-actions-image-style">
+                    <!-- Кнопки справа, как на вашем изображении -->
+                    <button class="btn-primary btn-danger" id="confirm-yes">Да</button>
+                    <button class="btn-primary btn-secondary" id="confirm-no">Нет</button>
+                </div>
+            </div>
+        </dialog>
+
+
+
+
 
 
         <script th:inline="javascript">

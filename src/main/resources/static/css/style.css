@@ -109,6 +109,15 @@ body {
     border-bottom: 2px solid var(--border);
 }
 
+.table button {
+    padding: 6px 12px;
+    font-size: 12px;
+}
+
+.badge.bg-primary { background-color: #3b82f6 !important; }
+.badge.bg-secondary { background-color: #64748b !important; }
+.badge.bg-warning { background-color: #f97316 !important; color: white !important; }
+
 /* Карточки сводки и фильтры - всегда сверху (не скроллится) */
 .summary-card {
     flex-shrink: 0; /* Не сжимается */
@@ -293,7 +302,10 @@ body {
     background: #f8fafc;
     cursor: pointer;
 }
-
+.table tbody tr:hover {
+    background-color: #f1f5f9; /* Светло-серый фон при наведении */
+    cursor: pointer;
+}
 
 /* Кнопки */
 .btn-primary {
@@ -505,3 +517,48 @@ body {
     text-align: center;
     font-size: 12px !important;
 }
+
+/* Базовый стиль модалки, как на изображении: белая карточка внутри легкой серой тени */
+.confirm-modal-image-style {
+    border: none;
+    border-radius: 12px;
+    padding: 30px;      /* Большие отступы, как на фото */
+    box-shadow: 0 10px 30px rgba(0,0,0,0.1), 0 0 0 1000px rgba(0,0,0,0.2); /* Тень и темный фон */
+    max-width: 450px;
+    width: 90%;
+}
+
+/* Нативный backdrop у <dialog> позволяет не создавать отдельный div для затемнения */
+.confirm-modal-image-style::backdrop {
+    /* Фон уже задан через box-shadow выше, здесь можно оставить пустым или убрать */
+    background: transparent;
+}
+
+.confirm-modal-content {
+    display: flex;
+    flex-direction: column;
+}
+
+/* Заголовок: жирный, с отступом */
+.confirm-title-image-style {
+    font-weight: 800;
+    margin-bottom: 8px;
+    font-size: 24px;
+}
+
+/* Текст: обычный шрифт */
+.confirm-text-image-style {
+    margin-bottom: 25px; /* Отступ до кнопок, как на фото */
+}
+
+/* Контейнер для кнопок: справа */
+.confirm-actions-image-style {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+/* Ваши стили кнопок (убедитесь, что они есть в вашем style.css) */
+.btn-primary { padding: 10px 20px; border-radius: 8px; border: none; cursor: pointer; font-weight: 600; }
+.btn-danger { background-color: #ef4444; color: white; }
+.btn-secondary { background-color: #64748b; color: white; }

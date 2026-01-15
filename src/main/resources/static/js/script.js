@@ -397,14 +397,17 @@ function openReturnDetails(id) {
     openModal('modal-order-view');
 }
 
+
 async function confirmReturn(id) {
-    if (!confirm("Подтвердить возврат? Сумма будет вычтена из долга клиента.")) return;
-    const response = await fetch(`/api/admin/returns/${id}/confirm`, {method: 'POST'});
-    if (response.ok) {
-        showToast("Возврат подтвержден!");
-        location.reload();
-    }
+    showConfirmModal("Подтвердить возврат?", "Сумма будет вычтена из долга клиента.", async () => {
+        const response = await fetch(`/api/admin/returns/${id}/confirm`, {method: 'POST'});
+        if (response.ok) {
+            showToast("Возврат подтвержден!", "success");
+            location.reload();
+        }
+    });
 }
+
 
 function enableReturnEdit(id) {
     const ret = returnsData.find(r => r.id == id);
@@ -949,20 +952,21 @@ function printInvoiceInline(invoiceId) {
 
 // Функция отмены заказа
 async function cancelOrder(id) {
-    if (!confirm("Отменить заказ? Товар вернется на склад.")) return;
-
-    try {
-        const response = await fetch(`/api/admin/orders/${id}/cancel`, {method: 'POST'});
-        if (response.ok) {
-            showToast("Заказ отменен");
-            location.reload();
-        } else {
-            showToast("Ошибка при отмене");
+    showConfirmModal("Отменить заказ?", "Товар вернется на склад.", async () => {
+        try {
+            const response = await fetch(`/api/admin/orders/${id}/cancel`, {method: 'POST'});
+            if (response.ok) {
+                showToast("Заказ отменен", "success");
+                location.reload();
+            } else {
+                showToast("Ошибка при отмене", "error");
+            }
+        } catch (e) {
+            showToast("Ошибка сети", "error");
         }
-    } catch (e) {
-        showToast("Ошибка сети");
-    }
+    });
 }
+
 
 async function showOrderHistory(orderId) {
     try {
@@ -1041,21 +1045,20 @@ function updateDashboardStats() {
 }
 
 async function deleteReturnOrder(id) {
-    if (!confirm("Вы уверены, что хотите удалить этот возврат?")) return;
-
-    try {
-        // Эндпоинт /api/admin/returns/{id}/delete, который мы создали ранее
-        const response = await fetch(`/api/admin/returns/${id}/delete`, {method: 'POST'});
-        if (response.ok) {
-            showToast("Возврат удален", "success");
-            location.reload();
-        } else {
-            const error = await response.json();
-            showToast(error.error || "Ошибка удаления возврата", "error");
+    showConfirmModal("Удалить возврат?", "Вы уверены, что хотите удалить этот возврат?", async () => {
+        try {
+            const response = await fetch(`/api/admin/returns/${id}/delete`, {method: 'POST'});
+            if (response.ok) {
+                showToast("Возврат удален", "success");
+                location.reload();
+            } else {
+                const error = await response.json();
+                showToast(error.error || "Ошибка удаления возврата", "error");
+            }
+        } catch (e) {
+            showToast("Ошибка сети", "error");
         }
-    } catch (e) {
-        showToast("Ошибка сети", "error");
-    }
+    });
 }
 
 
@@ -1111,21 +1114,91 @@ function showToast(text, type = 'info') {
     }, 4000);
 }
 
-async function resetPassword(userId) {
-    if (!confirm("Сбросить пароль пользователю на стандартный '1111'?")) return;
 
-    try {
-        // У вас есть эндпоинт /admin/users/reset-password/{id} в UserWebController
-        const response = await fetch(`/admin/users/reset-password/${userId}`, {method: 'POST'});
-        if (response.ok) {
-            showToast("Пароль сброшен на '1111'", "success"); // Используем Toast
-        } else {
-            showToast("Ошибка при сбросе пароля", "error");
-        }
-    } catch (e) {
-        showToast("Ошибка сети", "error");
-    }
+
+
+function openUserDetailsModal(id) {
+    const user = usersData.find(u => u.id == id);
+    if (!user) return;
+
+    // Используем модальное окно, которое уже есть для клиентов
+    const modalId = 'modal-client-view';
+
+    // Заголовок модалки
+    document.getElementById('modal-client-title').innerHTML = `
+        Профиль сотрудника <span class="badge">${user.fullName}</span>
+    `;
+
+    // Основная информация (используем существующий контейнер client-info)
+    const info = document.getElementById('client-info');
+    info.innerHTML = `
+        <div class="modal-info-row">
+            <div><small>Логин:</small><br><b>${user.username}</b></div>
+            <div><small>ФИО:</small><br><b>${user.fullName}</b></div>
+            <div><small>Роль:</small><br><b>${user.role}</b></div>
+        </div>
+        <!-- Если у пользователя есть телефон или другие детали, добавьте их здесь -->
+        <div class="modal-info-row">
+             <div><small>Телефон:</small><br><b>${user.phone || '---'}</b></div>
+             <div><small>Email:</small><br><b>${user.email || '---'}</b></div>
+        </div>
+    `;
+
+    // Действия в футере
+    document.getElementById('client-footer-actions').innerHTML = `
+        <button class="btn-warning" onclick="event.stopPropagation(); resetPassword(${user.id})">
+            Сброс пароля (1111)
+        </button>
+        <button class="btn-primary" style="background:#64748b" onclick="closeModal('${modalId}')">
+            Закрыть
+        </button>
+    `;
+
+    // Открываем модальное окно
+    openModal(modalId);
 }
+
+
+// Универсальная функция для современного модального подтверждения
+function showConfirmModal(title, text, onConfirm) {
+    const modal = document.getElementById('confirm-modal');
+    document.getElementById('confirm-title').innerText = title;
+    document.getElementById('confirm-text').innerText = text;
+
+    const yesBtn = document.getElementById('confirm-yes');
+    const noBtn = document.getElementById('confirm-no');
+
+    // Очищаем предыдущие обработчики
+    yesBtn.onclick = null;
+    noBtn.onclick = null;
+
+    yesBtn.onclick = () => {
+        modal.close();
+        onConfirm();
+    };
+
+    noBtn.onclick = () => modal.close();
+
+    modal.showModal();
+}
+
+
+
+async function resetPassword(userId) {
+    showConfirmModal("Сброс пароля", "Сбросить пароль пользователю на стандартный '1111'?", async () => {
+        try {
+            const response = await fetch(`/admin/users/reset-password/${userId}`, {method: 'POST'});
+            if (response.ok) {
+                showToast("Пароль сброшен на '1111'", "success");
+            } else {
+                showToast("Ошибка при сбросе пароля", "error");
+            }
+        } catch (e) {
+            showToast("Ошибка сети", "error");
+        }
+    });
+}
+
 
 document.addEventListener("DOMContentLoaded", async () => {
     // Используем await, чтобы дождаться загрузки списка менеджеров перед переключением вкладок
