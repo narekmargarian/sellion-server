@@ -34,6 +34,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // ВРЕМЕННО: Разрешаем полный доступ к аудиту для отладки
                         .requestMatchers("/api/admin/audit/**").permitAll()
+                        .requestMatchers("/api/public/managers").permitAll()
 
                         // Все остальные API открыты (permitAll)
                         .anyRequest().permitAll()

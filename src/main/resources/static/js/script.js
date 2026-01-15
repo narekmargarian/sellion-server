@@ -744,12 +744,16 @@ function openCreateClientModal() { // Используй это имя в onclic
 
 // --- НОВЫЙ ЗАКАЗ ---
 // Вспомогательная функция для получения списка менеджеров (чтобы не дублировать код)
+// В script.js
 function getManagerOptionsHTML() {
-    // Берем всех из usersData + добавляем "Менеджер Офис"
+    // Этот код получает список пользователей из базы (без OFFICE)
     let options = usersData.map(u => `<option value="${u.username}">${u.fullName}</option>`).join('');
+
+    // И добавляет OFFICE вручную для использования в веб-панели
     options += `<option value="OFFICE">Менеджер Офис</option>`;
     return options;
 }
+
 
 // --- НОВЫЙ ЗАКАЗ ---
 function openCreateOrderModal() {
