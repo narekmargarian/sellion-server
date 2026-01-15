@@ -788,7 +788,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 
 // --- НОВЫЙ ЗАКАЗ ---
-function openCreateOrderModal() {
+async function openCreateOrderModal() {
+    await loadManagerIds();
     tempItems = {};
     document.getElementById('modal-title').innerText = "Создание нового заказа";
 
@@ -827,7 +828,8 @@ function openCreateOrderModal() {
 }
 
 // --- НОВЫЙ ВОЗВРАТ ---
-function openCreateReturnModal() {
+async function openCreateReturnModal() {
+    await loadManagerIds();
     tempItems = {};
     document.getElementById('modal-title').innerText = "Оформление нового возврата";
 
@@ -905,25 +907,34 @@ async function saveNewManualOperation(type) {
 }
 
 function printInvoiceInline(invoiceId) {
-    // 1. Создаем iframe
+    // Удаляем старый фрейм, если он остался
+    const oldFrame = document.getElementById('print-iframe');
+    if (oldFrame) oldFrame.remove();
+
     const iframe = document.createElement('iframe');
-    iframe.style.display = "none";
+    iframe.id = 'print-iframe';
+    iframe.style.position = 'fixed';
+    iframe.style.right = '100%';
+    iframe.style.bottom = '100%';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = 'none';
+
+    // Путь к контроллеру, который ты скинул
     iframe.src = "/admin/invoices/print/" + invoiceId;
+
     document.body.appendChild(iframe);
 
-    // 2. Печатаем правильно через контентное окно
-    iframe.onload = function () {
+    iframe.onload = function() {
         try {
-            // В 2026 году это самый надежный способ вызова печати из фрейма
-            iframe.contentWindow.print();
-
-            // Удаляем фрейм после закрытия окна печати
+            // Ждем короткую паузу, чтобы стили успели примениться внутри фрейма
             setTimeout(() => {
-                document.body.removeChild(iframe);
-            }, 1000);
+                iframe.contentWindow.focus();
+                iframe.contentWindow.print();
+            }, 200);
         } catch (e) {
             console.error("Ошибка печати:", e);
-            // Если фрейм все равно блокируется, открываем в новом окне как запасной вариант
+            // Резервный вариант, если iframe заблокирован
             window.open("/admin/invoices/print/" + invoiceId, '_blank');
         }
     };

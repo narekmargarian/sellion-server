@@ -216,6 +216,7 @@
                         <th>Магазин</th>
                         <th>Причина</th>
                         <th>Сумма</th>
+                        <th>Статус</th>
                     </tr>
                     </thead>
                     <tbody>
@@ -238,6 +239,11 @@
 
                         <td class="price-down"
                             th:text="${#numbers.formatInteger(r.totalAmount, 1, 'WHITESPACE') + ' ֏'}"></td>
+
+                        <td>
+                            <span th:class="'badge ' + (${r.status} == 'CONFIRMED' ? 'bg-success text-white' : 'bg-warning')"
+                                  th:text="${r.status}"></span>
+                        </td>
                     </tr>
                     </tbody>
                 </table>
@@ -586,6 +592,17 @@
             </div>
         </div>
 
+        <script>
+            // Если страница открыта во фрейме, она просто подготовится.
+            // Если нужно, чтобы она сама инициировала печать:
+            window.onload = function() {
+                if (window.self !== window.top) {
+                    // Мы внутри iframe, ждем команду от родителя
+                } else {
+                    window.print(); // Если открыли вручную в новой вкладке
+                }
+            }
+        </script>
 
         <script th:inline="javascript">
             const fmt = (s) => {
