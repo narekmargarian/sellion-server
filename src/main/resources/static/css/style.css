@@ -562,3 +562,46 @@ body {
 .btn-primary { padding: 10px 20px; border-radius: 8px; border: none; cursor: pointer; font-weight: 600; }
 .btn-danger { background-color: #ef4444; color: white; }
 .btn-secondary { background-color: #64748b; color: white; }
+/* Контейнер для всех тостов (уже есть в вашем HTML) */
+#toast-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+/* Стиль отдельного уведомления */
+.toast-msg {
+    padding: 12px 20px;
+    border-radius: 8px; /* Закругленные углы */
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); /* Современная тень */
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    transition: opacity 0.5s ease-out; /* Плавное исчезание */
+    max-width: 300px;
+}
+
+/* Цвета для разных типов */
+.toast-success {
+    background-color: #ecfdf5; /* Очень светлый зеленый фон */
+    color: #047857;           /* Темно-зеленый текст */
+    border-left: 5px solid #10b981;
+}
+
+.toast-error {
+    background-color: #fef2f2; /* Очень светлый красный фон */
+    color: #b91c1c;           /* Темно-красный текст */
+    border-left: 5px solid #ef4444;
+}
+
+.toast-info {
+    background-color: #eff6ff; /* Очень светлый синий фон */
+    color: #1d4ed8;           /* Темно-синий текст */
+    border-left: 5px solid #3b82f6;
+}
