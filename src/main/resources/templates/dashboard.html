@@ -605,7 +605,7 @@
                     </tr>
                     </thead>
                     <tbody id="users-table-body">
-                    <tr th:each="u : ${users}" style="cursor:pointer;" onclick="openUserDetailsModal(/*[[${u.id}]]*/[])">
+                    <tr th:each="u : ${users}" style="cursor:pointer;" th:onclick="|openUserDetailsModal('${u.id}')|">
                         <td th:text="${u.username}" style="font-weight:600;"></td>
                         <td th:text="${u.fullName}"></td>
                         <td>

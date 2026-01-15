@@ -125,27 +125,32 @@ function applySingleQty(encodedName) {
 }
 
 function addItemToEdit() {
-
-    const productId = document.getElementById('add-item-select').value;
+    const selectElement = document.getElementById('add-item-select');
+    const productId = selectElement.value; // Это строка "123"
     const qty = parseInt(document.getElementById('add-item-qty').value) || 1;
-    const product = productsData.find(p => p.id === productId);
+
+    // ИСПОЛЬЗУЕМ == вместо === чтобы сравнить "123" и 123
+    const product = productsData.find(p => p.id == productId);
+
     if (product) {
-        // ПРОВЕРКА: Если мы в модалке заказа, проверяем остаток.
-        // Если заголовок содержит "возврат", проверку пропускаем.
         const modalTitle = document.getElementById('modal-title').innerText.toLowerCase();
         const isReturn = modalTitle.includes("возврат");
 
+        // Если это НЕ возврат, проверяем склад
         if (!isReturn && qty > product.stockQuantity) {
-            showStatus(`Недостаточно товара "${product.name}"! Доступно на складе: ${product.stockQuantity}`, true);
+            showStatus(`Недостаточно товара "${product.name}"! Доступно: ${product.stockQuantity}`, true);
             return;
         }
 
-        // Добавляем в tempItems по имени (как было в вашей логике) или по ID
-        // Если ваша база на сервере ждет Имена, оставляем так:
+        // Добавляем в список
         tempItems[product.name] = (tempItems[product.name] || 0) + qty;
 
+        // Перерисовываем таблицу
         renderItemsTable(tempItems, true);
-        showStatus(`Товар "${product.name}" добавлен в список`);
+        showStatus(`Товар "${product.name}" добавлен`);
+    } else {
+        // Если продукт не найден (например, не выбран в списке)
+        showStatus("Выберите товар из списка", true);
     }
 }
 
@@ -202,16 +207,19 @@ function renderItemsTable(itemsMap, isEdit) {
     });
 
     if (isEdit) {
-        // ... (твоя логика добавления строки "Добавить товар")
-        // Теперь value — это ID товара, а не имя
+        // Исправлено: добавляем кавычки вокруг value и проверяем наличие данных
         let options = productsData.map(p => `<option value="${p.id}">${p.name} (${p.price} ֏)</option>`).join('');
 
-
         body.innerHTML += `<tr style="background:#f8fafc; position: sticky; bottom: 0;">
-            <td><select id="add-item-select" style="width:100%">${options}</select></td>
-            <td><input type="number" id="add-item-qty" value="1" min="1" style="width:65px;"></td>
-            <td colspan="3"><button class="btn-primary" onclick="addItemToEdit()" style="width:100%">+ Добавить</button></td>
-        </tr>`;
+        <td>
+            <select id="add-item-select" style="width:100%">
+                <option value="">-- Выберите товар --</option>
+                ${options}
+            </select>
+        </td>
+        <td><input type="number" id="add-item-qty" value="1" min="1" style="width:65px;"></td>
+        <td colspan="3"><button class="btn-primary" onclick="addItemToEdit()" style="width:100%">+ Добавить</button></td>
+    </tr>`;
     }
 
     if (container) {
@@ -225,7 +233,7 @@ function renderItemsTable(itemsMap, isEdit) {
 
 // --- 4. Основные функции карточки заказа ---
 function openOrderDetails(id) {
-    const order = ordersData.find(o => o.id === id);
+    const order = ordersData.find(o => o.id == id);
     if (!order) return;
     tempItems = JSON.parse(JSON.stringify(order.items));
     document.getElementById('modal-title').innerHTML = `Детали операции <span class="badge" style="margin-left:10px;">ЗАКАЗ №${order.id}</span>`;
@@ -268,7 +276,7 @@ function openOrderDetails(id) {
 }
 
 function enableOrderEdit(id) {
-    const order = ordersData.find(o => o.id === id);
+    const order = ordersData.find(o => o.id == id);
     document.getElementById('modal-title').innerText = "Режим редактирования заказа #" + id;
     const info = document.getElementById('order-info');
     // info.style.gridTemplateColumns = '1fr';
@@ -320,7 +328,7 @@ async function saveFullChanges(id) {
         });
         const result = await response.json();
         if (response.ok) {
-            const idx = ordersData.findIndex(o => o.id === id);
+            const idx = ordersData.findIndex(o => o.id == id);
             if (idx !== -1) {
                 ordersData[idx] = {...ordersData[idx], ...data, totalAmount: result.finalSum};
                 updateRowInTable(ordersData[idx]);
@@ -337,7 +345,7 @@ async function saveFullChanges(id) {
 
 // --- 5. Возвраты ---
 function openReturnDetails(id) {
-    const ret = returnsData.find(r => r.id === id);
+    const ret = returnsData.find(r => r.id == id);
 
     const statusText = ret.status === 'CONFIRMED' ? 'Проведено' : (ret.status === 'DRAFT' ? 'Черновик' : ret.status);
 
@@ -410,7 +418,7 @@ async function confirmReturn(id) {
 
 
 function enableReturnEdit(id) {
-    const ret = returnsData.find(r => r.id === id);
+    const ret = returnsData.find(r => r.id == id);
     if (!ret) return;
     document.getElementById('modal-title').innerText = "Редактирование возврата #" + id;
     const info = document.getElementById('order-info');
@@ -457,7 +465,7 @@ async function saveReturnChanges(id) {
         });
         if (response.ok) {
             const result = await response.json();
-            const idx = returnsData.findIndex(r => r.id === id);
+            const idx = returnsData.findIndex(r => r.id == id);
             if (idx !== -1) {
                 returnsData[idx] = {...returnsData[idx], ...data, totalAmount: result.newTotal};
                 updateReturnRowInTable(returnsData[idx]); // <--- Вызов обновления строки
@@ -489,7 +497,7 @@ function cancelClientEdit(id) {
 
 // 2. Полная карточка клиента (все поля)
 function openClientDetails(id) {
-    const client = clientsData.find(c => c.id === id);
+    const client = clientsData.find(c => c.id == id);
     if (!client) return;
     window.currentClientId = id;
     document.getElementById('modal-client-title').innerHTML = `Детали клиента <span class="badge">${client.name}</span>`;
@@ -554,7 +562,7 @@ async function saveClientChanges(id) {
 
         if (response.ok) {
             // СРАЗУ ОБНОВЛЯЕМ ДАННЫЕ В ЛОКАЛЬНОМ МАССИВЕ
-            const idx = clientsData.findIndex(c => c.id === id);
+            const idx = clientsData.findIndex(c => c.id == id);
             if (idx !== -1) clientsData[idx] = {...clientsData[idx], ...data};
             // Обновляем строку в таблице
             updateClientRowInTable(clientsData[idx]);
@@ -587,7 +595,7 @@ function cancelProductEdit(id) {
 
 function openProductDetails(id) {
     window.currentProductId = id;
-    const product = productsData.find(p => p.id === id);
+    const product = productsData.find(p => p.id == id);
     if (!product) return;
     document.getElementById('modal-product-title').innerHTML = `Детали товара <span class="badge" style="margin-left:10px;">${product.name}</span>`;
     const info = document.getElementById('product-info');
@@ -616,7 +624,7 @@ function openProductDetails(id) {
 
 function enableProductEdit() {
     const id = window.currentProductId;
-    const product = productsData.find(p => p.id === id);
+    const product = productsData.find(p => p.id == id);
     if (!product) return;
     document.getElementById('modal-product-title').innerText = "Редактирование товара";
     const info = document.getElementById('product-info');
@@ -660,7 +668,7 @@ async function saveProductChanges(id) {
         const result = await response.json();
 
         if (response.ok) {
-            const idx = productsData.findIndex(p => p.id === id);
+            const idx = productsData.findIndex(p => p.id == id);
             if (idx !== -1) {
                 productsData[idx] = {...productsData[idx], ...data};
                 updateProductRowInTable(productsData[idx]); // <--- Вызов обновления строки
@@ -1118,7 +1126,7 @@ function showToast(text, type = 'info') {
 
 
 function openUserDetailsModal(id) {
-    const user = usersData.find(u => u.id === id);
+    const user = usersData.find(u => u.id == id);
     if (!user) return;
 
     // Используем модальное окно, которое уже есть для клиентов
