@@ -85,8 +85,11 @@
                     <tr th:each="o : ${orders}" th:onclick="'openOrderDetails(' + ${o.id} + ')'"
                         style="cursor:pointer;">
                         <!-- ИСПРАВЛЕНО: Безопасное форматирование createdAt -->
-                        <td th:if="${o.createdAt != null}"
-                            th:text="${#strings.replace(#strings.substring(o.createdAt, 0, 16), 'T', ' ')}"></td>
+                        <td th:with="dt=${o.createdAt}"
+                            th:text="${dt != null ? #strings.replace((dt.length() > 16 ? #strings.substring(dt, 0, 16) : dt), 'T', ' ') : ''}">
+                        </td>
+
+
                         <td th:unless="${o.createdAt != null}"></td>
 
                         <td th:text="${o.managerId}" style="font-weight:600; color:var(--accent);"></td>
@@ -129,11 +132,14 @@
                     <small>Оплаченный долг по счетам:</small><br>
                     <!-- Используем переменную totalPaidSum из контроллера, без тега <td> -->
 
+                    <!--                     ete bag exav es kareli e porcel-->
+                    <!--                    <span class="price-up"-->
+                    <!--                          th:text="${totalPaidSum != null ? #numbers.formatInteger(totalPaidSum, 1, 'WHITESPACE') + ' ֏' : '0 ֏'}">-->
+                    <!--                    </span>-->
+
                     <span class="price-up"
-                          th:text="${totalPaidSum != null ? #numbers.formatInteger(totalPaidSum, 1, 'WHITESPACE') + ' ֏' : '0 ֏'}">
-
+                          th:text="${totalPaidSum == null ? '0 ֏' : #numbers.formatInteger(totalPaidSum, 1, 'WHITESPACE') + ' ֏'}">
                     </span>
-
                 </div>
             </div>
             <div class="table-container">
@@ -216,8 +222,12 @@
                     <tr th:each="r : ${returns}" th:onclick="'openReturnDetails(' + ${r.id} + ')'"
                         style="cursor:pointer;">
                         <!-- ИСПРАВЛЕНО: Безопасное форматирование returnDate -->
-                        <td th:if="${r.returnDate != null}"
-                            th:text="${#strings.replace(#strings.substring(r.returnDate, 0, 16), 'T', ' ')}"></td>
+
+                        <td th:with="rd=${r.returnDate}"
+                            th:text="${rd != null ? #strings.replace((rd.length() > 16 ? #strings.substring(rd, 0, 16) : rd), 'T', ' ') : ''}">
+                        </td>
+
+
                         <td th:unless="${r.returnDate != null}"></td>
 
                         <td th:text="${r.managerId}"></td>
