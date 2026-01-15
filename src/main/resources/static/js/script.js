@@ -745,14 +745,46 @@ function openCreateClientModal() { // Используй это имя в onclic
 // --- НОВЫЙ ЗАКАЗ ---
 // Вспомогательная функция для получения списка менеджеров (чтобы не дублировать код)
 // В script.js
-function getManagerOptionsHTML() {
-    // Этот код получает список пользователей из базы (без OFFICE)
-    let options = usersData.map(u => `<option value="${u.username}">${u.fullName}</option>`).join('');
 
-    // И добавляет OFFICE вручную для использования в веб-панели
-    options += `<option value="OFFICE">Менеджер Офис</option>`;
-    return options;
+let managerIdList = []; // Глобальный массив для хранения списка из Enum
+
+// Функция для загрузки списка менеджеров с сервера (асинхронно)
+async function loadManagerIds() {
+    try {
+        const response = await fetch('/api/public/managers'); // Вызываем наш API
+        if (response.ok) {
+            managerIdList = await response.json();
+            console.log("Список менеджеров из Enum загружен:", managerIdList);
+        } else {
+            console.error("Не удалось загрузить список менеджеров из Enum.");
+        }
+    } catch (e) {
+        console.error("Ошибка сети при загрузке Enum менеджеров.");
+    }
 }
+
+// ... (остальные ваши функции: openModal, closeModal, formatOrderDate, translatePayment, ...)
+
+// Вспомогательная функция, которая использует загруженный список
+function getManagerOptionsHTML() {
+    // Теперь мы используем managerIdList, который содержит ТОЛЬКО логины из Enum (включая OFFICE)
+    return managerIdList.map(managerName => `<option value="${managerName}">${managerName}</option>`).join('');
+    // Ручное добавление больше не нужно!
+}
+
+// ... (все остальные функции логики) ...
+
+// ОБРАТИТЕ ВНИМАНИЕ НА ЭТОТ БЛОК:
+// Он запускает загрузку данных при старте страницы и активирует табы
+document.addEventListener("DOMContentLoaded", async () => {
+    // Используем await, чтобы дождаться загрузки списка менеджеров перед переключением вкладок
+    await loadManagerIds();
+    showTab(localStorage.getItem('sellion_tab') || 'tab-orders');
+});
+
+// ... (остальная часть вашего script.js) ...
+
+
 
 
 // --- НОВЫЙ ЗАКАЗ ---
