@@ -8,7 +8,7 @@
 </head>
 <body>
 
- <div class="sidebar">
+<div class="sidebar">
     <div class="brand">SELLION 2026</div>
     <div onclick="showTab('tab-orders')" class="nav-link" id="btn-orders"><i class="bi bi-cart"></i> Заказы</div>
     <div onclick="showTab('tab-returns')" class="nav-link" id="btn-returns"><i class="bi bi-arrow-counterclockwise"></i>
@@ -38,7 +38,7 @@
     </form>
 </div>
 
- <div class="main">
+<div class="main">
     <div class="scroll-area">
 
         <!-- ВКЛАДКА ЗАКАЗЫ -->
@@ -85,8 +85,9 @@
                     <tr th:each="o : ${orders}" th:onclick="'openOrderDetails(' + ${o.id} + ')'"
                         style="cursor:pointer;">
                         <!-- ИСПРАВЛЕНО: Безопасное форматирование createdAt -->
-                        <td th:with="dt=${o.createdAt}"
-                            th:text="${dt != null ? #strings.replace(dt.length() > 16 ? dt.substring(0,16) : dt, 'T', ' ') : ''}"></td>
+                        <td th:if="${o.createdAt != null}"
+                            th:text="${#strings.replace(#strings.substring(o.createdAt, 0, 16), 'T', ' ')}"></td>
+                        <td th:unless="${o.createdAt != null}"></td>
 
                         <td th:text="${o.managerId}" style="font-weight:600; color:var(--accent);"></td>
                         <td th:text="${o.shopName}" style="font-weight:700;"></td>
@@ -127,8 +128,12 @@
                 <div class="summary-item">
                     <small>Оплаченный долг по счетам:</small><br>
                     <!-- Используем переменную totalPaidSum из контроллера, без тега <td> -->
+
                     <span class="price-up"
-                          th:text="${#numbers.formatInteger(totalPaidSum ?: 0, 1, 'WHITESPACE') + ' ֏'}"></span>
+                          th:text="${totalPaidSum != null ? #numbers.formatInteger(totalPaidSum, 1, 'WHITESPACE') + ' ֏' : '0 ֏'}">
+
+                    </span>
+
                 </div>
             </div>
             <div class="table-container">
@@ -211,8 +216,9 @@
                     <tr th:each="r : ${returns}" th:onclick="'openReturnDetails(' + ${r.id} + ')'"
                         style="cursor:pointer;">
                         <!-- ИСПРАВЛЕНО: Безопасное форматирование returnDate -->
-                        <td th:with="rd=${r.returnDate}"
-                            th:text="${rd != null ? #strings.replace(rd.length() > 16 ? rd.substring(0,16) : rd, 'T', ' ') : ''}"></td>
+                        <td th:if="${r.returnDate != null}"
+                            th:text="${#strings.replace(#strings.substring(r.returnDate, 0, 16), 'T', ' ')}"></td>
+                        <td th:unless="${r.returnDate != null}"></td>
 
                         <td th:text="${r.managerId}"></td>
                         <td th:text="${r.shopName}"></td>
@@ -383,7 +389,7 @@
                     </button>
                 </div>
                 <div id="order-info">
-<!--                     style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; background: #f8fafc; padding: 15px; border-radius: 10px; margin-top: 20px; flex-shrink: 0;">-->
+                    <!--                     style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; background: #f8fafc; padding: 15px; border-radius: 10px; margin-top: 20px; flex-shrink: 0;">-->
 
                 </div>
                 <div id="table-scroll-container">
@@ -419,7 +425,7 @@
                 </div>
                 <!-- Используем тот же контейнер для информации, стили уже готовы -->
                 <div id="client-info">
-<!--                     style="display: grid; gap: 15px; background: #f8fafc; padding: 15px; border-radius: 10px; margin-top: 10px; flex-shrink: 0;"-->
+                    <!--                     style="display: grid; gap: 15px; background: #f8fafc; padding: 15px; border-radius: 10px; margin-top: 10px; flex-shrink: 0;"-->
 
                 </div>
 
@@ -480,7 +486,7 @@
                 </div>
 
                 <div id="product-info">
-<!--                     style="display: grid; gap: 15px; background: #f8fafc; padding: 15px; border-radius: 10px; margin-top: 10px; flex-shrink: 0;">-->
+                    <!--                     style="display: grid; gap: 15px; background: #f8fafc; padding: 15px; border-radius: 10px; margin-top: 10px; flex-shrink: 0;">-->
 
 
                 </div>
@@ -572,31 +578,28 @@
 
 
         <script th:inline="javascript">
-            // 1. Функция форматирования только для отображения
             const fmt = (s) => {
                 if (!s || typeof s !== 'string') return s;
                 let clean = s.replace('T', ' ');
                 return clean.length > 16 ? clean.substring(0, 16) : clean;
             };
 
-            // 2. ДАННЫЕ ДОЛЖНЫ БЫТЬ ОРИГИНАЛЬНЫМИ (как в Java)
-            // Мы не меняем TRANSFER на "Перевод" здесь, чтобы не сломать сохранение!
-            const ordersData = [[${orders}]] || [];
-            const returnsData = [[${returns}]] || [];
-
-            // 3. Справочники
-            const productsData = [[${products}]] || [];
-            const clientsData = [[${clients}]] || [];
-            const paymentMethods = [[${paymentMethods}]] || [];
-            const returnReasons = [[${returnReasons}]] || [];
-            const usersData = [[${users}]] || [];
+            // Добавляем проверку на null через Thymeleaf (стандарт 2026)
+            const ordersData = /*[[${orders}]]*/ [];
+            const returnsData = /*[[${returns}]]*/ [];
+            const productsData = /*[[${products}]]*/ [];
+            const clientsData = /*[[${clients}]]*/ [];
+            const usersData = /*[[${users}]]*/ [];
+            const paymentMethods = /*[[${paymentMethods}]]*/ [];
+            const returnReasons = /*[[${returnReasons}]]*/ [];
         </script>
+
         <script th:src="@{/js/script.js}"></script>
 
         <iframe id="printFrame" style="display:none;"></iframe>
         <div id="toast-container" style="position: fixed; top: 20px; right: 20px; z-index: 9999;"></div>
     </div>
- </div>
+</div>
 
 </body>
 

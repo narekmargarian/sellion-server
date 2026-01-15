@@ -119,16 +119,27 @@ function applySingleQty(encodedName) {
 }
 
 function addItemToEdit() {
-    const name = document.getElementById('add-item-select').value;
+
+    const productId = document.getElementById('add-item-select').value;
     const qty = parseInt(document.getElementById('add-item-qty').value) || 1;
-    const product = productsData.find(p => p.name === name);
-    if (product && qty > product.stockQuantity) {
-        showStatus(`Нельзя добавить ${qty} шт. товара "${name}". На складе всего ${product.stockQuantity}`, true);
-        return;
+    const product = productsData.find(p => p.id == productId);
+    if (product) {
+        if (qty > product.stockQuantity) {
+
+            //Kareli e es tarberaknerl
+            // showStatus(`Нельзя добавить ${qty} шт. товара "${product.name}". На складе всего ${product.stockQuantity}`, true);
+
+            showStatus(`Недостаточно товара! Доступно: ${product.stockQuantity}`, true);
+            return;
+        }
+
+        // Добавляем в tempItems по имени (как было в вашей логике) или по ID
+        // Если ваша база на сервере ждет Имена, оставляем так:
+        tempItems[product.name] = (tempItems[product.name] || 0) + qty;
+
+        renderItemsTable(tempItems, true);
+        showStatus(`Товар "${product.name}" добавлен в список`);
     }
-    tempItems[name] = (tempItems[name] || 0) + qty;
-    renderItemsTable(tempItems, true);
-    showStatus(`Товар "${name}" добавлен в список`);
 }
 
 function removeItemFromEdit(encodedName) {
@@ -185,7 +196,10 @@ function renderItemsTable(itemsMap, isEdit) {
 
     if (isEdit) {
         // ... (твоя логика добавления строки "Добавить товар")
-        let options = productsData.map(p => `<option value="${p.name.replace(/"/g, '&quot;')}">${p.name} (${p.price} ֏)</option>`).join('');
+        // Теперь value — это ID товара, а не имя
+        let options = productsData.map(p => `<option value="${p.id}">${p.name} (${p.price} ֏)</option>`).join('');
+
+
         body.innerHTML += `<tr style="background:#f8fafc; position: sticky; bottom: 0;">
             <td><select id="add-item-select" style="width:100%">${options}</select></td>
             <td><input type="number" id="add-item-qty" value="1" min="1" style="width:65px;"></td>
@@ -729,16 +743,23 @@ function openCreateClientModal() { // Используй это имя в onclic
 }
 
 // --- НОВЫЙ ЗАКАЗ ---
+// Вспомогательная функция для получения списка менеджеров (чтобы не дублировать код)
+function getManagerOptionsHTML() {
+    // Берем всех из usersData + добавляем "Менеджер Офис"
+    let options = usersData.map(u => `<option value="${u.username}">${u.fullName}</option>`).join('');
+    options += `<option value="OFFICE">Менеджер Офис</option>`;
+    return options;
+}
+
+// --- НОВЫЙ ЗАКАЗ ---
 function openCreateOrderModal() {
     tempItems = {};
     document.getElementById('modal-title').innerText = "Создание нового заказа";
 
-    // Формируем список клиентов и менеджеров
     let clientOptions = clientsData.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
-    const managerUsernames = ["1011", "1012", "1013", "1014", "1015", "ADMIN"];
+    // ИСПРАВЛЕНО: Теперь переменная определена
+    let managerOptions = getManagerOptionsHTML();
 
-
-    // Горизонтальное отображение в 2 ряда:
     document.getElementById('order-info').innerHTML = `
         <div class="modal-info-row">
             <div><label>Магазин:</label><select id="new-op-shop">${clientOptions}</select></div>
@@ -762,7 +783,6 @@ function openCreateOrderModal() {
         </div>`;
 
     renderItemsTable(tempItems, true);
-
     document.getElementById('order-footer-actions').innerHTML = `
         <button class="btn-primary" style="background:#10b981" onclick="saveNewManualOperation('order')">Создать заказ</button>
         <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-order-view')">Отмена</button>`;
@@ -770,16 +790,16 @@ function openCreateOrderModal() {
     openModal('modal-order-view');
 }
 
+// --- НОВЫЙ ВОЗВРАТ ---
 function openCreateReturnModal() {
     tempItems = {};
     document.getElementById('modal-title').innerText = "Оформление нового возврата";
 
     let clientOptions = clientsData.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
     let reasonOptions = returnReasons.map(r => `<option value="${r.name || r}">${translateReason(r)}</option>`).join('');
-    let managerOptions = usersData.map(u => `<option value="${u.username}">${u.fullName}</option>`).join('');
+    // ИСПРАВЛЕНО: Используем общую функцию со списком менеджеров
+    let managerOptions = getManagerOptionsHTML();
 
-
-    // Горизонтальное отображение в 1 ряд:
     document.getElementById('order-info').innerHTML = `
         <div class="modal-info-row">
             <div><label>Магазин:</label><select id="new-op-shop">${clientOptions}</select></div>
@@ -789,7 +809,6 @@ function openCreateReturnModal() {
         </div>`;
 
     renderItemsTable(tempItems, true);
-
     document.getElementById('order-footer-actions').innerHTML = `
         <button class="btn-primary" style="background:#10b981" onclick="saveNewManualOperation('return')">Создать возврат</button>
         <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-order-view')">Отмена</button>`;
