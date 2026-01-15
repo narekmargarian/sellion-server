@@ -8,7 +8,8 @@
 }
 
 body {
-    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+    Roboto, 'Helvetica Neue', Arial, sans-serif;
     background: var(--bg);
     margin: 0;
     display: flex;
@@ -562,7 +563,10 @@ body {
 .btn-primary { padding: 10px 20px; border-radius: 8px; border: none; cursor: pointer; font-weight: 600; }
 .btn-danger { background-color: #ef4444; color: white; }
 .btn-secondary { background-color: #64748b; color: white; }
-/* Контейнер для всех тостов (уже есть в вашем HTML) */
+
+
+
+/* Контейнер для всех тостов */
 #toast-container {
     position: fixed;
     top: 20px;
@@ -576,32 +580,75 @@ body {
 /* Стиль отдельного уведомления */
 .toast-msg {
     padding: 12px 20px;
-    border-radius: 8px; /* Закругленные углы */
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); /* Современная тень */
+    border-radius: 8px;
+    /* Плавная тень */
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
     display: flex;
     align-items: center;
     gap: 10px;
     font-size: 14px;
     font-weight: 600;
-    transition: opacity 0.5s ease-out; /* Плавное исчезание */
-    max-width: 300px;
+    transition: opacity 0.5s ease-out;
+    max-width: 320px;
+    /* Всегда белый текст на цветном фоне */
+    color: #ffffff;
 }
 
 /* Цвета для разных типов */
 .toast-success {
-    background-color: #ecfdf5; /* Очень светлый зеленый фон */
-    color: #047857;           /* Темно-зеленый текст */
-    border-left: 5px solid #10b981;
+    background-color: #10b981; /* Ярко-зеленый фон */
 }
 
 .toast-error {
-    background-color: #fef2f2; /* Очень светлый красный фон */
-    color: #b91c1c;           /* Темно-красный текст */
-    border-left: 5px solid #ef4444;
+    background-color: #ef4444; /* Ярко-красный фон */
 }
 
 .toast-info {
-    background-color: #eff6ff; /* Очень светлый синий фон */
-    color: #1d4ed8;           /* Темно-синий текст */
-    border-left: 5px solid #3b82f6;
+    background-color: #3b82f6; /* Ярко-синий фон */
 }
+
+
+
+/*!* Контейнер для всех тостов (уже есть в вашем HTML) *!*/
+/*#toast-container {*/
+/*    position: fixed;*/
+/*    top: 20px;*/
+/*    right: 20px;*/
+/*    z-index: 9999;*/
+/*    display: flex;*/
+/*    flex-direction: column;*/
+/*    gap: 10px;*/
+/*}*/
+
+/*!* Стиль отдельного уведомления *!*/
+/*.toast-msg {*/
+/*    padding: 12px 20px;*/
+/*    border-radius: 8px; !* Закругленные углы *!*/
+/*    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); !* Современная тень *!*/
+/*    display: flex;*/
+/*    align-items: center;*/
+/*    gap: 10px;*/
+/*    font-size: 14px;*/
+/*    font-weight: 600;*/
+/*    transition: opacity 0.5s ease-out; !* Плавное исчезание *!*/
+/*    max-width: 300px;*/
+/*}*/
+
+/*!* Цвета для разных типов *!*/
+/*.toast-success {*/
+/*    background-color: #ecfdf5; !* Очень светлый зеленый фон *!*/
+/*    color: #047857;           !* Темно-зеленый текст *!*/
+/*    border-left: 5px solid #10b981;*/
+/*}*/
+
+/*.toast-error {*/
+/*    background-color: #fef2f2; !* Очень светлый красный фон *!*/
+/*    color: #b91c1c;           !* Темно-красный текст *!*/
+/*    border-left: 5px solid #ef4444;*/
+/*}*/
+
+/*.toast-info {*/
+/*    background-color: #eff6ff; !* Очень светлый синий фон *!*/
+/*    color: #1d4ed8;           !* Темно-синий текст *!*/
+/*    border-left: 5px solid #3b82f6;*/
+/*}*/
