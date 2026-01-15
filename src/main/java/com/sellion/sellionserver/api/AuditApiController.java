@@ -19,10 +19,7 @@ public class AuditApiController {
 
     @GetMapping("/order/{id}")
     public List<AuditLog> getOrderLogs(@PathVariable Long id) {
-        // Ищем логи, где в деталях упоминается ID этого заказа
-        return auditLogRepository.findAll().stream()
-                .filter(log -> log.getDetails().contains("заказа #" + id) || log.getAction().contains("#" + id))
-                .sorted(Comparator.comparing(AuditLog::getTimestamp).reversed())
-                .toList();
+        // Ищем строго по ID заказа и типу ORDER
+        return auditLogRepository.findAllByEntityIdAndEntityTypeOrderByTimestampDesc(id, "ORDER");
     }
 }

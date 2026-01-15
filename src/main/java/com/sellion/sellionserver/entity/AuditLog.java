@@ -20,5 +20,9 @@ public class AuditLog {
     private String username;
     private String action; // Например: "Удалил товар из заказа #15"
     private String details;
+
+    private Long entityId;      // ID объекта (заказа, товара и т.д.)
+    private String entityType;  // Тип объекта ("ORDER", "PRODUCT", "CLIENT")
+
     private LocalDateTime timestamp = LocalDateTime.now();
 }

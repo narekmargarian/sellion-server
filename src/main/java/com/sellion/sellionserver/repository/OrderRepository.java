@@ -9,6 +9,5 @@ import java.util.List;
 
 @Repository
 public interface OrderRepository extends JpaRepository<Order, Long> {
-    // ИСПРАВЛЕНО: Принимаем OrderStatus вместо String
     List<Order> findAllByStatus(OrderStatus status);
 }

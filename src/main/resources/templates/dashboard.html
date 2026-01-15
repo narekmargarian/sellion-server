@@ -22,7 +22,12 @@
     <div onclick="showTab('tab-invoices')" class="nav-link" id="btn-invoices">
         <i class="bi bi-file-earmark-text"></i> Счета / Оплата
     </div>
-    <div onclick="showTab('tab-users')" class="nav-link" id="btn-users"><i class="bi bi-person-badge"></i> Персонал</div>
+    <div onclick="showTab('tab-users')" class="nav-link" id="btn-users"><i class="bi bi-person-badge"></i> Персонал
+    </div>
+
+    <div onclick="showTab('tab-main')" class="nav-link" id="btn-main">
+        <i class="bi bi-speedometer2"></i> Обзор системы
+    </div>
 
 
     <form th:action="@{/logout}" method="post" style="margin-top:auto; padding:20px;">
@@ -90,7 +95,13 @@
                         <td th:text="${o.deliveryDate}"></td>
 
                         <!-- ИСПРАВЛЕНО: TRANSFER -> Перевод -->
-                        <td><span class="badge" th:text="${o.status == 'TRANSFER' ? 'Перевод' : o.status}"></span></td>
+
+                        <td>
+                            <span class="badge"
+                                 th:text="${o.paymentMethod != null ? o.paymentMethod.displayName : o.status}">
+                             </span>
+                        </td>
+
 
                         <td onclick="event.stopPropagation()">
                             <form th:if="${o.invoiceId == null}"
@@ -108,22 +119,16 @@
 
         <div id="tab-invoices" class="tab-pane">
             <div class="summary-card" style="background: #f0fdf4; border-color: #bbf7d0; display: flex; gap: 50px;">
-                <div class="filter-bar">
-
-                    <input type="text" id="search-invoices"
-                           onkeyup="filterTable('search-invoices', 'invoices-table-body')"
-                           placeholder="🔎 Поиск по номеру счета или магазину..."
-                           class="form-control w-25">
-                </div>
-
                 <div class="summary-item">
-
                     <small>Общий долг по счетам:</small><br>
-                    <span class="price-down" th:text="${#numbers.formatInteger(totalInvoiceDebt, 1, 'WHITESPACE') + ' ֏'}"></span>
+                    <span class="price-down"
+                          th:text="${#numbers.formatInteger(totalInvoiceDebt, 1, 'WHITESPACE') + ' ֏'}"></span>
                 </div>
                 <div class="summary-item">
                     <small>Оплаченный долг по счетам:</small><br>
-                    <span class="price-up" th:text="${#numbers.formatInteger(totalPaidSum, 1, 'WHITESPACE') + ' ֏'}"></span>
+                    <!-- Используем переменную totalPaidSum из контроллера, без тега <td> -->
+                    <span class="price-up"
+                          th:text="${#numbers.formatInteger(totalPaidSum ?: 0, 1, 'WHITESPACE') + ' ֏'}"></span>
                 </div>
             </div>
             <div class="table-container">
@@ -171,10 +176,12 @@
         <div id="tab-returns" class="tab-pane">
 
             <div class="summary-card" style="background: #fff1f2; border-color: #fecdd3;">
-                <div class="summary-item"><small>Возвратов всего:</small> <span th:text="${totalReturnsCount}">0</span>
+                <div class="summary-item"><small>Возвратов всего:</small>
+                    <span th:text="${totalReturnsCount}">0</span>
                 </div>
-                <div class="summary-item"><small>Сумма возвратов:</small> <span class="price-down"
-                                                                                th:text="${#numbers.formatInteger(totalReturnsSum, 1, 'WHITESPACE') + ' ֏'}">0</span>
+                <div class="summary-item"><small>Сумма возвратов:</small>
+                    <span class="price-down"
+                          th:text="${#numbers.formatInteger(totalReturnsSum, 1, 'WHITESPACE') + ' ֏'}">0</span>
                 </div>
             </div>
             <div class="filter-bar">
@@ -287,10 +294,78 @@
                 </table>
             </div>
         </div>
-    </div>
-</div>
 
-<div id="modal-order-view" class="modal">
+        <div id="tab-main" class="tab-pane">
+            <div class="row g-3">
+                <!-- 1. Блок Статистики -->
+                <div class="col-md-4">
+                    <div class="summary-card" style="background: white; flex-direction: column; align-items: flex-start; gap: 10px; height: 100%;">
+                        <h5 style="color: var(--text-muted); font-size: 14px; margin: 0;">📊 ПОКАЗАТЕЛИ СЕГОДНЯ</h5>
+                        <div style="font-size: 20px; font-weight: 800; margin-top: 10px;">
+                            Средний чек: <span class="price-up" id="stat-avg-check">0 ֏</span>
+                        </div>
+                        <div style="font-size: 16px;">
+                            Заказов в ожидании: <b id="stat-pending-orders">0</b>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. Блок Импорта -->
+                <div class="col-md-4">
+                    <div class="summary-card" style="background: white; flex-direction: column; align-items: flex-start; gap: 10px; height: 100%;">
+                        <h5 style="color: var(--text-muted); font-size: 14px; margin: 0;">🔌 ИМПОРТ ДАННЫХ (Excel/1C)</h5>
+                        <div style="width: 100%; display: flex; flex-direction: column; gap: 8px; margin-top: 10px;">
+                            <button class="btn-primary" style="width: 100%; background: #6366f1;" onclick="triggerImport()">
+                                Загрузить приход товара
+                            </button>
+                            <button class="btn-primary" style="width: 100%; background: #64748b;" onclick="exportInventory()">
+                                Выгрузить остатки
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. Блок "Кто в сети" -->
+                <div class="col-md-4">
+                    <div class="summary-card" style="background: white; flex-direction: column; align-items: flex-start; gap: 10px; height: 100%;">
+                        <h5 style="color: var(--text-muted); font-size: 14px; margin: 0;">🟢 СЕЙЧАС В СИСТЕМЕ</h5>
+                        <div id="online-users-list" style="display: flex; flex-direction: column; gap: 5px; margin-top: 10px; width: 100%;">
+                            <span class="badge" style="background: #dcfce7; color: #166534; width: fit-content;">Администратор (Вы)</span>
+                        </div>
+                    </div>
+                </div>
+            </div> <!-- Конец row g-3 -->
+
+            <!-- Секция таблицы (Поступления) идет СРАЗУ после row -->
+            <div class="table-container" style="margin-top: 25px;">
+                <h5 style="padding: 15px; margin: 0; border-bottom: 1px solid var(--border); font-size: 15px; font-weight: 700;">
+                    Последние поступления (Импорт)
+                </h5>
+                <table class="table">
+                    <thead>
+                    <tr>
+                        <th>Дата</th>
+                        <th>Действие</th>
+                        <th>Детали</th>
+                    </tr>
+                    </thead>
+                    <tbody id="import-log-body">
+                    <!-- В 2026 данные сюда подтянутся через Thymeleaf или JS из AuditLog -->
+                    <tr th:each="log : ${auditLogs}">
+                        <td th:text="${#temporals.format(log.timestamp, 'dd.MM.yyyy HH:mm')}"></td>
+                        <td th:text="${log.action}"></td>
+                        <td th:text="${log.details}"></td>
+                    </tr>
+                    <tr th:if="${#lists.isEmpty(auditLogs)}">
+                        <td colspan="3" style="text-align:center; color: var(--text-muted); padding: 20px;">История пуста</td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+
+        <div id="modal-order-view" class="modal">
     <div class="modal-content">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;">
             <h2 id="modal-title" style="margin: 0;">Детали операции</h2>
@@ -388,36 +463,7 @@
         </div>
     </div>
 </div>
-<div id="modal-order-create" class="modal">
-    <div class="modal-content" style="width: 700px;">
-        <h2>Новый заказ (Ручной ввод)</h2>
-        <div class="modal-info-row">
-            <div style="flex:2">
-                <label>Выберите магазин</label>
-                <select id="new-order-shop" style="width:100%">
-                    <option th:each="c : ${clients}" th:value="${c.name}" th:text="${c.name}"></option>
-                </select>
-            </div>
-            <div style="flex:1">
-                <label>Менеджер</label>
-                <input type="text" id="new-order-manager" value="ADMIN">
-            </div>
-        </div>
 
-        <div id="new-order-items-area" style="margin-top:15px; border:1px solid #ddd; padding:10px; border-radius:8px;">
-            <!-- Сюда будем добавлять товары через JS как в редактировании -->
-            <table class="table">
-                <tbody id="new-order-body"></tbody>
-            </table>
-        </div>
-
-        <div style="display:flex; justify-content: space-between; margin-top:15px;">
-            <button class="btn-primary" onclick="submitManualOrder()">Создать заказ и списать со склада</button>
-            <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-order-create')">Отмена
-            </button>
-        </div>
-    </div>
-</div>
 <div id="modal-product-create-new" class="modal">
     <div class="modal-content" style="width: 500px;">
         <h2 style="margin-bottom:20px;">📦 Добавление нового товара</h2>
@@ -448,15 +494,23 @@
 <div id="tab-users" class="tab-pane">
     <div class="table-container">
         <table class="table">
-            <thead><tr><th>Логин</th><th>ФИО</th><th>Роль</th><th>Действие</th></tr></thead>
+            <thead>
+            <tr>
+                <th>Логин</th>
+                <th>ФИО</th>
+                <th>Роль</th>
+                <th>Действие</th>
+            </tr>
+            </thead>
             <tbody>
             <tr th:each="u : ${users}">
                 <td th:text="${u.username}"></td>
                 <td th:text="${u.fullName}"></td>
                 <td><span class="badge" th:text="${u.role}"></span></td>
                 <td>
-                    <button class="btn-primary" style="background:#f59e0b"
-                            th:onclick="'resetPassword(' + ${u.id} + ')'">Сброс пароля (1111)</button>
+                    <button class="btn-warning" th:onclick="'resetPassword(' + ${u.id} + ')'">
+                        Сброс пароля (1111)
+                    </button>
                 </td>
             </tr>
             </tbody>
@@ -464,36 +518,31 @@
     </div>
 </div>
 
-<div class="summary-item"><small>Средний чек:</small> <br>
-    <b th:text="${#numbers.formatInteger(avgOrder, 1, 'WHITESPACE') + ' ֏'}"></b>
-</div>
-
 
 <script th:inline="javascript">
+    // 1. Функция форматирования только для отображения
     const fmt = (s) => {
         if (!s || typeof s !== 'string') return s;
         let clean = s.replace('T', ' ');
         return clean.length > 16 ? clean.substring(0, 16) : clean;
     };
 
-    const ordersData = ([[${orders}]] || []).map(o => ({
-        ...o,
-        createdAt: fmt(o.createdAt),
-        status: o.status === 'TRANSFER' ? 'Перевод' : o.status
-    }));
+    // 2. ДАННЫЕ ДОЛЖНЫ БЫТЬ ОРИГИНАЛЬНЫМИ (как в Java)
+    // Мы не меняем TRANSFER на "Перевод" здесь, чтобы не сломать сохранение!
+    const ordersData = [[${orders}]] || [];
+    const returnsData = [[${returns}]] || [];
 
-    const returnsData = ([[${returns}]] || []).map(r => ({
-        ...r,
-        returnDate: fmt(r.returnDate),
-        displayReason: (r.returnReason && r.returnReason.toString() === 'EXPIRED') ? 'Просрочка' : (r.returnReason || '')
-    }));
-
-    const productsData = [[${products}]];
-    const clientsData = [[${clients}]];
-    const paymentMethods = [[${paymentMethods}]];
-    const returnReasons = [[${returnReasons}]];
+    // 3. Справочники
+    const productsData = [[${products}]] || [];
+    const clientsData = [[${clients}]] || [];
+    const paymentMethods = [[${paymentMethods}]] || [];
+    const returnReasons = [[${returnReasons}]] || [];
+    const usersData = [[${users}]] || [];
 </script>
 <script th:src="@{/js/script.js}"></script>
+
 <iframe id="printFrame" style="display:none;"></iframe>
+<div id="toast-container" style="position: fixed; top: 20px; right: 20px; z-index: 9999;"></div>
+
 </body>
 </html>

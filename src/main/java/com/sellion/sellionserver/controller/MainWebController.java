@@ -62,16 +62,19 @@ public class MainWebController {
                         - (i.getPaidAmount() != null ? i.getPaidAmount() : 0))
                 .sum();
 
-// НОВАЯ СТРОКА: считаем общую сумму оплат
+        // НОВАЯ ПЕРЕМЕННАЯ: Рассчитываем общую сумму оплаченных средств
         double totalPaidSum = invoices.stream()
-                .mapToDouble(i -> i.getPaidAmount() != null ? i.getPaidAmount() : 0)
+                .mapToDouble(i -> i.getPaidAmount() != null ? i.getPaidAmount() : 0.0)
                 .sum();
-        double avgOrder = filteredOrders.isEmpty() ? 0 : totalOrdersSum / filteredOrders.size();
-        model.addAttribute("avgOrder", avgOrder);
+
+        double totalSum = allOrders.stream().mapToDouble(o -> o.getTotalAmount() != null ? o.getTotalAmount() : 0.0).sum();
+        double avgCheck = allOrders.isEmpty() ? 0 : totalSum / allOrders.size();
+        model.addAttribute("totalPaidSum", totalPaidSum);
+        model.addAttribute("avgCheck", avgCheck);
 
         model.addAttribute("invoices", invoices);
         model.addAttribute("totalInvoiceDebt", totalInvoiceDebt);
-        model.addAttribute("totalPaidSum", totalPaidSum);
+
 
         // 4. ДАННЫЕ КЛИЕНТОВ И ПРОДУКТОВ
         model.addAttribute("clients", clientRepository.findAll());

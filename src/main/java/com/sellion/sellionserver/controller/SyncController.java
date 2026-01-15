@@ -12,6 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 
@@ -34,7 +35,9 @@ public class SyncController {
                 order.setStatus(OrderStatus.NEW);
                 // ДОБАВЛЕНО: Устанавливаем текущую дату, если Android не прислал
                 if (order.getCreatedAt() == null || order.getCreatedAt().isEmpty()) {
-                    order.setCreatedAt(LocalDateTime.now().toString());
+                    // В SyncController.java вместо toString()
+                    order.setCreatedAt(LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
+
                 }
             });
             orderRepository.saveAll(orders);
