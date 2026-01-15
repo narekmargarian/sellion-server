@@ -22,35 +22,55 @@ import java.util.List;
 @EnableMethodSecurity
 public class SecurityConfig {
 
+    // --- ОБЩАЯ ЦЕПОЧКА ДЛЯ API и ФРОНТЕНДА (Без CSRF для Android/JS) ---
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain apiSecurityFilterChain(HttpSecurity http) throws Exception {
         http.csrf(AbstractHttpConfigurer::disable)
                 .cors(Customizer.withDefaults())
                 .headers(headers -> headers.frameOptions(HeadersConfigurer.FrameOptionsConfig::sameOrigin))
 
-                // Указываем, что для API не нужно создавать сессии и редиректить
-                .securityMatcher("/api/**", "/admin/**", "/login", "/css/**", "/js/**")
+                // Этот фильтр обрабатывает ТОЛЬКО /api/** запросы
+                .securityMatcher("/api/**")
                 .authorizeHttpRequests(auth -> auth
-                        // ПОЛНЫЙ ДОСТУП ДЛЯ ANDROID
-                        .requestMatchers("/api/**").permitAll()
-                        .requestMatchers("/login", "/css/**", "/js/**", "/error").permitAll()
-                        .requestMatchers("/admin/**").authenticated()
-                        .requestMatchers("/favicon.ico").permitAll()
+                        // ВРЕМЕННО: Разрешаем полный доступ к аудиту для отладки
+                        .requestMatchers("/api/admin/audit/**").permitAll()
 
+                        // Все остальные API открыты (permitAll)
+                        .anyRequest().permitAll()
+                );
+        return http.build();
+    }
+
+    // --- ЦЕПОЧКА ДЛЯ HTML-СТРАНИЦ (Требует логина через форму) ---
+    @Bean
+    public SecurityFilterChain formLoginSecurityFilterChain(HttpSecurity http) throws Exception {
+        http.csrf(Customizer.withDefaults()) // CSRF включен для веб-форм
+                .cors(Customizer.withDefaults())
+
+                // ВАЖНО: Добавляем "/logout" в список matchers
+                .securityMatcher("/admin/**", "/login", "/css/**", "/js/**", "/error", "/", "/logout")
+                .authorizeHttpRequests(auth -> auth
+                        .requestMatchers("/admin/**").authenticated() // Админка требует авторизации
+                        .requestMatchers("/login", "/css/**", "/js/**", "/error", "/", "/favicon.ico", "/logout").permitAll()
                         .anyRequest().authenticated()
                 )
                 .formLogin(form -> form
                         .loginPage("/login")
                         .defaultSuccessUrl("/admin", true)
                         .permitAll()
-                );
+                )
+                .logout(logout -> logout
+                        .logoutUrl("/logout")
+                        .logoutSuccessUrl("/login?logout")
+                        .permitAll());
+
         return http.build();
     }
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of("*")); // Разрешить всем (для офисной сети 2026)
+        configuration.setAllowedOrigins(List.of("*"));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
