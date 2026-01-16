@@ -238,6 +238,7 @@ function openOrderDetails(id) {
     tempItems = JSON.parse(JSON.stringify(order.items));
     document.getElementById('modal-title').innerHTML = `Детали операции <span class="badge" style="margin-left:10px;">ЗАКАЗ №${order.id}</span>`;
     const info = document.getElementById('order-info');
+    const printBtn = `<button class="btn-primary" style="background:#475569" onclick="printOrder(${order.id})">🖨 Печать Заказа</button>`;
     // info.style.gridTemplateColumns = '1fr';
     info.innerHTML = `
         <div class="modal-info-row">
@@ -257,20 +258,20 @@ function openOrderDetails(id) {
     const footer = document.getElementById('order-footer-actions');
     // Формируем кнопки в зависимости от статуса инвойса
     if (order.invoiceId) {
-        // Если СЧЕТ ВЫСТАВЛЕН: только История и Закрыть
         footer.innerHTML = `
-            <button class="btn-primary" style="background:#6366f1" onclick="showOrderHistory(${order.id})">📜 История</button>
-            <div style="color:#991b1b; font-weight:700; background:#fee2e2; padding:10px; border-radius:8px; flex:1; text-align:center;">СЧЕТ ВЫСТАВЛЕН</div>
-            <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-order-view')">Закрыть</button>
-        `;
+        <button class="btn-primary" style="background:#6366f1" onclick="showOrderHistory(${order.id})">📜 История</button>
+        <button class="btn-primary" style="background:#475569" onclick="printOrder(${order.id})">🖨 Печать</button>
+        <div style="color:#991b1b; font-weight:700; background:#fee2e2; padding:10px; border-radius:8px; flex:1; text-align:center;">СЧЕТ ВЫСТАВЛЕН</div>
+        <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-order-view')">Закрыть</button>
+    `;
     } else {
-        // Если СЧЕТА НЕТ: История, Изменить, Отменить, Закрыть
         footer.innerHTML = `
-            <button class="btn-primary" style="background:#6366f1" onclick="showOrderHistory(${order.id})">📜 История</button>
-            <button class="btn-primary" onclick="enableOrderEdit(${order.id})">Изменить</button>
-            <button class="btn-primary" style="background:#ef4444" onclick="cancelOrder(${order.id})">Отменить заказ</button>
-            <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-order-view')">Закрыть</button>
-        `;
+        <button class="btn-primary" style="background:#6366f1" onclick="showOrderHistory(${order.id})">📜 История</button>
+        <button class="btn-primary" style="background:#475569" onclick="printOrder(${order.id})">🖨 Печать</button>
+        <button class="btn-primary" onclick="enableOrderEdit(${order.id})">Изменить</button>
+        <button class="btn-primary" style="background:#ef4444" onclick="cancelOrder(${order.id})">Отменить заказ</button>
+        <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-order-view')">Закрыть</button>
+    `;
     }
     openModal('modal-order-view');
 }
@@ -344,33 +345,29 @@ async function saveFullChanges(id) {
 }
 
 // --- 5. Возвраты ---
+// --- 5. Возвраты ---
 function openReturnDetails(id) {
+    // Используем ==, как мы договорились
     const ret = returnsData.find(r => r.id == id);
+    if (!ret) return;
 
     const statusText = ret.status === 'CONFIRMED' ? 'Проведено' : (ret.status === 'DRAFT' ? 'Черновик' : ret.status);
-
     const statusClass = ret.status === 'CONFIRMED' ? 'bg-success' : 'bg-warning';
-    if (!ret) return;
-    tempItems = JSON.parse(JSON.stringify(ret.items));
-    document.getElementById('modal-title').innerHTML = `Детали операции <span class="badge" style="margin-left:10px;">ВОЗВРАТ №${ret.id}</span>`;
-    const info = document.getElementById('order-info');
-    // info.style.gridTemplateColumns = '1fr';
-
-
-    const displayReason = translateReason(ret.returnReason);
     const footer = document.getElementById('order-footer-actions');
-    if (ret.status === 'DRAFT') {
-        footer.innerHTML = `
-        <button class="btn-primary" style="background:#10b981" onclick="confirmReturn(${ret.id})">✅ Подтвердить</button>
-        <button class="btn-primary" onclick="enableReturnEdit(${ret.id})">Изменить</button>
-        <button class="btn-primary" style="background:#ef4444" onclick="deleteReturnOrder(${ret.id})">❌ Удалить</button>
-        <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-order-view')">Закрыть</button>`;
-    } else {
-        // ЗАМЕНА ЗДЕСЬ:
-        footer.innerHTML = `<b style="color:green;">✅ Проведено</b> <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-order-view')">Закрыть</button>`;
-    }
+    // HTML для кнопки печати
+    const printBtnHtml = `<button class="btn-primary" style="background:#475569" onclick="printReturn(${ret.id})">🖨 Печать</button>`;
+    const displayReason = translateReason(ret.returnReason);
 
-    info.innerHTML = `
+    tempItems = JSON.parse(JSON.stringify(ret.items));
+
+    // Обновляем заголовок и информацию
+    document.getElementById('modal-title').innerHTML = `
+        Детали операции 
+        <span class="badge ${statusClass}" style="margin-left:10px;">${statusText}</span>
+        <span class="badge" style="margin-left:5px;">ВОЗВРАТ №${ret.id}</span>
+    `;
+
+    document.getElementById('order-info').innerHTML = `
         <div class="modal-info-row">
             <div><small>Магазин:</small><br><b>${ret.shopName}</b></div>
             <div><small>Дата возврата:</small><br><b>${formatOrderDate(ret.returnDate)}</b></div>
@@ -378,30 +375,29 @@ function openReturnDetails(id) {
         </div>
     `;
 
+    // Рендерим таблицу товаров
     renderItemsTable(tempItems, false);
 
-    document.getElementById('modal-title').innerHTML = `
-    Детали операции 
-    <span class="badge ${statusClass}" style="margin-left:10px;">${statusText}</span>
-    <span class="badge" style="margin-left:5px;">ВОЗВРАТ №${ret.id}</span>
-`;
     document.getElementById('order-total-price').innerText = "Сумма возврата: " + (ret.totalAmount || 0).toLocaleString() + " ֏";
 
-    document.getElementById('order-footer-actions').innerHTML = `
-        <button class="btn-primary" onclick="enableReturnEdit(${ret.id})">Изменить возврат</button>
-        <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-order-view')">Закрыть</button>`;
-
-    // Добавляем кнопку удаления, если статус черновик
+    // *** ЕДИНСТВЕННЫЙ И ПРАВИЛЬНЫЙ БЛОК ДЛЯ КНОПОК ФУТЕРА ***
     if (ret.status === 'DRAFT') {
         footer.innerHTML = `
             <button class="btn-primary" style="background:#10b981" onclick="confirmReturn(${ret.id})">✅ Подтвердить</button>
+            ${printBtnHtml}
             <button class="btn-primary" onclick="enableReturnEdit(${ret.id})">Изменить</button>
             <button class="btn-primary" style="background:#ef4444" onclick="deleteReturnOrder(${ret.id})">❌ Удалить</button>
-            <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-order-view')">Закрыть</button>`;
+            <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-order-view')">Закрыть</button>
+        `;
     } else {
-        // Если подтвержден или отменен, просто закрыть
-        footer.innerHTML = `<b style="color:gray;">Обработан</b> <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-order-view')">Закрыть</button>`;
+        footer.innerHTML = `
+            <b style="color:gray;">Обработан</b>
+            ${printBtnHtml}
+            <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-order-view')">Закрыть</button>
+        `;
     }
+    // *********************************************************
+
     openModal('modal-order-view');
 }
 
@@ -1246,6 +1242,41 @@ async function resetPassword(userId) {
         }
     });
 }
+
+// Эти функции должны быть ГЛОБАЛЬНЫМИ, чтобы onclick их видел
+window.printOrder = function(id) {
+    console.log("Запуск печати заказа:", id);
+    const url = `/admin/orders/print/${id}`;
+    printAction(url);
+}
+
+window.printReturn = function(id) {
+    console.log("Запуск печати возврата:", id);
+    const url = `/admin/returns/print/${id}`;
+    printAction(url);
+}
+
+function printAction(url) {
+    const frame = document.getElementById('printFrame');
+    if (!frame) {
+        window.open(url, '_blank');
+        return;
+    }
+
+    frame.src = url;
+
+    // Ждем загрузки содержимого перед печатью
+    frame.onload = function() {
+        try {
+            frame.contentWindow.focus();
+            frame.contentWindow.print();
+        } catch (e) {
+            console.error("Ошибка печати:", e);
+            window.open(url, '_blank');
+        }
+    };
+}
+
 
 
 document.addEventListener("DOMContentLoaded", async () => {

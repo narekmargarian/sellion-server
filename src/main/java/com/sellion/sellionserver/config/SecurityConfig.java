@@ -30,11 +30,11 @@ public class SecurityConfig {
     public SecurityFilterChain apiSecurityFilterChain(HttpSecurity http) throws Exception {
         http
                 .securityMatcher("/api/**")
-                .csrf(AbstractHttpConfigurer::disable) // Отключаем защиту CSRF
+                .csrf(AbstractHttpConfigurer::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                .authorizeHttpRequests(auth -> auth
-                        .anyRequest().permitAll() // РАЗРЕШАЕМ ВСЁ для API
-                );
+                // ДОБАВИТЬ ЭТО:
+                .headers(headers -> headers.frameOptions(HeadersConfigurer.FrameOptionsConfig::sameOrigin))
+                .authorizeHttpRequests(auth -> auth.anyRequest().permitAll());
         return http.build();
     }
 
@@ -42,17 +42,17 @@ public class SecurityConfig {
     @Order(2)
     public SecurityFilterChain formLoginSecurityFilterChain(HttpSecurity http) throws Exception {
         http
-                .csrf(AbstractHttpConfigurer::disable) // Отключаем защиту CSRF
+                .csrf(AbstractHttpConfigurer::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                .authorizeHttpRequests(auth -> auth
-                        .anyRequest().permitAll() // РАЗРЕШАЕМ ВСЁ для Web/Админки
-                )
-                // Отключаем форму логина, чтобы она не перехватывала запросы
+                // ДОБАВИТЬ ЭТО:
+                .headers(headers -> headers.frameOptions(HeadersConfigurer.FrameOptionsConfig::sameOrigin))
+                .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
                 .formLogin(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable);
 
         return http.build();
     }
+
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {

@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="ru" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: 'Inter', sans-serif; font-size: 12px; color: #333; margin: 20px; }
+        .header { display: flex; justify-content: space-between; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; }
+        .company-info { line-height: 1.4; }
+        .doc-title { font-size: 18px; font-weight: bold; text-transform: uppercase; }
+        .info-table { width: 100%; margin-bottom: 20px; border-collapse: collapse; }
+        .info-table td { padding: 5px 0; border-bottom: 1px solid #eee; }
+        .main-table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
+        .main-table th { background: #f0f0f0; border: 1px solid #ccc; padding: 8px; text-align: left; }
+        .main-table td { border: 1px solid #ccc; padding: 8px; }
+        .total-block { text-align: right; font-size: 16px; font-weight: bold; }
+        .footer-sig { margin-top: 50px; display: flex; justify-content: space-between; }
+        .sig-line { border-top: 1px solid #000; width: 200px; margin-top: 40px; text-align: center; font-size: 10px; }
+    </style>
+</head>
+<body>
+<div class="header">
+    <div class="company-info">
+        <strong>SELLION ERP 2026</strong><br>
+        Система управления складом и продажами<br>
+        г. Ереван, Армения
+    </div>
+    <div class="doc-title" th:text="${title}">ДОКУМЕНТ</div>
+</div>
+
+<table class="info-table">
+    <tr>
+        <td width="150">Контрагент (Магазин):</td>
+        <td th:text="${op.shopName}">Название магазина</td>
+    </tr>
+    <tr>
+        <td>Дата документа:</td>
+        <td th:text="${op.createdAt != null ? op.createdAt : op.returnDate}">01.01.2026</td>
+    </tr>
+    <tr>
+        <td>Ответственное лицо:</td>
+        <td th:text="${op.managerId}">Менеджер</td>
+    </tr>
+</table>
+
+<table class="main-table">
+    <thead>
+    <tr>
+        <th>№</th>
+        <th>Наименование товара</th>
+        <th>Кол-во</th>
+        <th>Цена (֏)</th>
+        <th>Сумма (֏)</th>
+    </tr>
+    </thead>
+    <tbody>
+    <!-- Изменяем th:each на printItems -->
+    <tr th:each="item, iter : ${printItems}">
+        <td th:text="${iter.index + 1}">1</td>
+        <td th:text="${item.name}">Товар</td>
+        <td th:text="${item.quantity + ' шт.'}">10</td>
+        <!-- Отображаем цену с форматированием -->
+        <td th:text="${#numbers.formatInteger(item.price, 1, 'WHITESPACE') + ' ֏'}">790 ֏</td>
+        <!-- Отображаем сумму с форматированием -->
+        <td th:text="${#numbers.formatInteger(item.total, 1, 'WHITESPACE') + ' ֏'}">790 ֏</td>
+    </tr>
+    </tbody>
+</table>
+
+
+<div class="total-block">
+    ИТОГО: <span th:text="${#numbers.formatInteger(op.totalAmount, 1, 'WHITESPACE') + ' ֏'}">0</span>
+</div>
+
+<div class="footer-sig">
+    <div class="sig-line">Отпустил (Подпись)</div>
+    <div class="sig-line">Получил (Подпись / Печать)</div>
+</div>
+
+<script>
+    // Автоматический запуск печати при загрузке во фрейм
+    window.onload = function() { window.print(); }
+</script>
+</body>
+</html>
