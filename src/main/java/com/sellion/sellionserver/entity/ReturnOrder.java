@@ -1,5 +1,6 @@
 package com.sellion.sellionserver.entity;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -7,6 +8,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Map;
@@ -31,11 +33,12 @@ public class ReturnOrder {
     @Column(name = "quantity")
     private Map<String, Integer> items;
 
-
     private ReasonsReturn returnReason;
 
     @JsonProperty("returnDate")
-    private String returnDate;
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "d MMMM yyyy", locale = "ru")
+    private LocalDate returnDate;
+
 
     @Enumerated(EnumType.STRING)
     private ReturnStatus status = ReturnStatus.DRAFT;
@@ -51,18 +54,16 @@ public class ReturnOrder {
 
     @PrePersist
     public void formatAndSetReturnDate() {
-        DateTimeFormatter appFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
+        // Форматтер для createdAt (с полным временем)
+        DateTimeFormatter fullFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
+        LocalDateTime now = LocalDateTime.now();
 
-        // Форматируем createdAt всегда при создании записи
+        // Логика форматирования остается только для createdAt, с полным временем
         if (this.createdAt == null || this.createdAt.isEmpty() || this.createdAt.length() > 19) {
-            this.createdAt = LocalDateTime.now().format(appFormatter);
+            this.createdAt = now.format(fullFormatter);
         }
 
-        // Если returnDate пришла с Z или миллисекундами, мы её обрезаем до нужного формата
-        if (this.returnDate != null && this.returnDate.length() > 19) {
-            this.returnDate = this.returnDate.substring(0, 19);
-        } else if (this.returnDate == null || this.returnDate.isEmpty()) {
-            this.returnDate = LocalDateTime.now().format(appFormatter);
-        }
+        // Логика для returnDate удалена, так как JPA и Jackson автоматически
+        // обработают LocalDate и сохранят его в формате YYYY-MM-DD.
     }
 }

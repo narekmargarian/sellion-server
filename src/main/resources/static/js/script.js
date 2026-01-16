@@ -17,11 +17,22 @@ function closeModal(id) {
 }
 
 // Безопасное форматирование даты (убирает T и секунды)
-function formatOrderDate(dateStr) {
-    if (!dateStr || typeof dateStr !== 'string') return dateStr;
-    let clean = dateStr.replace('T', ' ');
-    return clean.length > 16 ? clean.substring(0, 16) : clean;
+function formatOrderDate(dateVal) {
+    if (!dateVal) return '---';
+    if (typeof dateVal === 'object' && dateVal.year) {
+        const months = {
+            'JANUARY': 'января', 'FEBRUARY': 'февраля', 'MARCH': 'марта', 'APRIL': 'апреля',
+            'MAY': 'мая', 'JUNE': 'июня', 'JULY': 'июля', 'AUGUST': 'августа',
+            'SEPTEMBER': 'сентября', 'OCTOBER': 'октября', 'NOVEMBER': 'ноября', 'DECEMBER': 'декабря'
+        };
+        return `${dateVal.dayOfMonth} ${months[dateVal.month] || dateVal.monthValue} ${dateVal.year}`;
+    }
+    if (typeof dateVal === 'string') {
+        return dateVal.includes('T') ? dateVal.replace('T', ' ').substring(0, 16) : dateVal;
+    }
+    return dateVal;
 }
+
 
 // Утилита для перевода методов оплаты
 function translatePayment(m) {
@@ -891,11 +902,24 @@ async function saveNewManualOperation(type) {
 
     const url = type === 'order' ? '/api/admin/orders/create-manual' : '/api/returns/sync';
 
-    // 1. Получаем базовую дату из поля ввода (формат YYYY-MM-DD)
+    // 1. Получаем дату из календаря (например, "2026-01-16")
     const baseDate = document.getElementById('new-op-date').value;
+    if (!baseDate) {
+        showToast("Выберите дату!");
+        return;
+    }
 
-    // 2. Объединяем дату с текущим временем в нужный формат: YYYY-MM-DDTHH:MM:SS
-    const formattedDateTime = `${baseDate}T${getCurrentTimeFormat()}`;
+    // 2. Вспомогательная функция для конвертации в русский формат "16 января 2026"
+    // Это именно то, что ожидает ваш сервер в LocalDate
+    const toRuDate = (isoStr) => {
+        const d = new Date(isoStr);
+        const months = ["января", "февраля", "марта", "апреля", "мая", "июня",
+            "июля", "августа", "сентября", "октября", "ноября", "декабря"];
+        return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+    };
+
+    const russianDate = toRuDate(baseDate); // Результат: "16 января 2026"
+    const formattedDateTime = `${baseDate}T${getCurrentTimeFormat()}`; // Для createdAt
 
     // Собираем общие данные
     const data = {
@@ -903,42 +927,44 @@ async function saveNewManualOperation(type) {
         managerId: document.getElementById('new-op-manager').value,
         items: tempItems,
         totalAmount: calculateCurrentTempTotal(),
-        // ИСПРАВЛЕНО: Используем отформатированную дату из поля ввода + текущее время
+        // createdAt — это String в Java, здесь время нужно оставить
         createdAt: formattedDateTime
     };
 
     // Добавляем специфичные данные
     if (type === 'order') {
         data.comment = document.getElementById('new-op-comment').value;
-        // ИСПРАВЛЕНО: Дата доставки тоже должна быть с временем
-        data.deliveryDate = formattedDateTime;
+        // ИСПРАВЛЕНО: Отправляем только дату БЕЗ ВРЕМЕНИ в формате "16 января 2026"
+        data.deliveryDate = russianDate;
         data.paymentMethod = document.getElementById('new-op-payment').value;
         data.needsSeparateInvoice = document.getElementById('new-op-invoice').value === "true";
         data.status = "ACCEPTED";
     } else {
         data.returnReason = document.getElementById('new-op-reason').value;
-        // ИСПРАВЛЕНО: Дата возврата тоже должна быть с временем
-        data.returnDate = formattedDateTime;
+        // ИСПРАВЛЕНО: Отправляем только дату БЕЗ ВРЕМЕНИ в формате "16 января 2026"
+        data.returnDate = russianDate;
     }
 
     try {
         const response = await fetch(url, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            // Сервер ожидает List<ReturnOrder> для /api/returns/sync
             body: JSON.stringify(type === 'order' ? data : [data])
         });
+
         if (response.ok) {
             showToast(`✅ ${type === 'order' ? 'Заказ' : 'Возврат'} успешно создан`, "success");
             location.reload();
         } else {
             const result = await response.json();
-            showStatus(result.error || "Ошибка сервера", true);
+            // Если сервер вернет ошибку валидации даты, мы увидим её здесь
+            showStatus(result.error || "Ошибка сервера при парсинге даты", true);
         }
     } catch (e) {
         showStatus("Ошибка сети", true);
     }
 }
+
 
 function printInvoiceInline(invoiceId) {
     const url = `/admin/invoices/print/${invoiceId}`;

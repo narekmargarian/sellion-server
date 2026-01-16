@@ -8,7 +8,11 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.util.Locale;
 import java.util.Map;
 
 @RestController
@@ -21,7 +25,13 @@ public class AdminManagementController {
     private final ReturnOrderRepository returnOrderRepository;
     private final StockService stockService;
     private final ClientRepository clientRepository;
-    private final AuditLogRepository auditLogRepository; // Добавлено для логов
+    private final AuditLogRepository auditLogRepository;
+
+    // Форматтер для системных дат (создание записи)
+    private static final DateTimeFormatter DATETIME_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
+
+    // ФОРМАТТЕР ДЛЯ РУССКИХ ДАТ (например: "17 января 2026")
+    private static final DateTimeFormatter RU_DATE_FORMATTER = DateTimeFormatter.ofPattern("d MMMM yyyy", new Locale("ru"));
 
     @PutMapping("/orders/{id}/full-edit")
     @Transactional
@@ -35,7 +45,18 @@ public class AdminManagementController {
         stockService.returnItemsToStock(order.getItems());
 
         order.setShopName((String) payload.get("shopName"));
-        order.setDeliveryDate((String) payload.get("deliveryDate"));
+
+        // ИСПРАВЛЕНО: Прямой парсинг через русский форматтер
+        String deliveryDateString = (String) payload.get("deliveryDate");
+        if (deliveryDateString != null && !deliveryDateString.isEmpty()) {
+            try {
+                // Используем RU_DATE_FORMATTER (d MMMM yyyy)
+                order.setDeliveryDate(LocalDate.parse(deliveryDateString, RU_DATE_FORMATTER));
+            } catch (DateTimeParseException e) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Неверный формат даты: " + deliveryDateString));
+            }
+        }
+
         order.setNeedsSeparateInvoice((Boolean) payload.get("needsSeparateInvoice"));
         order.setPaymentMethod(PaymentMethod.fromString((String) payload.get("paymentMethod")));
 
@@ -52,7 +73,6 @@ public class AdminManagementController {
         order.setTotalAmount(newTotal);
         orderRepository.save(order);
 
-        // ЛОГИРОВАНИЕ ИЗМЕНЕНИЯ ЗАКАЗА
         AuditLog log = new AuditLog();
         log.setUsername("ADMIN");
         log.setAction("РЕДАКТИРОВАНИЕ ЗАКАЗА");
@@ -74,7 +94,6 @@ public class AdminManagementController {
         order.setStatus(OrderStatus.CANCELLED);
         orderRepository.save(order);
 
-        // ЛОГИРОВАНИЕ ОТМЕНЫ ЗАКАЗА
         AuditLog log = new AuditLog();
         log.setUsername("ADMIN");
         log.setAction("ОТМЕНА ЗАКАЗА");
@@ -100,7 +119,6 @@ public class AdminManagementController {
             p.setCategory((String) payload.get("category"));
             productRepository.save(p);
 
-            // ЛОГИРОВАНИЕ ИЗМЕНЕНИЯ ТОВАРА
             AuditLog log = new AuditLog();
             log.setUsername("ADMIN");
             log.setAction("ИЗМЕНЕНИЕ ТОВАРА");
@@ -113,13 +131,22 @@ public class AdminManagementController {
         }).orElse(ResponseEntity.notFound().build());
     }
 
-    // --- ВОЗВРАТЫ ---
     @PutMapping("/returns/{id}/edit")
     @Transactional
     public ResponseEntity<?> editReturn(@PathVariable Long id, @RequestBody Map<String, Object> payload) {
         ReturnOrder ret = returnOrderRepository.findById(id).orElseThrow();
         ret.setShopName((String) payload.get("shopName"));
-        ret.setReturnDate((String) payload.get("returnDate"));
+
+        // ИСПРАВЛЕНО: Прямой парсинг через русский форматтер
+        String returnDateString = (String) payload.get("returnDate");
+        if (returnDateString != null && !returnDateString.isEmpty()) {
+            try {
+                ret.setReturnDate(LocalDate.parse(returnDateString, RU_DATE_FORMATTER));
+            } catch (DateTimeParseException e) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Неверный формат даты возврата: " + returnDateString));
+            }
+        }
+
         ret.setReturnReason(ReasonsReturn.fromString((String) payload.get("returnReason")));
 
         Map<String, Integer> newItems = (Map<String, Integer>) payload.get("items");
@@ -128,7 +155,6 @@ public class AdminManagementController {
         ret.setTotalAmount(newTotal);
         returnOrderRepository.save(ret);
 
-        // АУДИТ: Изменение возврата
         AuditLog log = new AuditLog();
         log.setUsername("ADMIN");
         log.setAction("ИЗМЕНЕНИЕ ВОЗВРАТА");
@@ -152,7 +178,6 @@ public class AdminManagementController {
             c.setPhone((String) payload.get("phone"));
             clientRepository.save(c);
 
-            // АУДИТ: Изменение данных клиента
             AuditLog log = new AuditLog();
             log.setUsername("ADMIN");
             log.setAction("ИЗМЕНЕНИЕ КЛИЕНТА");
@@ -169,12 +194,11 @@ public class AdminManagementController {
     @Transactional
     public ResponseEntity<?> createOrderManual(@RequestBody Order order) {
         order.setStatus(OrderStatus.ACCEPTED);
-        order.setCreatedAt(LocalDateTime.now().format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME));
+        order.setCreatedAt(LocalDateTime.now().format(DATETIME_FORMATTER));
 
         stockService.deductItemsFromStock(order.getItems());
         Order saved = orderRepository.save(order);
 
-        // АУДИТ: Ручное создание заказа
         AuditLog log = new AuditLog();
         log.setUsername("ADMIN");
         log.setAction("СОЗДАНИЕ ЗАКАЗА (РУЧНОЕ)");
@@ -200,7 +224,6 @@ public class AdminManagementController {
             ret.setStatus(ReturnStatus.CONFIRMED);
             returnOrderRepository.save(ret);
 
-            // АУДИТ: Подтверждение возврата
             AuditLog log = new AuditLog();
             log.setUsername("ADMIN");
             log.setAction("ПОДТВЕРЖДЕНИЕ ВОЗВРАТА");
@@ -222,7 +245,6 @@ public class AdminManagementController {
             return ResponseEntity.badRequest().body(Map.of("error", "Подтвержденный возврат удалить нельзя!"));
         }
 
-        // АУДИТ: Перед удалением записываем лог
         AuditLog log = new AuditLog();
         log.setUsername("ADMIN");
         log.setAction("УДАЛЕНИЕ ВОЗВРАТА");
@@ -234,7 +256,6 @@ public class AdminManagementController {
         returnOrderRepository.deleteById(id);
         return ResponseEntity.ok(Map.of("message", "Возврат успешно удален"));
     }
-
 
     private double calculateTotal(Map<String, Integer> items) {
         double total = 0;

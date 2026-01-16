@@ -11,6 +11,7 @@
         .main-table th { background: #f0f0f0; text-transform: uppercase; }
         .total-row { font-weight: bold; background: #f9f9f9; }
         .text-right { text-align: right; }
+        .col-id { width: 40px; text-align: center; } /* Новый класс для центрирования номера */
     </style>
 </head>
 <body>
@@ -22,19 +23,19 @@
 <table class="main-table">
     <thead>
     <tr>
-        <th style="width: 40px;">ID</th>
+        <th class="col-id">№</th> <!-- Изменили заголовок с ID на № -->
         <th style="width: 110px;">Дата</th>
         <th>Магазин</th>
         <th class="text-right" style="width: 100px;">Сумма (֏)</th>
         <th>Комментарий/Причина</th>
     </tr>
     </thead>
-
     <tbody>
-    <tr th:each="op : ${operations}">
-        <td th:text="${op.id}"></td>
+    <!-- Используем "stat" для получения индекса цикла -->
+    <tr th:each="op, stat : ${operations}">
+        <td class="col-id" th:text="${stat.index + 1}">1</td> <!-- Выводим порядковый номер -->
 
-        <!-- Универсальная дата -->
+        <!-- Универсальный вывод даты -->
         <td th:text="${op.createdAt != null ? #strings.replace(#strings.substring(op.createdAt, 0, 16), 'T', ' ') : '---'}"></td>
 
         <td th:text="${op.shopName}" style="font-weight: bold;"></td>
@@ -42,25 +43,18 @@
         <td class="text-right" th:text="${op.totalAmount != null ? #numbers.formatInteger(op.totalAmount, 1, 'WHITESPACE') : '0'}"></td>
 
         <td>
-            <!-- Пробуем вывести причину возврата. Если объекта ReturnOrder, то выведется текст.
-                 Если это Order, Thymeleaf просто пропустит блок из-за ошибки/null -->
+            <!-- Логика для ВОЗВРАТА -->
+            <th:block th:if="${title.contains('ВОЗВРАТ')}">
+                <span th:text="${op.returnReason != null ? op.returnReason.displayName : '---'}"></span>
+            </th:block>
 
-            <span th:if="${title.contains('ВОЗВРАТ')}"
-                  th:text="${op.returnReason != null ? op.returnReason.displayName : '---'}"></span>
-
-
-            <!-- Если в заголовке страницы есть слово ЗАКАЗ -->
-            <span th:if="${title.contains('ЗАКАЗ')}"
-                  th:text="${(op.comment != null && !op.comment.isEmpty()) ? op.comment : (op.paymentMethod != null ? op.paymentMethod.displayName : '---')}"></span>
+            <!-- Логика для ЗАКАЗА -->
+            <th:block th:if="${title.contains('ЗАКАЗ')}">
+                <span th:text="${(op.comment != null && !op.comment.isEmpty()) ? op.comment : (op.paymentMethod != null ? op.paymentMethod.displayName : '---')}"></span>
+            </th:block>
         </td>
     </tr>
     </tbody>
-
-
-
-
-
-
     <tfoot>
     <tr class="total-row">
         <td colspan="3" class="text-right">ИТОГО К ОПЛАТЕ:</td>
