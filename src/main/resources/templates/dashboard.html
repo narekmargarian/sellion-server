@@ -676,6 +676,47 @@
         </div>
 
 
+        <!-- МОДАЛЬНОЕ ОКНО ИНВЕНТАРИЗАЦИИ (НОВОЕ) -->
+        <div id="modal-inventory" class="modal">
+            <div class="modal-content" style="width: 450px;">
+                <h2 style="margin-bottom: 20px;">⚖️ Инвентаризация склада</h2>
+                <input type="hidden" id="inv-product-id">
+
+                <div class="modal-info-row">
+                    <div>
+                        <label>Товар</label>
+                        <b id="inv-product-name" style="display: block; padding-top: 8px;">Название товара</b>
+                    </div>
+                </div>
+
+                <div class="modal-info-row" style="margin-top: 10px;">
+                    <div>
+                        <label>Фактический остаток на полке (шт.)</label>
+                        <input type="number" id="inv-actual-qty" placeholder="Введите количество">
+                    </div>
+                </div>
+
+                <div class="modal-info-row" style="margin-top: 10px;">
+                    <div>
+                        <label>Причина корректировки</label>
+                        <input type="text" id="inv-reason" placeholder="Например, Бой товара / Излишки">
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 10px; margin-top: 25px; justify-content: flex-end;">
+                    <button class="btn-primary" onclick="submitInventoryAdjustment()" style="background:#10b981">
+                        Подтвердить
+                    </button>
+                    <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-inventory')">
+                        Отмена
+                    </button>
+                </div>
+            </div>
+        </div>
+
+
+
+
         <!-- МОДАЛЬНОЕ ОКНО ПОДТВЕРЖДЕНИЯ (ТОЧНО КАК НА ИЗОБРАЖЕНИИ) -->
         <dialog id="confirm-modal" class="confirm-modal-image-style">
             <div class="confirm-modal-content">
@@ -689,6 +730,7 @@
                 </div>
             </div>
         </dialog>
+
 
 
         <!-- Перед вашим script.js -->

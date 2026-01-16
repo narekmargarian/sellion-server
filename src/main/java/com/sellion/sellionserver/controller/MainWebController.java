@@ -105,8 +105,8 @@ public class MainWebController {
         model.addAttribute("avgCheck", avgCheck);
         model.addAttribute("invoices", invoices);
         model.addAttribute("totalInvoiceDebt", totalInvoiceDebt);
-        model.addAttribute("clients", clientRepository.findAll());
-        model.addAttribute("products", productRepository.findAll());
+        model.addAttribute("products", productRepository.findAllActive());
+        model.addAttribute("clients", clientRepository.findAllActive());
         model.addAttribute("users", userRepository.findAll());
 
         // Список менеджеров для фильтров (из текущих выборок)

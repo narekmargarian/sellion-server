@@ -600,31 +600,77 @@ function cancelProductEdit(id) {
     openProductDetails(id);
 }
 
-function openProductDetails(id) {
+async function openProductDetails(id) {
     window.currentProductId = id;
     const product = productsData.find(p => p.id == id);
     if (!product) return;
+
     document.getElementById('modal-product-title').innerHTML = `Детали товара <span class="badge" style="margin-left:10px;">${product.name}</span>`;
     const info = document.getElementById('product-info');
-    // info.style.gridTemplateColumns = '1fr';
 
+    // ОБЪЕДИНЕННЫЙ БЛОК (Инфо о товаре + Складские данные + Контейнер истории)
     info.innerHTML = `
         <div class="modal-info-row">
             <div><small>Название:</small><br><b>${product.name}</b></div>
-            <div><small>Цена:</small><br><b class="price-up">${(product.price || 0).toLocaleString()} ֏</b></div>
+            <div><small>Цена продажи:</small><br><b class="price-up">${(product.price || 0).toLocaleString()} ֏</b></div>
             <div><small>Категория:</small><br><b>${product.category || '---'}</b></div>
         </div>
         <div class="modal-info-row">
             <div><small>Остаток на складе:</small><br><b>${product.stockQuantity || 0} шт.</b></div>
             <div><small>Штрих-код:</small><br><b>${product.barcode || '---'}</b></div>
-            <div><small>Упаковка (шт. в коробке):</small><br><b>${product.itemsPerBox || '---'}</b></div>
+            <div><small>В коробке:</small><br><b>${product.itemsPerBox || '---'} шт.</b></div>
+        </div>
+        <!-- Секция истории (теперь она не затрется) -->
+        <div id="product-history-container" style="margin-top:20px;">
+            <label style="font-size: 11px; font-weight: 800; color: var(--text-muted);">📜 ИСТОРИЯ ДВИЖЕНИЯ ТОВАРА</label>
+            <div class="table-container" style="max-height: 200px; font-size: 11px; margin-top: 10px;">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Дата</th>
+                            <th>Тип</th>
+                            <th>Кол-во</th>
+                            <th>Причина</th>
+                        </tr>
+                    </thead>
+                    <tbody id="product-history-body">
+                        <tr><td colspan="4" style="text-align:center;">Загрузка истории...</td></tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
     `;
 
+    // 2. Загружаем историю с сервера (адрес /api/products/{name}/history у нас уже есть в контроллере)
+    try {
+        const response = await fetch(`/api/products/${encodeURIComponent(product.name)}/history`);
+        if (response.ok) {
+            const history = await response.json();
+            const tbody = document.getElementById('product-history-body');
+            tbody.innerHTML = history.map(h => `
+                <tr>
+                    <td>${fmt(h.timestamp)}</td>
+                    <td><span class="badge">${h.type}</span></td>
+                    <td style="color:${h.quantityChange > 0 ? '#10b981' : '#ef4444'}">
+                        <b>${h.quantityChange > 0 ? '+' : ''}${h.quantityChange}</b>
+                    </td>
+                    <td><small>${h.reason || '---'}</small></td>
+                </tr>
+            `).join('') || '<tr><td colspan="4" style="text-align:center;">Движений не найдено</td></tr>';
+        }
+    } catch (e) {
+        console.error("Ошибка загрузки истории:", e);
+        document.getElementById('product-history-body').innerHTML = '<tr><td colspan="4" style="color:red;">Ошибка загрузки</td></tr>';
+    }
+
+    // 3. Футер с кнопкой Инвентаризации
     const footer = document.getElementById('product-footer-actions');
     footer.innerHTML = `
+        <button class="btn-primary" style="background:#f59e0b" onclick="doInventory()">⚖️ Инвентаризация</button>
         <button class="btn-primary" onclick="enableProductEdit()">Изменить товар</button>
-        <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-product-view')">Закрыть</button>`;
+        <button class="btn-danger" onclick="deleteProduct(${product.id})">Удалить</button>
+        <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-product-view')">Закрыть</button>
+    `;
 
     openModal('modal-product-view');
 }
@@ -1371,19 +1417,77 @@ function connectWebSocket() {
     });
 }
 
+async function deleteProduct(id) {
+    showConfirmModal("Удалить товар?", "Он будет скрыт из списков, но останется в старых заказах.", async () => {
+        const response = await fetch(`/api/products/${id}`, {method: 'DELETE'});
+        if (response.ok) {
+            showToast("Товар успешно удален (скрыт)!", "success");
+            location.reload();
+        } else {
+            showToast("Ошибка удаления", "error");
+        }
+    });
+}
+
+async function deleteClient(id) {
+    showConfirmModal("Удалить клиента?", "Он будет скрыт из списков, но останется в старых счетах и заказах.", async () => {
+        const response = await fetch(`/api/clients/${id}`, {method: 'DELETE'});
+        if (response.ok) {
+            showToast("Клиент успешно удален (скрыт)!", "success");
+            location.reload();
+        } else {
+            showToast("Ошибка удаления", "error");
+        }
+    });
+}
 
 
-async function doInventory() {
+
+// Открывает нашу новую красивую модалку
+function doInventory() {
     const id = window.currentProductId;
     const product = productsData.find(p => p.id == id);
-    const realQty = prompt(`Инвентаризация: ${product.name}. Введите ФАКТИЧЕСКОЕ количество на полке:`, product.stockQuantity);
+    if (!product) return;
 
-    if (realQty !== null) {
-        const diff = parseInt(realQty) - product.stockQuantity;
-        // Отправляем на сервер PUT запрос для обновления остатка и записи в StockMovement
-        // ... реализация API запроса
+    // Заполняем поля в модалке данными
+    document.getElementById('inv-product-id').value = id;
+    document.getElementById('inv-product-name').innerText = product.name;
+    document.getElementById('inv-actual-qty').value = product.stockQuantity;
+    document.getElementById('inv-reason').value = 'Плановая проверка';
+
+    openModal('modal-inventory');
+}
+
+// Отправляет данные с модалки на сервер
+async function submitInventoryAdjustment() {
+    const id = document.getElementById('inv-product-id').value;
+    const newQty = parseInt(document.getElementById('inv-actual-qty').value);
+    const reason = document.getElementById('inv-reason').value;
+
+    if (isNaN(newQty) || newQty < 0 || !reason) {
+        showToast("Введите корректное количество и причину!", "error");
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/admin/products/${id}/inventory`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ newQty: newQty, reason: reason })
+        });
+
+        if (response.ok) {
+            showToast("Склад скорректирован ✅", "success");
+            location.reload();
+        } else {
+            const error = await response.json();
+            showToast(error.message || "Ошибка при сохранении", "error");
+        }
+    } catch (e) {
+        showToast("Ошибка сети", "error");
     }
 }
+
 
 
 // Запустить при старте

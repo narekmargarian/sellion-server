@@ -2,12 +2,13 @@ package com.sellion.sellionserver.api;
 
 import com.sellion.sellionserver.entity.Client;
 import com.sellion.sellionserver.repository.ClientRepository;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import jakarta.transaction.Transactional;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/clients")
@@ -26,5 +27,14 @@ public class ClientApiController {
                 .stream()
                 .sorted(Comparator.comparing(Client::getName))
                 .toList();
+
+
+    }
+
+    @DeleteMapping("/{id}")
+    @Transactional
+    public ResponseEntity<?> deleteClient(@PathVariable Long id) {
+        clientRepository.softDeleteById(id);
+        return ResponseEntity.ok(Map.of("message", "Клиент скрыт (мягко удален)"));
     }
 }

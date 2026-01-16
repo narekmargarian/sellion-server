@@ -243,6 +243,25 @@ public class AdminManagementController {
         return ResponseEntity.ok(Map.of("message", "Возврат подтвержден, долг клиента уменьшен"));
     }
 
+
+    @PostMapping("/products/{id}/inventory")
+    @Transactional
+    public ResponseEntity<?> updateStockManual(@PathVariable Long id, @RequestBody Map<String, Object> payload) {
+        Product p = productRepository.findById(id).orElseThrow();
+        int newQty = ((Number) payload.get("newQty")).intValue();
+        String reason = (String) payload.get("reason");
+        int diff = newQty - p.getStockQuantity();
+
+        p.setStockQuantity(newQty);
+        productRepository.save(p);
+
+        // Записываем в историю движения
+        stockService.logMovement(p.getName(), diff, "ADJUSTMENT", "Инвентаризация: " + reason, "ADMIN");
+
+        return ResponseEntity.ok(Map.of("message", "Склад обновлен. Разница: " + diff));
+    }
+
+
     @PostMapping("/returns/{id}/delete")
     @Transactional
     public ResponseEntity<?> deleteReturnOrder(@PathVariable Long id) {

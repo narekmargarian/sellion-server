@@ -24,4 +24,6 @@ public class Product {
 
     // НОВОЕ ПОЛЕ: Остаток на складе
     private Integer stockQuantity;
+    private boolean isDeleted = false; // Флаг мягкого удаления
+
 }

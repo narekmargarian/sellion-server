@@ -85,4 +85,10 @@ public class ProductApiController {
     public List<StockMovement> getProductHistory(@PathVariable String name) {
         return movementRepository.findAllByProductNameOrderByTimestampDesc(name);
     }
+    @DeleteMapping("/{id}")
+    @Transactional
+    public ResponseEntity<?> deleteProduct(@PathVariable Long id) {
+        productRepository.softDeleteById(id);
+        return ResponseEntity.ok(Map.of("message", "Товар скрыт (мягко удален)"));
+    }
 }
