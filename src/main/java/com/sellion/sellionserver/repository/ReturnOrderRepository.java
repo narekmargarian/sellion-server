@@ -17,6 +17,6 @@ public interface ReturnOrderRepository extends JpaRepository<ReturnOrder, Long> 
     @Query("SELECT r FROM ReturnOrder r WHERE r.createdAt >= :startOfDay AND r.createdAt <= :endOfDay")
     List<ReturnOrder> findReturnsBetweenDates(@Param("startOfDay") String startOfDay, @Param("endOfDay") String endOfDay);
 
-    List<ReturnOrder> findAllByManagerId(String managerId);
-
+    @Query("SELECT r FROM ReturnOrder r WHERE r.managerId = :managerId AND r.createdAt >= :start AND r.createdAt <= :end")
+    List<ReturnOrder> findReturnsByManagerAndDateRange(@Param("managerId") String managerId, @Param("start") String start, @Param("end") String end);
 }

@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -65,16 +66,30 @@ public class SyncController {
         return ResponseEntity.ok(Map.of("status", "empty"));
     }
 
-    @GetMapping("/orders/manager/{managerId}")
-    public ResponseEntity<List<Order>> getOrdersByManager(@PathVariable String managerId) {
-        // Используем ваш существующий метод в репозитории
-        return ResponseEntity.ok(orderRepository.findAllByManagerId(managerId));
+    @GetMapping("/orders/manager/{managerId}/current-month")
+    public ResponseEntity<List<Order>> getOrdersByManagerCurrentMonth(@PathVariable String managerId) {
+        // Вычисляем начало и конец месяца
+        LocalDateTime startOfMonth = LocalDate.now().withDayOfMonth(1).atStartOfDay();
+        LocalDateTime endOfMonth = LocalDate.now().withDayOfMonth(LocalDate.now().lengthOfMonth()).atTime(23, 59, 59);
+
+        // Форматируем в ISO (как в вашей базе)
+        String start = startOfMonth.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+        String end = endOfMonth.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+
+        // Используем ваш метод из репозитория, добавив фильтр по менеджеру (нужно добавить в репозиторий)
+        return ResponseEntity.ok(orderRepository.findOrdersByManagerAndDateRange(managerId, start, end));
     }
 
-    @GetMapping("/returns/manager/{managerId}")
-    public ResponseEntity<List<ReturnOrder>> getReturnsByManager(@PathVariable String managerId) {
-        // Используем ваш существующий метод в репозитории
-        return ResponseEntity.ok(returnOrderRepository.findAllByManagerId(managerId));
+    @GetMapping("/returns/manager/{managerId}/current-month")
+    public ResponseEntity<List<ReturnOrder>> getReturnsByManagerCurrentMonth(@PathVariable String managerId) {
+        LocalDateTime startOfMonth = LocalDate.now().withDayOfMonth(1).atStartOfDay();
+        LocalDateTime endOfMonth = LocalDate.now().withDayOfMonth(LocalDate.now().lengthOfMonth()).atTime(23, 59, 59);
+
+        String start = startOfMonth.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+        String end = endOfMonth.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+
+        return ResponseEntity.ok(returnOrderRepository.findReturnsByManagerAndDateRange(managerId, start, end));
     }
+
 
 }
