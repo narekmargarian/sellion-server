@@ -7,6 +7,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Map;
 
 @Entity
@@ -45,4 +47,22 @@ public class ReturnOrder {
     private Double totalAmount;
 
     private String createdAt;
+
+
+    @PrePersist
+    public void formatAndSetReturnDate() {
+        DateTimeFormatter appFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
+
+        // Форматируем createdAt всегда при создании записи
+        if (this.createdAt == null || this.createdAt.isEmpty() || this.createdAt.length() > 19) {
+            this.createdAt = LocalDateTime.now().format(appFormatter);
+        }
+
+        // Если returnDate пришла с Z или миллисекундами, мы её обрезаем до нужного формата
+        if (this.returnDate != null && this.returnDate.length() > 19) {
+            this.returnDate = this.returnDate.substring(0, 19);
+        } else if (this.returnDate == null || this.returnDate.isEmpty()) {
+            this.returnDate = LocalDateTime.now().format(appFormatter);
+        }
+    }
 }

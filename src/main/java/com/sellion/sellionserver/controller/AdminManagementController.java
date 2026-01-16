@@ -235,6 +235,7 @@ public class AdminManagementController {
         return ResponseEntity.ok(Map.of("message", "Возврат успешно удален"));
     }
 
+
     private double calculateTotal(Map<String, Integer> items) {
         double total = 0;
         for (Map.Entry<String, Integer> entry : items.entrySet()) {

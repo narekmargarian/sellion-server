@@ -4,54 +4,70 @@
     <meta charset="UTF-8">
     <title th:text="${title}">Реестр операций</title>
     <style>
-        body { font-family: 'Inter', sans-serif; font-size: 12px; margin: 20px; }
-        .header { text-align: center; margin-bottom: 20px; }
+        body { font-family: 'Inter', sans-serif; font-size: 11px; margin: 20px; color: #000; }
+        .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 10px; }
         .main-table { width: 100%; border-collapse: collapse; }
-        .main-table th, .main-table td { border: 1px solid #000; padding: 8px; text-align: left; }
-        .main-table th { background: #f0f0f0; }
-        .total-row { font-weight: bold; }
+        .main-table th, .main-table td { border: 1px solid #000; padding: 6px; text-align: left; }
+        .main-table th { background: #f0f0f0; text-transform: uppercase; }
+        .total-row { font-weight: bold; background: #f9f9f9; }
+        .text-right { text-align: right; }
     </style>
 </head>
 <body>
 <div class="header">
-    <h1 th:text="${title}">РЕЕСТР</h1>
-    <!-- ИСПРАВЛЕНО: используем переданный объект currentDateTime -->
-    <p>Дата печати: <span th:text="${#temporals.format(currentDateTime, 'dd.MM.yyyy HH:mm')}"></span></p>
+    <h1 th:text="${title}" style="margin: 0; font-size: 18px;">РЕЕСТР</h1>
+    <p style="margin: 5px 0;">Дата печати: <span th:text="${#temporals.format(currentDateTime, 'dd.MM.yyyy HH:mm')}"></span></p>
 </div>
 
 <table class="main-table">
     <thead>
     <tr>
-        <th>ID</th>
-        <th>Дата</th>
+        <th style="width: 40px;">ID</th>
+        <th style="width: 110px;">Дата</th>
         <th>Магазин</th>
-        <th>Сумма (֏)</th>
+        <th class="text-right" style="width: 100px;">Сумма (֏)</th>
         <th>Комментарий/Причина</th>
     </tr>
     </thead>
+
     <tbody>
     <tr th:each="op : ${operations}">
-        <td th:text="${op.id}">1</td>
-        <td th:text="${op.createdAt != null ? op.createdAt : op.returnDate}">2026-01-01</td>
-        <td th:text="${op.shopName}">Магазин</td>
-        <td th:text="${#numbers.formatInteger(op.totalAmount, 1, 'WHITESPACE')}">1000</td>
-        <!-- Отображаем причину для возвратов или комментарий/метод для заказов -->
-        <td th:text="${op.returnReason != null ? op.returnReason : (op.comment != null ? op.comment : op.paymentMethod)}">Детали</td>
+        <td th:text="${op.id}"></td>
+
+        <!-- Универсальная дата -->
+        <td th:text="${op.createdAt != null ? #strings.replace(#strings.substring(op.createdAt, 0, 16), 'T', ' ') : '---'}"></td>
+
+        <td th:text="${op.shopName}" style="font-weight: bold;"></td>
+
+        <td class="text-right" th:text="${op.totalAmount != null ? #numbers.formatInteger(op.totalAmount, 1, 'WHITESPACE') : '0'}"></td>
+
+        <td>
+            <!-- Пробуем вывести причину возврата. Если объекта ReturnOrder, то выведется текст.
+                 Если это Order, Thymeleaf просто пропустит блок из-за ошибки/null -->
+
+            <span th:if="${title.contains('ВОЗВРАТ')}"
+                  th:text="${op.returnReason != null ? op.returnReason.displayName : '---'}"></span>
+
+
+            <!-- Если в заголовке страницы есть слово ЗАКАЗ -->
+            <span th:if="${title.contains('ЗАКАЗ')}"
+                  th:text="${(op.comment != null && !op.comment.isEmpty()) ? op.comment : (op.paymentMethod != null ? op.paymentMethod.displayName : '---')}"></span>
+        </td>
     </tr>
     </tbody>
+
+
+
+
+
+
     <tfoot>
     <tr class="total-row">
-        <td colspan="3">ИТОГО:</td>
-        <td th:with="totalSum=${#lists.stream(operations).mapToDouble(o -> o.totalAmount != null ? o.totalAmount : 0.0).sum()}"
-            th:text="${#numbers.formatInteger(totalSum, 1, 'WHITESPACE')}">10000</td>
+        <td colspan="3" class="text-right">ИТОГО К ОПЛАТЕ:</td>
+        <td class="text-right" th:text="${#numbers.formatInteger(finalTotal, 1, 'WHITESPACE') + ' ֏'}"></td>
         <td></td>
     </tr>
     </tfoot>
 </table>
-
-<script>
-    // Автоматический запуск печати при загрузке во фрейм
-    window.onload = function() { window.print(); }
-</script>
 </body>
 </html>

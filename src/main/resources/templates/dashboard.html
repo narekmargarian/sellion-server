@@ -61,16 +61,22 @@
                 <input type="text" id="search-orders" onkeyup="filterTable('search-orders', 'orders-table-body')"
                        placeholder="🔎 Поиск по магазину..." class="form-control w-25">
 
-                <form method="get" th:action="@{/admin}" class="d-inline-flex gap-2">
+                <form method="get" th:action="@{/admin}" class="d-inline-flex gap-2 align-items-center">
                     <input type="hidden" name="activeTab" value="tab-orders">
+
+                    <small>С:</small>
+                    <input type="date" name="orderStartDate" class="form-control" th:value="${orderStartDate}">
+                    <small>По:</small>
+                    <input type="date" name="orderEndDate" class="form-control" th:value="${orderEndDate}">
+
                     <select name="orderManagerId" onchange="this.form.submit()" class="form-select">
                         <option value="">Все менеджеры (Заказы)</option>
                         <option th:each="m : ${managers}" th:value="${m}" th:text="${m}"
                                 th:selected="${m == selectedOrderManager}"></option>
                     </select>
 
-                    <button type="button" class="btn-primary" style="background:#555;" onclick="printOrderList()">🖨️ Печать списка</button>
-
+                    <button type="submit" class="btn-primary">Показать</button>
+                    <button type="button" class="btn-primary" style="background:#555;" onclick="printOrderList()">🖨️ Печать</button>
                 </form>
                 <button class="btn-primary" onclick="openCreateOrderModal()">+ Создать заказ</button>
 
@@ -92,6 +98,7 @@
                     </thead>
                     <tbody id="orders-table-body">
                     <tr th:each="o : ${orders}" th:onclick="'openOrderDetails(' + ${o.id} + ')'"
+
                         style="cursor:pointer;">
                         <!-- ИСПРАВЛЕНО: Безопасное форматирование createdAt -->
                         <td th:with="dt=${o.createdAt}"
@@ -217,14 +224,22 @@
                 </div>
             </div>
             <div class="filter-bar">
-                <form method="get" th:action="@{/admin}" class="d-inline-flex gap-2">
+                <form method="get" th:action="@{/admin}" class="d-inline-flex gap-2 align-items-center">
                     <input type="hidden" name="activeTab" value="tab-returns">
+
+                    <small>С:</small>
+                    <input type="date" name="returnStartDate" class="form-control" th:value="${returnStartDate}">
+                    <small>По:</small>
+                    <input type="date" name="returnEndDate" class="form-control" th:value="${returnEndDate}">
+
                     <select name="returnManagerId" onchange="this.form.submit()" class="form-select">
                         <option value="">Все менеджеры (Возвраты)</option>
                         <option th:each="m : ${managers}" th:value="${m}" th:text="${m}"
                                 th:selected="${m == selectedReturnManager}"></option>
                     </select>
-                    <button type="button" class="btn-primary" style="background:#555;" onclick="printReturnList()">🖨️ Печать списка</button>
+
+                    <button type="submit" class="btn-primary">Показать</button>
+                    <button type="button" class="btn-primary" style="background:#555;" onclick="printReturnList()">🖨️ Печать</button>
                 </form>
                 <button class="btn-primary" onclick="openCreateReturnModal()">+ Добавить возврат</button>
             </div>
@@ -242,14 +257,14 @@
                     </tr>
                     </thead>
                     <tbody id="returns-table-body">
-                    <tr th:each="r : ${returns}" th:onclick="'openReturnDetails(' + ${r.id} + ')'"
-                        style="cursor:pointer;">
-                        <!-- ИСПРАВЛЕНО: Безопасное форматирование returnDate -->
-                        <td th:with="rd=${r.returnDate}"
-                            th:text="${rd != null ? #strings.replace((rd.length() > 16 ? #strings.substring(rd, 0, 16) : rd), 'T', ' ') : ''}">
+                    <tr th:each="r : ${returns}" th:onclick="'openReturnDetails(' + ${r.id} + ')'" style="cursor:pointer;">
+
+                        <!-- ИСПРАВЛЕНО: Теперь показываем createdAt в главной таблице -->
+                        <td th:with="dt=${r.createdAt}"
+                            th:text="${dt != null ? #strings.replace((dt.length() > 16 ? #strings.substring(dt, 0, 16) : dt), 'T', ' ') : ''}">
                         </td>
 
-                        <td th:unless="${r.returnDate != null}"></td>
+<!--                        <td th:unless="${r.returnDate != null}"></td>-->
 
                         <td th:text="${r.managerId}"></td>
                         <td th:text="${r.shopName}"></td>

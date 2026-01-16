@@ -69,6 +69,7 @@ public class SecurityConfig {
 
 
 
+
     @SuppressWarnings("deprecation")
     @Bean
     public PasswordEncoder passwordEncoder() {

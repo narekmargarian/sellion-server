@@ -3,6 +3,8 @@ package com.sellion.sellionserver.repository;
 import com.sellion.sellionserver.entity.Order;
 import com.sellion.sellionserver.entity.OrderStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -10,4 +12,8 @@ import java.util.List;
 @Repository
 public interface OrderRepository extends JpaRepository<Order, Long> {
     List<Order> findAllByStatus(OrderStatus status);
+
+    // Новый метод: Найти заказы, созданные между startOfDay и endOfDay
+    @Query("SELECT o FROM Order o WHERE o.createdAt >= :startOfDay AND o.createdAt <= :endOfDay")
+    List<Order> findOrdersBetweenDates(@Param("startOfDay") String startOfDay, @Param("endOfDay") String endOfDay);
 }

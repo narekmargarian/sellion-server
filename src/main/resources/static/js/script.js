@@ -873,7 +873,13 @@ async function openCreateReturnModal() {
     openModal('modal-order-view');
 }
 
-
+function getCurrentTimeFormat() {
+    const now = new Date();
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const seconds = String(now.getSeconds()).padStart(2, '0');
+    return `${hours}:${minutes}:${seconds}`;
+}
 // --- УНИВЕРСАЛЬНОЕ СОХРАНЕНИЕ ---
 // --- 7. УНИВЕРСАЛЬНОЕ СОХРАНЕНИЕ ---
 
@@ -885,32 +891,41 @@ async function saveNewManualOperation(type) {
 
     const url = type === 'order' ? '/api/admin/orders/create-manual' : '/api/returns/sync';
 
+    // 1. Получаем базовую дату из поля ввода (формат YYYY-MM-DD)
+    const baseDate = document.getElementById('new-op-date').value;
+
+    // 2. Объединяем дату с текущим временем в нужный формат: YYYY-MM-DDTHH:MM:SS
+    const formattedDateTime = `${baseDate}T${getCurrentTimeFormat()}`;
+
     // Собираем общие данные
     const data = {
         shopName: document.getElementById('new-op-shop').value,
         managerId: document.getElementById('new-op-manager').value,
         items: tempItems,
-        totalAmount: calculateCurrentTempTotal(), // Сумма уже посчитана в renderItemsTable/calculateCurrentTempTotal
-        createdAt: new Date().toISOString()
+        totalAmount: calculateCurrentTempTotal(),
+        // ИСПРАВЛЕНО: Используем отформатированную дату из поля ввода + текущее время
+        createdAt: formattedDateTime
     };
 
     // Добавляем специфичные данные
     if (type === 'order') {
-        data.comment = document.getElementById('new-op-comment').value; // <-- Добавьте эту строку
-        data.deliveryDate = document.getElementById('new-op-date').value;
+        data.comment = document.getElementById('new-op-comment').value;
+        // ИСПРАВЛЕНО: Дата доставки тоже должна быть с временем
+        data.deliveryDate = formattedDateTime;
         data.paymentMethod = document.getElementById('new-op-payment').value;
         data.needsSeparateInvoice = document.getElementById('new-op-invoice').value === "true";
-        // data.comment = document.getElementById('new-op-comment').value; // TODO: Добавить поле comment в сущность Order.java
         data.status = "ACCEPTED";
     } else {
         data.returnReason = document.getElementById('new-op-reason').value;
-        data.returnDate = document.getElementById('new-op-date').value;
+        // ИСПРАВЛЕНО: Дата возврата тоже должна быть с временем
+        data.returnDate = formattedDateTime;
     }
 
     try {
         const response = await fetch(url, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
+            // Сервер ожидает List<ReturnOrder> для /api/returns/sync
             body: JSON.stringify(type === 'order' ? data : [data])
         });
         if (response.ok) {
@@ -1263,40 +1278,49 @@ function printAction(url) {
         return;
     }
 
-    frame.src = url;
+    // Очистка фрейма перед новой загрузкой
+    frame.src = "about:blank";
 
-    // Ждем загрузки содержимого перед печатью
-    frame.onload = function() {
-        try {
-            frame.contentWindow.focus();
-            frame.contentWindow.print();
-        } catch (e) {
-            console.error("Ошибка печати:", e);
-            window.open(url, '_blank');
-        }
-    };
+    setTimeout(() => {
+        frame.src = url;
+        frame.onload = function() {
+            // Печатаем только один раз, когда фрейм загрузился
+            try {
+                // Добавляем проверку, чтобы не печатать пустой src
+                if (frame.src === "about:blank") return;
+
+                setTimeout(() => {
+                    frame.contentWindow.focus();
+                    frame.contentWindow.print();
+                }, 500);
+            } catch (e) {
+                console.error("Ошибка печати:", e);
+                window.open(url, '_blank');
+            }
+        };
+    }, 100);
 }
+
 
 // Функции для печати всего списка заказов/возвратов (для доставщиков)
 
 window.printOrderList = function() {
     const form = document.querySelector('#tab-orders .filter-bar form');
-    const select = form.querySelector('select[name="orderManagerId"]');
-    // ИСПОЛЬЗУЕМ .trim() ДЛЯ УДАЛЕНИЯ ПРОБЕЛОВ
-    const managerId = select.value.trim();
+    const mId = form.querySelector('select[name="orderManagerId"]').value;
+    const s = form.querySelector('input[name="orderStartDate"]').value;
+    const e = form.querySelector('input[name="orderEndDate"]').value;
 
-    // Формируем URL с параметрами фильтрации
-    const url = `/admin/orders/print-all?orderManagerId=${encodeURIComponent(managerId)}`;
+    const url = `/admin/orders/print-all?orderManagerId=${mId}&orderStartDate=${s}&orderEndDate=${e}`;
     printAction(url);
 }
 
 window.printReturnList = function() {
     const form = document.querySelector('#tab-returns .filter-bar form');
-    const select = form.querySelector('select[name="returnManagerId"]');
-    // ИСПОЛЬЗУЕМ .trim() ДЛЯ УДАЛЕНИЯ ПРОБЕЛОВ
-    const managerId = select.value.trim();
+    const mId = form.querySelector('select[name="returnManagerId"]').value;
+    const s = form.querySelector('input[name="returnStartDate"]').value;
+    const e = form.querySelector('input[name="returnEndDate"]').value;
 
-    const url = `/admin/returns/print-all?returnManagerId=${encodeURIComponent(managerId)}`;
+    const url = `/admin/returns/print-all?returnManagerId=${mId}&returnStartDate=${s}&returnEndDate=${e}`;
     printAction(url);
 }
 
