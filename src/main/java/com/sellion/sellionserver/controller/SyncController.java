@@ -64,4 +64,17 @@ public class SyncController {
         }
         return ResponseEntity.ok(Map.of("status", "empty"));
     }
+
+    @GetMapping("/orders/manager/{managerId}")
+    public ResponseEntity<List<Order>> getOrdersByManager(@PathVariable String managerId) {
+        // Используем ваш существующий метод в репозитории
+        return ResponseEntity.ok(orderRepository.findAllByManagerId(managerId));
+    }
+
+    @GetMapping("/returns/manager/{managerId}")
+    public ResponseEntity<List<ReturnOrder>> getReturnsByManager(@PathVariable String managerId) {
+        // Используем ваш существующий метод в репозитории
+        return ResponseEntity.ok(returnOrderRepository.findAllByManagerId(managerId));
+    }
+
 }

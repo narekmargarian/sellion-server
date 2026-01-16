@@ -16,4 +16,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     // Новый метод: Найти заказы, созданные между startOfDay и endOfDay
     @Query("SELECT o FROM Order o WHERE o.createdAt >= :startOfDay AND o.createdAt <= :endOfDay")
     List<Order> findOrdersBetweenDates(@Param("startOfDay") String startOfDay, @Param("endOfDay") String endOfDay);
+
+
+    List<Order> findAllByManagerId(String managerId);
 }
