@@ -146,12 +146,6 @@
                 </div>
                 <div class="summary-item">
                     <small>Оплаченный долг по счетам:</small><br>
-                    <!-- Используем переменную totalPaidSum из контроллера, без тега <td> -->
-
-                    <!--                     ete bag exav es kareli e porcel-->
-                    <!--                    <span class="price-up"-->
-                    <!--                          th:text="${totalPaidSum != null ? #numbers.formatInteger(totalPaidSum, 1, 'WHITESPACE') + ' ֏' : '0 ֏'}">-->
-                    <!--                    </span>-->
 
                     <span class="price-up"
                           th:text="${totalPaidSum == null ? '0 ֏' : #numbers.formatInteger(totalPaidSum, 1, 'WHITESPACE') + ' ֏'}">
@@ -403,6 +397,16 @@
                     </div>
                 </div>
             </div> <!-- Конец row g-3 -->
+            <div class="summary-card" style="background: white; flex-direction: column;">
+                <h5 style="font-weight: 700;">🚛 ЛОГИСТИКА И МАРШРУТЫ</h5>
+                <div class="d-flex gap-2 mt-2">
+                    <select id="route-manager-select" class="form-select">
+                        <option th:each="m : ${managers}" th:value="${m}" th:text="${m}"></option>
+                    </select>
+                    <input type="date" id="route-date-select" class="form-control" th:value="${#temporals.format(#temporals.createNow(), 'yyyy-MM-dd')}">
+                    <button class="btn-primary" onclick="printRouteSheet()">Печать маршрута</button>
+                </div>
+            </div>
 
             <!-- Секция таблицы (Поступления) идет СРАЗУ после row -->
             <div class="table-container" style="margin-top: 25px;">
@@ -686,6 +690,11 @@
             </div>
         </dialog>
 
+
+        <!-- Перед вашим script.js -->
+
+        <script th:src="@{/js/sockjs.min.js}"></script>
+        <script th:src="@{/js/stomp.min.js}"></script>
 
 
 

@@ -3,7 +3,6 @@ package com.sellion.sellionserver.config;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
-import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -17,8 +16,6 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.List;
-
-import static org.springframework.security.config.Customizer.withDefaults;
 
 @Configuration
 @EnableWebSecurity
@@ -34,7 +31,14 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 // ДОБАВИТЬ ЭТО:
                 .headers(headers -> headers.frameOptions(HeadersConfigurer.FrameOptionsConfig::sameOrigin))
-                .authorizeHttpRequests(auth -> auth.anyRequest().permitAll());
+
+
+                .authorizeHttpRequests(auth -> auth
+                        .requestMatchers("/ws-sellion/**").permitAll() // РАЗРЕШАЕМ WS
+                        .anyRequest().permitAll()
+                );
+
+
         return http.build();
     }
 
@@ -66,8 +70,6 @@ public class SecurityConfig {
         source.registerCorsConfiguration("/**", configuration);
         return source;
     }
-
-
 
 
     @SuppressWarnings("deprecation")

@@ -4,6 +4,7 @@ import com.sellion.sellionserver.entity.Order;
 import com.sellion.sellionserver.entity.OrderStatus;
 import com.sellion.sellionserver.entity.Product;
 import com.sellion.sellionserver.entity.ReturnOrder;
+import com.sellion.sellionserver.repository.ClientRepository;
 import com.sellion.sellionserver.repository.OrderRepository;
 import com.sellion.sellionserver.repository.ProductRepository;
 import com.sellion.sellionserver.repository.ReturnOrderRepository;
@@ -29,6 +30,8 @@ public class PrintController {
     private final OrderRepository orderRepository;
     private final ReturnOrderRepository returnOrderRepository;
     private final ProductRepository productRepository;
+    private final ClientRepository clientRepository; // Добавьте в final поля
+
 
     // Вспомогательный класс для шаблона печати (DTO)
     public static class PrintItemDto {
@@ -158,5 +161,27 @@ public class PrintController {
         }
         return list;
     }
+    @GetMapping("/logistic/route-list")
+    public String printRouteList(
+            @RequestParam String managerId,
+            @RequestParam String date,
+            Model model) {
+
+        LocalDate deliveryDate = LocalDate.parse(date);
+        List<Order> orders = orderRepository.findDailyRouteOrders(managerId, deliveryDate);
+
+        double routeTotal = orders.stream().mapToDouble(o -> o.getTotalAmount() != null ? o.getTotalAmount() : 0.0).sum();
+
+        model.addAttribute("orders", orders);
+        model.addAttribute("managerId", managerId);
+        model.addAttribute("date", date);
+        model.addAttribute("routeTotal", routeTotal);
+        model.addAttribute("title", "МАРШРУТНЫЙ ЛИСТ: " + managerId);
+        // Добавляем репозиторий в модель, чтобы вызвать его из HTML для адресов
+        model.addAttribute("clientRepo", clientRepository);
+
+        return "print_route_template";
+    }
+
 }
 

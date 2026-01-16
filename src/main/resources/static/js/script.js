@@ -1304,6 +1304,7 @@ function printAction(url) {
         return;
     }
 
+
     // Очистка фрейма перед новой загрузкой
     frame.src = "about:blank";
 
@@ -1326,6 +1327,72 @@ function printAction(url) {
         };
     }, 100);
 }
+
+function printRouteSheet() {
+    const mId = document.getElementById('route-manager-select').value;
+    const date = document.getElementById('route-date-select').value;
+    if(!date) return showToast("Выберите дату", "error");
+
+    const url = `/admin/logistic/route-list?managerId=${mId}&date=${date}`;
+    printAction(url); // Используем вашу готовую функцию печати
+}
+
+// В script.js
+// В script.js
+
+function connectWebSocket() {
+    // Проверка: загрузилась ли библиотека? (Можно удалить эту проверку, если файлы теперь локальные и загружаются сразу)
+    if (typeof SockJS === 'undefined') {
+        // console.warn("Библиотека SockJS еще не загружена. Повтор через 1 сек...");
+        setTimeout(connectWebSocket, 1000);
+        return;
+    }
+
+    const socket = new SockJS('/ws-sellion');
+    const stompClient = Stomp.over(socket);
+
+    stompClient.debug = null;
+
+    stompClient.connect({}, function (frame) {
+        console.log('Уведомления Sellion 2026 подключены');
+        stompClient.subscribe('/topic/new-order', function (message) {
+            showToast("🔔 " + message.body, "info");
+
+            // СТРОКА ДЛЯ ЗВУКА УДАЛЕНА. Теперь только визуальное уведомление.
+            // new Audio('https://www.soundjay.com').play().catch(() => {});
+
+            if (localStorage.getItem('sellion_tab') === 'tab-orders') {
+                setTimeout(() => location.reload(), 2000);
+            }
+        });
+    }, function(error) {
+        console.error('Ошибка WS:', error);
+        setTimeout(connectWebSocket, 5000); // Реконнект
+    });
+}
+
+
+
+async function doInventory() {
+    const id = window.currentProductId;
+    const product = productsData.find(p => p.id == id);
+    const realQty = prompt(`Инвентаризация: ${product.name}. Введите ФАКТИЧЕСКОЕ количество на полке:`, product.stockQuantity);
+
+    if (realQty !== null) {
+        const diff = parseInt(realQty) - product.stockQuantity;
+        // Отправляем на сервер PUT запрос для обновления остатка и записи в StockMovement
+        // ... реализация API запроса
+    }
+}
+
+
+// Запустить при старте
+document.addEventListener("DOMContentLoaded", () => {
+    connectWebSocket();
+});
+
+
+
 
 
 // Функции для печати всего списка заказов/возвратов (для доставщиков)

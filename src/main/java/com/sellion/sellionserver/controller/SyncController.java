@@ -9,6 +9,7 @@ import com.sellion.sellionserver.repository.ReturnOrderRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -25,6 +26,8 @@ public class SyncController {
 
     private final OrderRepository orderRepository;
     private final ReturnOrderRepository returnOrderRepository;
+    private final SimpMessagingTemplate messagingTemplate;
+
 
     // Путь будет: /api/orders/sync (согласно логам вашего Android)
     @PostMapping("/orders/sync")
@@ -42,6 +45,8 @@ public class SyncController {
                 }
             });
             orderRepository.saveAll(orders);
+            messagingTemplate.convertAndSend("/topic/new-order", "Новый заказ получен!");
+
             return ResponseEntity.ok(Map.of("status", "success", "count", orders.size()));
         }
         return ResponseEntity.ok(Map.of("status", "empty"));

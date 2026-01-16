@@ -36,21 +36,23 @@ public class AdminManagementController {
     @PutMapping("/orders/{id}/full-edit")
     @Transactional
     public ResponseEntity<?> fullEditOrder(@PathVariable Long id, @RequestBody Map<String, Object> payload) {
-        Order order = orderRepository.findById(id).orElseThrow();
+        Order order = orderRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Заказ не найден: " + id));
 
+        // 1. Проверка на наличие счета
         if (order.getInvoiceId() != null) {
             return ResponseEntity.badRequest().body(Map.of("error", "Заказ со счетом нельзя менять!"));
         }
 
-        stockService.returnItemsToStock(order.getItems());
+        // 2. Возвращаем старые товары на склад С ЗАПИСЬЮ В ИСТОРИЮ
+        stockService.returnItemsToStock(order.getItems(), "Корректировка состава заказа #" + id);
 
+        // 3. Обновляем основные данные
         order.setShopName((String) payload.get("shopName"));
 
-        // ИСПРАВЛЕНО: Прямой парсинг через русский форматтер
         String deliveryDateString = (String) payload.get("deliveryDate");
         if (deliveryDateString != null && !deliveryDateString.isEmpty()) {
             try {
-                // Используем RU_DATE_FORMATTER (d MMMM yyyy)
                 order.setDeliveryDate(LocalDate.parse(deliveryDateString, RU_DATE_FORMATTER));
             } catch (DateTimeParseException e) {
                 return ResponseEntity.badRequest().body(Map.of("error", "Неверный формат даты: " + deliveryDateString));
@@ -60,29 +62,35 @@ public class AdminManagementController {
         order.setNeedsSeparateInvoice((Boolean) payload.get("needsSeparateInvoice"));
         order.setPaymentMethod(PaymentMethod.fromString((String) payload.get("paymentMethod")));
 
+        // 4. Списываем новые товары С ЗАПИСЬЮ В ИСТОРИЮ
         Map<String, Integer> newItems = (Map<String, Integer>) payload.get("items");
         try {
-            stockService.deductItemsFromStock(newItems);
+            // Вызываем новый метод с указанием причины
+            stockService.deductItemsFromStock(newItems, "Обновление состава заказа #" + id);
         } catch (RuntimeException e) {
-            stockService.deductItemsFromStock(order.getItems());
+            // Если новых товаров не хватило, возвращаем назад старый состав
+            stockService.deductItemsFromStock(order.getItems(), "Откат к старому составу заказа #" + id);
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
 
+        // 5. Пересчет суммы и сохранение
         double newTotal = calculateTotal(newItems);
         order.setItems(newItems);
         order.setTotalAmount(newTotal);
         orderRepository.save(order);
 
+        // 6. Запись в общий аудит админки
         AuditLog log = new AuditLog();
         log.setUsername("ADMIN");
         log.setAction("РЕДАКТИРОВАНИЕ ЗАКАЗА");
-        log.setDetails("Изменен состав или параметры заказа. Новая сумма: " + newTotal);
+        log.setDetails("Заказ #" + id + " изменен. Новая сумма: " + newTotal);
         log.setEntityId(id);
         log.setEntityType("ORDER");
         auditLogRepository.save(log);
 
-        return ResponseEntity.ok(Map.of("finalSum", newTotal, "message", "Заказ обновлен"));
+        return ResponseEntity.ok(Map.of("finalSum", newTotal, "message", "Заказ успешно обновлен"));
     }
+
 
     @PostMapping("/orders/{id}/cancel")
     @Transactional

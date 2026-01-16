@@ -2,8 +2,10 @@ package com.sellion.sellionserver.api;
 
 import com.sellion.sellionserver.entity.AuditLog;
 import com.sellion.sellionserver.entity.Product;
+import com.sellion.sellionserver.entity.StockMovement;
 import com.sellion.sellionserver.repository.AuditLogRepository;
 import com.sellion.sellionserver.repository.ProductRepository;
+import com.sellion.sellionserver.repository.StockMovementRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.apache.poi.ss.usermodel.*;
@@ -24,6 +26,8 @@ public class ProductApiController {
 
     private final ProductRepository productRepository;
     private final AuditLogRepository auditLogRepository;
+    private final StockMovementRepository movementRepository; // <-- Репозиторий добавлен
+
 
 
     @GetMapping
@@ -75,5 +79,10 @@ public class ProductApiController {
         } catch (Exception e) {
             return ResponseEntity.badRequest().body("Ошибка: " + e.getMessage());
         }
+    }
+
+    @GetMapping("/{name}/history")
+    public List<StockMovement> getProductHistory(@PathVariable String name) {
+        return movementRepository.findAllByProductNameOrderByTimestampDesc(name);
     }
 }

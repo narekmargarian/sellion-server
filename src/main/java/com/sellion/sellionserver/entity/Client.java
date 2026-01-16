@@ -30,4 +30,5 @@ public class Client {
 
     private String routeDay; // День маршрута (Понедельник, Вторник и т.д.)
     private Double debt = 0.0; // Новое поле
+    private String managerId;
 }

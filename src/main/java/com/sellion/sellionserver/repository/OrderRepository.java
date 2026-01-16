@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @Repository
@@ -19,4 +20,10 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
 
     @Query("SELECT o FROM Order o WHERE o.managerId = :managerId AND o.createdAt >= :start AND o.createdAt <= :end")
-    List<Order> findOrdersByManagerAndDateRange(@Param("managerId") String managerId, @Param("start") String start, @Param("end") String end);}
+    List<Order> findOrdersByManagerAndDateRange(@Param("managerId") String managerId, @Param("start") String start, @Param("end") String end);
+
+    @Query("SELECT o FROM Order o WHERE o.managerId = :managerId " +
+            "AND o.deliveryDate = :date AND o.status != 'CANCELLED'")
+    List<Order> findDailyRouteOrders(@Param("managerId") String managerId, @Param("date") LocalDate date);
+
+}
