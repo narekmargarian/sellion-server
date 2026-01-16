@@ -41,21 +41,40 @@ public class StockService {
         items.forEach(productRepository::addStock);
     }
 
-    // --- ОБНОВЛЕННЫЙ: Авто-списание теперь логирует движения товара ---
-    @Scheduled(cron = "0 */3 * * * *") // Авто-списание новых заказов
+//    // --- ОБНОВЛЕННЫЙ: Авто-списание теперь логирует движения товара ---
+//    @Scheduled(cron = "0 */3 * * * *") // Авто-списание новых заказов
+//    @Transactional
+//    public void processNewOrders() {
+//        orderRepository.findAllByStatus(OrderStatus.NEW).forEach(order -> {
+//            try {
+//                // Используем перегруженный метод с причиной
+//                deductItemsFromStock(order.getItems(), "Авто-списание заказа #" + order.getId());
+//                order.setStatus(OrderStatus.PROCESSED);
+//                orderRepository.save(order);
+//            } catch (Exception e) {
+//                System.err.println("Ошибка списания заказа #" + order.getId() + ": " + e.getMessage());
+//            }
+//        });
+//    }
+
     @Transactional
-    public void processNewOrders() {
-        orderRepository.findAllByStatus(OrderStatus.NEW).forEach(order -> {
-            try {
-                // Используем перегруженный метод с причиной
-                deductItemsFromStock(order.getItems(), "Авто-списание заказа #" + order.getId());
-                order.setStatus(OrderStatus.PROCESSED);
-                orderRepository.save(order);
-            } catch (Exception e) {
-                System.err.println("Ошибка списания заказа #" + order.getId() + ": " + e.getMessage());
+    public void reserveItemsFromStock(Map<String, Integer> items, String reason) {
+        if (items == null) return;
+        for (Map.Entry<String, Integer> entry : items.entrySet()) {
+            String name = entry.getKey();
+            Integer qty = entry.getValue();
+
+            // 1. Атомарное списание (используем наш безопасный метод)
+            int updated = productRepository.deductStock(name, qty);
+            if (updated == 0) {
+                throw new RuntimeException("Недостаточно товара для резервирования: " + name);
             }
-        });
+
+            // 2. Логируем движение как SALE, но с причиной "Резерв"
+            logMovement(name, -qty, "SALE", reason, "SYSTEM/MANAGER");
+        }
     }
+
 
     @Transactional
     public void logMovement(String name, Integer qty, String type, String reason, String operator) {

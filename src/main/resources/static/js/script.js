@@ -250,7 +250,7 @@ function openOrderDetails(id) {
     document.getElementById('modal-title').innerHTML = `Детали операции <span class="badge" style="margin-left:10px;">ЗАКАЗ №${order.id}</span>`;
     const info = document.getElementById('order-info');
     const printBtn = `<button class="btn-primary" style="background:#475569" onclick="printOrder(${order.id})">🖨 Печать Заказа</button>`;
-    // info.style.gridTemplateColumns = '1fr';
+
     info.innerHTML = `
         <div class="modal-info-row">
             <div><small>Магазин:</small><br><b>${order.shopName}</b></div>
@@ -258,7 +258,8 @@ function openOrderDetails(id) {
             <div><small>Менеджер:</small><br><b>${order.managerId}</b></div>
         </div>
         <div class="modal-info-row">
-            <div><small>Доставка:</small><br><b>${order.deliveryDate || '---'}</b></div>
+            <!-- ИСПРАВЛЕНО: Используем нашу функцию форматирования для даты доставки -->
+            <div><small>Доставка:</small><br><b>${formatOrderDate(order.deliveryDate)}</b></div>
             <div><small>Оплата:</small><br><b>${translatePayment(order.paymentMethod)}</b></div>
             <div><small>Фактура:</small><br><b>${order.needsSeparateInvoice ? 'ДА' : 'НЕТ'}</b></div>
         </div>
@@ -287,17 +288,20 @@ function openOrderDetails(id) {
     openModal('modal-order-view');
 }
 
+// В script.js, функция enableOrderEdit(id)
+
 function enableOrderEdit(id) {
     const order = ordersData.find(o => o.id == id);
     document.getElementById('modal-title').innerText = "Режим редактирования заказа #" + id;
     const info = document.getElementById('order-info');
-    // info.style.gridTemplateColumns = '1fr';
+
     let clientOptions = clientsData.map(c => `<option value="${c.name}" ${c.name === order.shopName ? 'selected' : ''}>${c.name}</option>`).join('');
     let paymentOptions = paymentMethods.map(m => {
         const val = (typeof m === 'object') ? m.name : m;
         const label = translatePayment(m);
         return `<option value="${val}" ${order.paymentMethod === val ? 'selected' : ''}>${label}</option>`;
     }).join('');
+
 
     info.innerHTML = `
         <div class="modal-info-row">
@@ -318,6 +322,7 @@ function enableOrderEdit(id) {
         <button class="btn-primary" style="background:#10b981" onclick="saveFullChanges(${id})">Сохранить</button>
         <button class="btn-primary" style="background:#64748b" onclick="cancelOrderEdit(${id})">Отмена</button>`;
 }
+
 
 function cancelOrderEdit(id) {
     openOrderDetails(id);
@@ -937,6 +942,7 @@ function getCurrentTimeFormat() {
     const seconds = String(now.getSeconds()).padStart(2, '0');
     return `${hours}:${minutes}:${seconds}`;
 }
+
 // --- УНИВЕРСАЛЬНОЕ СОХРАНЕНИЕ ---
 // --- 7. УНИВЕРСАЛЬНОЕ СОХРАНЕНИЕ ---
 
@@ -1206,8 +1212,6 @@ function showToast(text, type = 'info') {
 }
 
 
-
-
 function openUserDetailsModal(id) {
     const user = usersData.find(u => u.id == id);
     if (!user) return;
@@ -1314,7 +1318,6 @@ async function submitCreateUser() {
 }
 
 
-
 async function resetPassword(userId) {
     showConfirmModal("Сброс пароля", "Сбросить пароль пользователю на стандартный 'qwerty'?", async () => {
         try {
@@ -1331,13 +1334,13 @@ async function resetPassword(userId) {
 }
 
 // Эти функции должны быть ГЛОБАЛЬНЫМИ, чтобы onclick их видел
-window.printOrder = function(id) {
+window.printOrder = function (id) {
     console.log("Запуск печати заказа:", id);
     const url = `/admin/orders/print/${id}`;
     printAction(url);
 }
 
-window.printReturn = function(id) {
+window.printReturn = function (id) {
     console.log("Запуск печати возврата:", id);
     const url = `/admin/returns/print/${id}`;
     printAction(url);
@@ -1356,7 +1359,7 @@ function printAction(url) {
 
     setTimeout(() => {
         frame.src = url;
-        frame.onload = function() {
+        frame.onload = function () {
             // Печатаем только один раз, когда фрейм загрузился
             try {
                 // Добавляем проверку, чтобы не печатать пустой src
@@ -1377,7 +1380,7 @@ function printAction(url) {
 function printRouteSheet() {
     const mId = document.getElementById('route-manager-select').value;
     const date = document.getElementById('route-date-select').value;
-    if(!date) return showToast("Выберите дату", "error");
+    if (!date) return showToast("Выберите дату", "error");
 
     const url = `/admin/logistic/route-list?managerId=${mId}&date=${date}`;
     printAction(url); // Используем вашу готовую функцию печати
@@ -1411,7 +1414,7 @@ function connectWebSocket() {
                 setTimeout(() => location.reload(), 2000);
             }
         });
-    }, function(error) {
+    }, function (error) {
         console.error('Ошибка WS:', error);
         setTimeout(connectWebSocket, 5000); // Реконнект
     });
@@ -1442,7 +1445,6 @@ async function deleteClient(id) {
 }
 
 
-
 // Открывает нашу новую красивую модалку
 function doInventory() {
     const id = window.currentProductId;
@@ -1457,6 +1459,7 @@ function doInventory() {
 
     openModal('modal-inventory');
 }
+
 
 // Отправляет данные с модалки на сервер
 async function submitInventoryAdjustment() {
@@ -1473,7 +1476,7 @@ async function submitInventoryAdjustment() {
         const response = await fetch(`/api/admin/products/${id}/inventory`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ newQty: newQty, reason: reason })
+            body: JSON.stringify({newQty: newQty, reason: reason})
         });
 
         if (response.ok) {
@@ -1489,19 +1492,15 @@ async function submitInventoryAdjustment() {
 }
 
 
-
 // Запустить при старте
 document.addEventListener("DOMContentLoaded", () => {
     connectWebSocket();
 });
 
 
-
-
-
 // Функции для печати всего списка заказов/возвратов (для доставщиков)
 
-window.printOrderList = function() {
+window.printOrderList = function () {
     const form = document.querySelector('#tab-orders .filter-bar form');
     const mId = form.querySelector('select[name="orderManagerId"]').value;
     const s = form.querySelector('input[name="orderStartDate"]').value;
@@ -1511,7 +1510,7 @@ window.printOrderList = function() {
     printAction(url);
 }
 
-window.printReturnList = function() {
+window.printReturnList = function () {
     const form = document.querySelector('#tab-returns .filter-bar form');
     const mId = form.querySelector('select[name="returnManagerId"]').value;
     const s = form.querySelector('input[name="returnStartDate"]').value;
@@ -1520,7 +1519,6 @@ window.printReturnList = function() {
     const url = `/admin/returns/print-all?returnManagerId=${mId}&returnStartDate=${s}&returnEndDate=${e}`;
     printAction(url);
 }
-
 
 
 document.addEventListener("DOMContentLoaded", async () => {

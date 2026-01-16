@@ -8,15 +8,18 @@
 }
 
 body {
-    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
-    Roboto, 'Helvetica Neue', Arial, sans-serif;
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system,
+    BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
     background: var(--bg);
     margin: 0;
     display: flex;
     height: 100vh;
     overflow: hidden;
+    font-size: 14px;
+    line-height: 1.5;
     color: var(--text-main);
 }
+
 
 /* Сайдбар */
 .sidebar {
@@ -67,6 +70,7 @@ body {
     overflow: hidden;
 }
 
+
 /* Область контента внутри main */
 .scroll-area {
     padding: 25px;
@@ -76,6 +80,7 @@ body {
     box-sizing: border-box;
     overflow: hidden; /* Убираем скролл всей страницы */
 }
+
 
 /* Вкладки - занимают все доступное место */
 .tab-pane {
@@ -90,6 +95,7 @@ body {
     animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+
 /* Контейнер для таблицы с независимым скроллом */
 .table-container {
     flex-grow: 1;
@@ -100,6 +106,7 @@ body {
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
     margin-bottom: 10px;
 }
+
 
 /* Фиксированная шапка таблицы при скролле */
 .table thead th {
@@ -115,9 +122,18 @@ body {
     font-size: 12px;
 }
 
-.badge.bg-primary { background-color: #3b82f6 !important; }
-.badge.bg-secondary { background-color: #64748b !important; }
-.badge.bg-warning { background-color: #f97316 !important; color: white !important; }
+.badge.bg-primary {
+    background-color: #3b82f6 !important;
+}
+
+.badge.bg-secondary {
+    background-color: #64748b !important;
+}
+
+.badge.bg-warning {
+    background-color: #f97316 !important;
+    color: white !important;
+}
 
 /* Карточки сводки и фильтры - всегда сверху (не скроллится) */
 .summary-card {
@@ -144,138 +160,6 @@ body {
     border-collapse: collapse;
 }
 
-.table th {
-    text-align: left;
-    padding: 12px;
-    font-size: 11px;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-.table td {
-    padding: 14px 12px;
-    font-size: 13px;
-    border-bottom: 1px solid #f8fafc;
-}
-
-.table tr:last-child td {
-    border-bottom: none;
-}
-
-.table tr:hover {
-    background: #f8fafc;
-    cursor: pointer;
-}
-
-
-body {
-    font-family: 'Plus Jakarta Sans', sans-serif;
-    background: var(--bg);
-    margin: 0;
-    display: flex;
-    height: 100vh;
-    overflow: hidden;
-    color: var(--text-main);
-}
-
-/* Сайдбар */
-.sidebar {
-    width: 260px;
-    background: var(--sidebar);
-    color: white;
-    display: flex;
-    flex-direction: column;
-    flex-shrink: 0;
-}
-
-.brand {
-    padding: 30px 25px;
-    font-weight: 700;
-    font-size: 1.4rem;
-    color: var(--accent);
-    letter-spacing: -0.5px;
-}
-
-.nav-link {
-    display: flex;
-    align-items: center;
-    padding: 12px 25px;
-    color: #94a3b8;
-    text-decoration: none;
-    cursor: pointer;
-    border-right: 4px solid transparent;
-    transition: 0.2s;
-}
-
-.nav-link:hover, .nav-link.active {
-    background: #1e293b;
-    color: white;
-    border-right-color: var(--accent);
-}
-
-.nav-link i {
-    margin-right: 12px;
-    font-size: 1.1rem;
-}
-
-/* Основная область */
-.main {
-    flex-grow: 1;
-    display: flex;
-    flex-direction: column;
-    height: 100vh;
-    overflow: hidden;
-}
-
-/* Область контента внутри main */
-.scroll-area {
-    padding: 25px;
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    box-sizing: border-box;
-    overflow: hidden;
-}
-
-/* Вкладки */
-.tab-pane {
-    display: none;
-    flex-direction: column;
-    height: 100%;
-    overflow: hidden;
-}
-
-.tab-pane.active {
-    display: flex;
-    animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-/* Контейнер для таблицы с независимым скроллом */
-.table-container {
-    flex-grow: 1;
-    overflow-y: auto;
-    background: white;
-    border-radius: 12px;
-    border: 1px solid var(--border);
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-    margin-bottom: 10px;
-}
-
-/* Фиксированная шапка таблицы при скролле */
-.table thead th {
-    position: sticky;
-    top: 0;
-    background: #f8fafc;
-    z-index: 5;
-    border-bottom: 2px solid var(--border);
-}
-
-/* Таблицы */
-.table {
-    width: 100%;
-    border-collapse: collapse;
-}
 
 .table th {
     text-align: left;
@@ -299,10 +183,7 @@ body {
     border-bottom: none;
 }
 
-.table tr:hover {
-    background: #f8fafc;
-    cursor: pointer;
-}
+
 .table tbody tr:hover {
     background-color: #f1f5f9; /* Светло-серый фон при наведении */
     cursor: pointer;
@@ -326,14 +207,17 @@ body {
     background: #4f46e5;
     transform: translateY(-1px);
 }
+
 /* Фоновая подложка */
 .modal {
     display: flex;
     visibility: hidden;
     opacity: 0;
     position: fixed;
-    top: 0; left: 0;
-    width: 100%; height: 100%;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
     background: rgba(15, 23, 42, 0.6); /* Темный элегантный фон */
     backdrop-filter: blur(4px); /* Эффект размытия 2026 */
     z-index: 9999;
@@ -347,48 +231,11 @@ body {
     opacity: 1;
 }
 
-/* Контент модалки */
-.modal-content {
-    background: #ffffff;
-    padding: 24px;
-    border-radius: 16px; /* Более скругленные углы */
-    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-    width: 90%;
-    max-width: 800px;
-    max-height: 90vh;
-    transform: translateY(20px); /* Начальная позиция для анимации */
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    display: flex;
-    flex-direction: column;
-}
-
-.modal.active .modal-content {
-    transform: translateY(0); /* Всплытие */
-}
-
-/* Красивый скроллбар для состава заказа */
-#table-scroll-container {
-    margin-top: 15px;
-    border-radius: 8px;
-    border: 1px solid #e2e8f0;
-    overflow-y: auto;
-    background: #ffffff;
-}
-
-
-.modal-content h2 {
-    font-size: 18px !important;
-    font-weight: 700;
-    margin: 0 0 15px 0 !important;
-    color: var(--sidebar);
-    flex-shrink: 0; /* Шапка не сжимается */
-}
-
 
 .modal-content {
     background: white;
     padding: 24px;
-    border-radius: 20px;
+    border-radius: 20px; /* Более скругленные углы */
     width: 850px;
     max-width: 95%;
     box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
@@ -406,6 +253,20 @@ body {
     color: var(--sidebar);
     flex-shrink: 0;
 }
+
+.modal.active .modal-content {
+    transform: translateY(0); /* Всплытие */
+}
+
+/* Красивый скроллбар для состава заказа */
+#table-scroll-container {
+    margin-top: 15px;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    overflow-y: auto;
+    background: #ffffff;
+}
+
 
 /* Компактный макет инфо-панелей (всегда горизонтально) */
 .modal-info-row {
@@ -454,18 +315,9 @@ body {
 }
 
 
-:root {
-    --accent: #6366f1;
-    --sidebar: #0f172a;
-    --bg: #f8fafc;
-    --border: #e2e8f0;
-    --text-main: #1e293b;
-    --text-muted: #64748b;
-}
-
 .bg-warning {
     background-color: #ffc107 !important; /* Желтый фон */
-    color: #000000 !important;           /* ЧЕРНЫЙ текст */
+    color: #000000 !important; /* ЧЕРНЫЙ текст */
 }
 
 
@@ -523,8 +375,8 @@ body {
 .confirm-modal-image-style {
     border: none;
     border-radius: 12px;
-    padding: 30px;      /* Большие отступы, как на фото */
-    box-shadow: 0 10px 30px rgba(0,0,0,0.1), 0 0 0 1000px rgba(0,0,0,0.2); /* Тень и темный фон */
+    padding: 30px; /* Большие отступы, как на фото */
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1), 0 0 0 1000px rgba(0, 0, 0, 0.2); /* Тень и темный фон */
     max-width: 450px;
     width: 90%;
 }
@@ -559,10 +411,6 @@ body {
     gap: 8px;
 }
 
-/* Ваши стили кнопок (убедитесь, что они есть в вашем style.css) */
-/*.btn-primary {*/
-/*    padding: 10px 20px; border-radius: 8px; border: none; cursor: pointer; font-weight: 600; }*/
-/*.btn-danger { background-color: #ef4444; color: white; }*/
 .btn-danger {
     background-color: #ef4444; /* Ярко-красный фон */
     color: white;
@@ -576,33 +424,16 @@ body {
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
-.btn-primary {
-    background: var(--accent);
-    color: white;
-    border: none; /* Убираем рамку */
-    padding: 10px 18px;
-    border-radius: 8px;
-    cursor: pointer;
-    font-weight: 600;
-    font-size: 13px;
-    transition: 0.2s;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-}
-
-
 .btn-danger:hover {
     background-color: #dc2626; /* Темнее при наведении */
     transform: translateY(-1px);
 }
 
 
-
-
-.btn-secondary { background-color: #64748b; color: white; }
-
-
-
-
+.btn-secondary {
+    background-color: #64748b;
+    color: white;
+}
 
 
 /* Контейнер для всех тостов */
@@ -646,19 +477,12 @@ body {
     background-color: #3b82f6; /* Ярко-синий фон */
 }
 
-/* style.css */
-
 /* Специальная ширина для колонки Действие на вкладке Персонал */
 #tab-users .table th:last-child {
     width: 180px; /* Делаем колонку действий шире */
 }
 
 /* Кнопки в таблице Персонала должны быть компактными */
-#tab-users .table button {
-    padding: 6px 12px;
-    font-size: 11px;
-    width: 100%; /* Растягиваем на всю ячейку */
-}
 
 /* Стиль для кнопки сброса пароля (warning color) */
 .btn-warning {
@@ -678,9 +502,4 @@ body {
 }
 
 
-/* Улучшаем внешний вид фильтр-бара для поиска */
-#tab-users .filter-bar input {
-    /* Чтобы поле поиска было адаптивным, но не слишком большим */
-    flex-grow: 1;
-    max-width: 350px;
-}
+

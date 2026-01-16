@@ -66,7 +66,7 @@ public class AdminManagementController {
         Map<String, Integer> newItems = (Map<String, Integer>) payload.get("items");
         try {
             // Вызываем новый метод с указанием причины
-            stockService.deductItemsFromStock(newItems, "Обновление состава заказа #" + id);
+            stockService.reserveItemsFromStock(newItems, "Обновление состава заказа #" + id);
         } catch (RuntimeException e) {
             // Если новых товаров не хватило, возвращаем назад старый состав
             stockService.deductItemsFromStock(order.getItems(), "Откат к старому составу заказа #" + id);
@@ -201,10 +201,10 @@ public class AdminManagementController {
     @PostMapping("/orders/create-manual")
     @Transactional
     public ResponseEntity<?> createOrderManual(@RequestBody Order order) {
-        order.setStatus(OrderStatus.ACCEPTED);
+        order.setStatus(OrderStatus.RESERVED);
         order.setCreatedAt(LocalDateTime.now().format(DATETIME_FORMATTER));
 
-        stockService.deductItemsFromStock(order.getItems());
+        stockService.reserveItemsFromStock(order.getItems(), "Ручной заказ #" + order.getId());
         Order saved = orderRepository.save(order);
 
         AuditLog log = new AuditLog();

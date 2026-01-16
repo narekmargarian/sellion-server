@@ -36,7 +36,7 @@ public class SyncController {
         if (orders != null && !orders.isEmpty()) {
             orders.forEach(order -> {
                 order.setId(null);
-                order.setStatus(OrderStatus.NEW);
+                order.setStatus(OrderStatus.RESERVED);
                 // ДОБАВЛЕНО: Устанавливаем текущую дату, если Android не прислал
                 if (order.getCreatedAt() == null || order.getCreatedAt().isEmpty()) {
                     // В SyncController.java вместо toString()

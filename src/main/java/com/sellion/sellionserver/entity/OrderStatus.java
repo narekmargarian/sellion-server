@@ -6,5 +6,6 @@ public enum OrderStatus {
     PENDING,//
     INVOICED,   // Счет создан (редактирование запрещено)
     CANCELLED,
-    PROCESSED// Отменен
-}
+    PROCESSED,// Отменен
+    RESERVED
+    }
