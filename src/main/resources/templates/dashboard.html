@@ -68,6 +68,9 @@
                         <option th:each="m : ${managers}" th:value="${m}" th:text="${m}"
                                 th:selected="${m == selectedOrderManager}"></option>
                     </select>
+
+                    <button type="button" class="btn-primary" style="background:#555;" onclick="printOrderList()">🖨️ Печать списка</button>
+
                 </form>
                 <button class="btn-primary" onclick="openCreateOrderModal()">+ Создать заказ</button>
 
@@ -221,6 +224,7 @@
                         <option th:each="m : ${managers}" th:value="${m}" th:text="${m}"
                                 th:selected="${m == selectedReturnManager}"></option>
                     </select>
+                    <button type="button" class="btn-primary" style="background:#555;" onclick="printReturnList()">🖨️ Печать списка</button>
                 </form>
                 <button class="btn-primary" onclick="openCreateReturnModal()">+ Добавить возврат</button>
             </div>

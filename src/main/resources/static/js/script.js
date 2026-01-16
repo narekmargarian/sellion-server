@@ -1277,6 +1277,29 @@ function printAction(url) {
     };
 }
 
+// Функции для печати всего списка заказов/возвратов (для доставщиков)
+
+window.printOrderList = function() {
+    const form = document.querySelector('#tab-orders .filter-bar form');
+    const select = form.querySelector('select[name="orderManagerId"]');
+    // ИСПОЛЬЗУЕМ .trim() ДЛЯ УДАЛЕНИЯ ПРОБЕЛОВ
+    const managerId = select.value.trim();
+
+    // Формируем URL с параметрами фильтрации
+    const url = `/admin/orders/print-all?orderManagerId=${encodeURIComponent(managerId)}`;
+    printAction(url);
+}
+
+window.printReturnList = function() {
+    const form = document.querySelector('#tab-returns .filter-bar form');
+    const select = form.querySelector('select[name="returnManagerId"]');
+    // ИСПОЛЬЗУЕМ .trim() ДЛЯ УДАЛЕНИЯ ПРОБЕЛОВ
+    const managerId = select.value.trim();
+
+    const url = `/admin/returns/print-all?returnManagerId=${encodeURIComponent(managerId)}`;
+    printAction(url);
+}
+
 
 
 document.addEventListener("DOMContentLoaded", async () => {
