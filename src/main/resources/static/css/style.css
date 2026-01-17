@@ -5,6 +5,10 @@
     --border: #e2e8f0;
     --text-main: #1e293b;
     --text-muted: #64748b;
+    /* ОБЯЗАТЕЛЬНО ДОБАВЬ ЭТИ ТРИ СТРОКИ */
+    --success: #10b981;
+    --warning: #f59e0b;
+    --danger: #ef4444;
 }
 
 body {
@@ -210,7 +214,7 @@ body {
 
 /* Фоновая подложка */
 .modal {
-    display: flex;
+    display: none;
     visibility: hidden;
     opacity: 0;
     position: fixed;
@@ -229,6 +233,7 @@ body {
 .modal.active {
     visibility: visible;
     opacity: 1;
+    display: flex;
 }
 
 
@@ -502,4 +507,92 @@ body {
 }
 
 
+.import-log {
+    margin-top: 25px;
+}
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-shrink: 0;
+}
+.modal-title {
+    margin: 0;
+}
 
+.modal-footer {
+    display: flex;
+    align-items: center;
+    padding-top: 20px;
+    border-top: 2px solid #eee;
+    flex-shrink: 0;
+}
+
+.modal-footer.space-between {
+    justify-content: space-between;
+    margin-top: auto;
+}
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+}
+
+/* Новые вспомогательные классы */
+.card-dashboard {
+    background: white !important;
+    border: 1px solid var(--border) !important;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.02) !important;
+}
+
+.stat-main {
+    font-size: 20px;
+    font-weight: 800;
+    margin-top: 5px;
+}
+
+.stat-sub {
+    font-size: 14px;
+    color: var(--text-muted);
+}
+
+.modal-info-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr; /* Две колонки */
+    gap: 20px;
+    background: #f8fafc;
+    padding: 15px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    margin-bottom: 15px;
+}
+
+.price-total {
+    font-size: 20px;
+    font-weight: 800;
+    color: var(--accent);
+}
+
+.btn-success {
+    background-color: var(--success) !important;
+    color: white;
+}
+
+
+.btn-success:hover {
+    background-color: #059669 !important; /* Чуть темнее при наведении */
+}
+.btn-sm {
+    padding: 5px 10px !important;
+    font-size: 11px !important;
+    border-radius: 6px !important;
+}/* Ячейка менеджера */
+.manager-cell {
+    font-weight: 600;
+    color: var(--accent);
+}
+
+
+.cursor-pointer { cursor: pointer; }
+.fw-bold { font-weight: 700 !important; }

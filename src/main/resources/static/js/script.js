@@ -3,18 +3,22 @@ let tempItems = {};
 // --- 1. Навигация и Утилиты ---
 function openModal(id) {
     const modal = document.getElementById(id);
+    if (!modal) return console.error(`Модальное окно с ID ${id} не найдено.`);
+
     modal.classList.add('active');
-    document.getElementById(id).classList.add('active');
-    document.body.style.overflow = 'hidden'; // Блокируем фон
-    const sc = modal.querySelector('#table-scroll-container');
+    document.body.style.overflow = 'hidden';
+
+    const sc = modal.querySelector('.table-container, .order-items-scroll');
     if (sc) sc.scrollTop = 0;
 }
 
 function closeModal(id) {
-    document.getElementById(id).classList.remove('active');
+    const modal = document.getElementById(id);
+    if (!modal) return;
+    modal.classList.remove('active');
     document.body.style.overflow = '';
-    document.getElementById(id).classList.remove('active');
 }
+
 
 // Безопасное форматирование даты (убирает T и секунды)
 function formatOrderDate(dateVal) {
