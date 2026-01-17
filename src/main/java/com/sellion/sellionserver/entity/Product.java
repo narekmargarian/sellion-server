@@ -21,7 +21,7 @@ public class Product {
     private Integer itemsPerBox;
     private String barcode;
     private String category;
-
+    private Double purchasePrice;
     // НОВОЕ ПОЛЕ: Остаток на складе
     private Integer stockQuantity;
     private boolean isDeleted = false; // Флаг мягкого удаления

@@ -979,14 +979,16 @@ async function saveNewManualOperation(type) {
     const russianDate = toRuDate(baseDate); // Результат: "16 января 2026"
     const formattedDateTime = `${baseDate}T${getCurrentTimeFormat()}`; // Для createdAt
 
-    // Собираем общие данные
+
     const data = {
         shopName: document.getElementById('new-op-shop').value,
         managerId: document.getElementById('new-op-manager').value,
         items: tempItems,
         totalAmount: calculateCurrentTempTotal(),
-        // createdAt — это String в Java, здесь время нужно оставить
-        createdAt: formattedDateTime
+        createdAt: formattedDateTime,
+        // ОТПРАВЛЯЕМ ЧИСТУЮ ДАТУ ISO
+        deliveryDate: baseDate,
+        returnDate: baseDate
     };
 
     // Добавляем специфичные данные

@@ -34,11 +34,13 @@ public class StockService {
         });
     }
 
-    // --- Существующий метод (теперь без логирования) ---
     @Transactional
-    public void returnItemsToStock(Map<String, Integer> items) {
+    public void returnItemsToStock(Map<String, Integer> items, String reason, String operator) {
         if (items == null) return;
-        items.forEach(productRepository::addStock);
+        items.forEach((name, qty) -> {
+            productRepository.addStock(name, qty);
+            logMovement(name, qty, "RETURN", reason, operator);
+        });
     }
 
 //    // --- ОБНОВЛЕННЫЙ: Авто-списание теперь логирует движения товара ---

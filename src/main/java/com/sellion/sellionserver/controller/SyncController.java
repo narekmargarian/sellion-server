@@ -6,6 +6,7 @@ import com.sellion.sellionserver.entity.ReturnOrder;
 import com.sellion.sellionserver.entity.ReturnStatus;
 import com.sellion.sellionserver.repository.OrderRepository;
 import com.sellion.sellionserver.repository.ReturnOrderRepository;
+import com.sellion.sellionserver.services.StockService;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -27,9 +28,8 @@ public class SyncController {
     private final OrderRepository orderRepository;
     private final ReturnOrderRepository returnOrderRepository;
     private final SimpMessagingTemplate messagingTemplate;
+    private final StockService stockService; // ДОБАВЛЕНО
 
-
-    // Путь будет: /api/orders/sync (согласно логам вашего Android)
     @PostMapping("/orders/sync")
     @Transactional
     public ResponseEntity<?> syncOrders(@RequestBody List<Order> orders) {
@@ -37,13 +37,21 @@ public class SyncController {
             orders.forEach(order -> {
                 order.setId(null);
                 order.setStatus(OrderStatus.RESERVED);
-                // ДОБАВЛЕНО: Устанавливаем текущую дату, если Android не прислал
-                if (order.getCreatedAt() == null || order.getCreatedAt().isEmpty()) {
-                    // В SyncController.java вместо toString()
-                    order.setCreatedAt(LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
 
+                // Установка даты создания
+                if (order.getCreatedAt() == null || order.getCreatedAt().isEmpty()) {
+                    order.setCreatedAt(LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
+                }
+
+                // КРИТИЧЕСКИЙ МОМЕНТ: Списываем товары со склада при получении заказа
+                try {
+                    stockService.reserveItemsFromStock(order.getItems(), "Заказ с Android (" + order.getShopName() + ")");
+                } catch (Exception e) {
+                    // Если товара не хватило, логируем ошибку, но заказ сохраняем (или можно выкинуть ошибку)
+                    System.err.println("Ошибка списания при синхронизации: " + e.getMessage());
                 }
             });
+
             orderRepository.saveAll(orders);
             messagingTemplate.convertAndSend("/topic/new-order", "Новый заказ получен!");
 
@@ -51,6 +59,7 @@ public class SyncController {
         }
         return ResponseEntity.ok(Map.of("status", "empty"));
     }
+
 
     // Путь будет: /api/returns/sync
     @PostMapping("/returns/sync")

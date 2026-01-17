@@ -12,13 +12,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-
 @Controller
 @RequestMapping("/admin")
 @RequiredArgsConstructor
@@ -29,12 +25,12 @@ public class MainWebController {
     private final ProductRepository productRepository;
     private final UserRepository userRepository;
     private final InvoiceRepository invoiceRepository;
+    private final AuditLogRepository auditLogRepository;
 
     @GetMapping
     public String showDashboard(
             @RequestParam(value = "orderManagerId", required = false) String orderManagerId,
             @RequestParam(value = "returnManagerId", required = false) String returnManagerId,
-            // 4 отдельных параметра даты для независимой фильтрации
             @RequestParam(value = "orderStartDate", required = false) String orderStartDate,
             @RequestParam(value = "orderEndDate", required = false) String orderEndDate,
             @RequestParam(value = "returnStartDate", required = false) String returnStartDate,
@@ -49,6 +45,8 @@ public class MainWebController {
         String oEnd = (orderEndDate != null && !orderEndDate.isEmpty()) ? orderEndDate : oStart;
 
         List<Order> allOrders = orderRepository.findOrdersBetweenDates(oStart + "T00:00:00", oEnd + "T23:59:59");
+        if (allOrders == null) allOrders = new ArrayList<>();
+
         List<Order> filteredOrders = (orderManagerId != null && !orderManagerId.isEmpty())
                 ? allOrders.stream().filter(o -> orderManagerId.equals(o.getManagerId())).toList()
                 : allOrders;
@@ -57,11 +55,28 @@ public class MainWebController {
                 .mapToDouble(o -> o.getTotalAmount() != null ? o.getTotalAmount() : 0.0)
                 .sum();
 
+        // --- НОВОЕ: РАСЧЕТ ПРИБЫЛИ (КАК В 1С) ---
+        // Считаем: (Цена продажи - Себестоимость закупки) * Кол-во
+        double totalProfit = filteredOrders.stream()
+                .filter(o -> o.getStatus() != OrderStatus.CANCELLED) // Не считаем отмененные
+                .flatMap(o -> o.getItems().entrySet().stream())
+                .mapToDouble(entry -> {
+                    // Ищем актуальные цены товара
+                    return productRepository.findByName(entry.getKey()).map(p -> {
+                        double purchase = (p.getPurchasePrice() != null) ? p.getPurchasePrice() : 0.0;
+                        double sale = (p.getPrice() != null) ? p.getPrice() : 0.0;
+                        return (sale - purchase) * entry.getValue();
+                    }).orElse(0.0);
+                }).sum();
+        model.addAttribute("totalProfit", totalProfit);
+
         // 2. ЛОГИКА ДЛЯ ВОЗВРАТОВ
         String rStart = (returnStartDate != null && !returnStartDate.isEmpty()) ? returnStartDate : today;
         String rEnd = (returnEndDate != null && !returnEndDate.isEmpty()) ? returnEndDate : rStart;
 
         List<ReturnOrder> allReturns = returnOrderRepository.findReturnsBetweenDates(rStart + "T00:00:00", rEnd + "T23:59:59");
+        if (allReturns == null) allReturns = new ArrayList<>();
+
         List<ReturnOrder> filteredReturns = (returnManagerId != null && !returnManagerId.isEmpty())
                 ? allReturns.stream().filter(r -> returnManagerId.equals(r.getManagerId())).toList()
                 : allReturns;
@@ -72,6 +87,8 @@ public class MainWebController {
 
         // 3. ОБЩАЯ СТАТИСТИКА И СЧЕТА
         List<Invoice> invoices = invoiceRepository.findAll();
+        if (invoices == null) invoices = new ArrayList<>();
+
         double totalInvoiceDebt = invoices.stream()
                 .mapToDouble(i -> (i.getTotalAmount() != null ? i.getTotalAmount() : 0)
                         - (i.getPaidAmount() != null ? i.getPaidAmount() : 0))
@@ -81,10 +98,21 @@ public class MainWebController {
                 .mapToDouble(i -> i.getPaidAmount() != null ? i.getPaidAmount() : 0.0)
                 .sum();
 
-        double totalAllOrdersSum = allOrders.stream().mapToDouble(o -> o.getTotalAmount() != null ? o.getTotalAmount() : 0.0).sum();
-        double avgCheck = allOrders.isEmpty() ? 0 : totalAllOrdersSum / allOrders.size();
+        double totalAllOrdersSum = allOrders.stream()
+                .mapToDouble(o -> o.getTotalAmount() != null ? o.getTotalAmount() : 0.0)
+                .sum();
+        double avgCheck = allOrders.isEmpty() ? 0.0 : totalAllOrdersSum / allOrders.size();
 
-        // 4. ПЕРЕДАЧА ДАННЫХ ЗАКАЗОВ В МОДЕЛЬ
+        // Получаем последние логи для таблицы импорта
+        List<AuditLog> auditLogs = auditLogRepository.findAllByOrderByTimestampDesc();
+
+        // Ограничим список последними 15 записями, чтобы не перегружать страницу
+        List<AuditLog> limitedLogs = auditLogs.stream().limit(15).toList();
+
+        model.addAttribute("auditLogs", limitedLogs);
+
+
+        // 4. ПЕРЕДАЧА ДАННЫХ В МОДЕЛЬ
         model.addAttribute("orders", filteredOrders);
         model.addAttribute("totalOrdersCount", filteredOrders.size());
         model.addAttribute("totalOrdersSum", totalOrdersSum);
@@ -92,7 +120,6 @@ public class MainWebController {
         model.addAttribute("orderEndDate", oEnd);
         model.addAttribute("selectedOrderManager", orderManagerId);
 
-        // 5. ПЕРЕДАЧА ДАННЫХ ВОЗВРАТОВ В МОДЕЛЬ
         model.addAttribute("returns", filteredReturns);
         model.addAttribute("totalReturnsCount", filteredReturns.size());
         model.addAttribute("totalReturnsSum", totalReturnsSum);
@@ -100,32 +127,37 @@ public class MainWebController {
         model.addAttribute("returnEndDate", rEnd);
         model.addAttribute("selectedReturnManager", returnManagerId);
 
-        // 6. ОСТАЛЬНЫЕ ДАННЫЕ
         model.addAttribute("totalPaidSum", totalPaidSum);
         model.addAttribute("avgCheck", avgCheck);
         model.addAttribute("invoices", invoices);
         model.addAttribute("totalInvoiceDebt", totalInvoiceDebt);
-        model.addAttribute("products", productRepository.findAllActive());
-        model.addAttribute("clients", clientRepository.findAllActive());
-        model.addAttribute("users", userRepository.findAll());
 
-        // Список менеджеров для фильтров (из текущих выборок)
+        model.addAttribute("products", productRepository.findAllActive() != null ? productRepository.findAllActive() : new ArrayList<>());
+        model.addAttribute("clients", clientRepository.findAllActive() != null ? clientRepository.findAllActive() : new ArrayList<>());
+        model.addAttribute("users", userRepository.findAll() != null ? userRepository.findAll() : new ArrayList<>());
+
         List<String> managers = Stream.concat(allOrders.stream().map(Order::getManagerId),
                         allReturns.stream().map(ReturnOrder::getManagerId))
-                .filter(Objects::nonNull).distinct().sorted().toList();
+                .filter(Objects::nonNull)
+                .distinct()
+                .sorted()
+                .toList();
         model.addAttribute("managers", managers);
 
-        // Проверка просрочки
         LocalDateTime oneMonthAgo = LocalDateTime.now().minusMonths(1);
         Set<String> overdueClients = invoices.stream()
                 .filter(inv -> !"PAID".equals(inv.getStatus()))
                 .filter(inv -> inv.getCreatedAt() != null && inv.getCreatedAt().isBefore(oneMonthAgo))
-                .map(Invoice::getShopName).collect(Collectors.toSet());
+                .map(Invoice::getShopName)
+                .collect(Collectors.toSet());
         model.addAttribute("overdueClients", overdueClients);
 
-        // Долги клиентов
         Map<String, Double> clientDebts = clientRepository.findAll().stream()
-                .collect(Collectors.toMap(Client::getName, c -> c.getDebt() != null ? c.getDebt() : 0.0, (v1, v2) -> v1));
+                .collect(Collectors.toMap(
+                        Client::getName,
+                        c -> c.getDebt() != null ? c.getDebt() : 0.0,
+                        (v1, v2) -> v1
+                ));
         model.addAttribute("clientDebts", clientDebts);
 
         model.addAttribute("paymentMethods", PaymentMethod.values());
@@ -135,4 +167,3 @@ public class MainWebController {
         return "dashboard";
     }
 }
-

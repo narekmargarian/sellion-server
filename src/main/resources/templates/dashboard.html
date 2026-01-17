@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ru" xmlns:th="http://www.thymeleaf.org">
+<html lang="ru" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.w3.org/1999/xhtml">
 <head>
     <meta charset="UTF-8">
     <title>Sellion ERP 2026</title>
@@ -402,6 +402,17 @@
                     </div>
                 </div>
             </div> <!-- Конец row g-3 -->
+<!--            <div class="col-md-4" sec:authorize="hasRole('ADMIN')">-->
+            <div class="col-md-4">
+                <div class="summary-card" style="background: #f0fdf4; border: 1px solid #bbf7d0;">
+                    <h5 style="color: #166534; font-size: 14px;">📈 ВАЛОВАЯ ПРИБЫЛЬ</h5>
+                    <div style="font-size: 24px; font-weight: 800; color: #15803d;">
+                        <span th:text="${#numbers.formatInteger(totalProfit, 1, 'WHITESPACE') + ' ֏'}"></span>
+                    </div>
+                    <small style="color: #166534;">Доход за вычетом закупки</small>
+                </div>
+            </div>
+
             <div class="summary-card" style="background: white; flex-direction: column;">
                 <h5 style="font-weight: 700;">🚛 ЛОГИСТИКА И МАРШРУТЫ</h5>
                 <div class="d-flex gap-2 mt-2">

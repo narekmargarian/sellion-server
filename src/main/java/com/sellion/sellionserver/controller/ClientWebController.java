@@ -13,8 +13,6 @@ import org.springframework.web.bind.annotation.*;
 public class ClientWebController {
     private final ClientRepository clientRepository;
 
-    // ... listClients и updateClient методы не нужны, т.к. данные в MainWebController ...
-
     @PostMapping("/create")
     public String createClient(@ModelAttribute Client client) {
         clientRepository.save(client);

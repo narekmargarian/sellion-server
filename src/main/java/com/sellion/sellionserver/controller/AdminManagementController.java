@@ -54,6 +54,8 @@ public class AdminManagementController {
         if (deliveryDateString != null && !deliveryDateString.isEmpty()) {
             try {
                 order.setDeliveryDate(LocalDate.parse(deliveryDateString, RU_DATE_FORMATTER));
+//                order.setDeliveryDate(LocalDate.parse(deliveryDateString));
+
             } catch (DateTimeParseException e) {
                 return ResponseEntity.badRequest().body(Map.of("error", "Неверный формат даты: " + deliveryDateString));
             }
@@ -156,6 +158,7 @@ public class AdminManagementController {
         if (returnDateString != null && !returnDateString.isEmpty()) {
             try {
                 ret.setReturnDate(LocalDate.parse(returnDateString, RU_DATE_FORMATTER));
+//                ret.setReturnDate(LocalDate.parse(returnDateString));
             } catch (DateTimeParseException e) {
                 return ResponseEntity.badRequest().body(Map.of("error", "Неверный формат даты возврата: " + returnDateString));
             }
