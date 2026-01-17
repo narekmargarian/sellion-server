@@ -53,6 +53,7 @@ public class Order {
 
     @JsonProperty("totalAmount")
     private Double totalAmount;
+    private Double totalPurchaseCost;
 
     // НОВОЕ ПОЛЕ: Ссылка на инвойс (счёт), если он создан
     private Long invoiceId;

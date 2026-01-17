@@ -1,6 +1,6 @@
 package com.sellion.sellionserver.controller;
 
-import com.sellion.sellionserver.entity.*; // Импорт всех сущностей и Enum
+import com.sellion.sellionserver.entity.*;
 import com.sellion.sellionserver.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Controller;
@@ -11,10 +11,10 @@ import org.springframework.web.bind.annotation.RequestParam;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
 @Controller
 @RequestMapping("/admin")
 @RequiredArgsConstructor
@@ -55,20 +55,27 @@ public class MainWebController {
                 .mapToDouble(o -> o.getTotalAmount() != null ? o.getTotalAmount() : 0.0)
                 .sum();
 
-        // --- НОВОЕ: РАСЧЕТ ПРИБЫЛИ (КАК В 1С) ---
-        // Считаем: (Цена продажи - Себестоимость закупки) * Кол-во
-        double totalProfit = filteredOrders.stream()
-                .filter(o -> o.getStatus() != OrderStatus.CANCELLED) // Не считаем отмененные
-                .flatMap(o -> o.getItems().entrySet().stream())
-                .mapToDouble(entry -> {
-                    // Ищем актуальные цены товара
-                    return productRepository.findByName(entry.getKey()).map(p -> {
-                        double purchase = (p.getPurchasePrice() != null) ? p.getPurchasePrice() : 0.0;
-                        double sale = (p.getPrice() != null) ? p.getPrice() : 0.0;
-                        return (sale - purchase) * entry.getValue();
-                    }).orElse(0.0);
-                }).sum();
-        model.addAttribute("totalProfit", totalProfit);
+
+        // 1. Выручка
+        double rawSales = filteredOrders.stream()
+                .filter(o -> o.getStatus() != OrderStatus.CANCELLED)
+                .mapToDouble(o -> o.getTotalAmount() != null ? o.getTotalAmount() : 0.0)
+                .sum();
+
+// 2. Себестоимость
+        double rawPurchaseCost = filteredOrders.stream()
+                .filter(o -> o.getStatus() != OrderStatus.CANCELLED)
+                .mapToDouble(o -> o.getTotalPurchaseCost() != null ? o.getTotalPurchaseCost() : 0.0)
+                .sum();
+
+// 3. Чистая прибыль - округляем до ближайшего целого числа
+        long netProfit = Math.round(rawSales - rawPurchaseCost);
+
+        model.addAttribute("totalSales", Math.round(rawSales));
+        model.addAttribute("totalPurchaseCost", Math.round(rawPurchaseCost));
+        model.addAttribute("netProfit", netProfit);
+
+
 
         // 2. ЛОГИКА ДЛЯ ВОЗВРАТОВ
         String rStart = (returnStartDate != null && !returnStartDate.isEmpty()) ? returnStartDate : today;

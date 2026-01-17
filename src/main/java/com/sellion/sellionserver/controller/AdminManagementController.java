@@ -13,6 +13,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 
@@ -77,11 +78,16 @@ public class AdminManagementController {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
 
-        // 5. Пересчет суммы и сохранение
-        double newTotal = calculateTotal(newItems);
+        // 5. Пересчет суммы и себестоимости при редактировании заказа
+        Map<String, Double> totals = calculateTotalSaleAndCost(newItems);
+        double newTotal = totals.get("totalSale");
+        double newPurchaseCost = totals.get("totalCost");
+
         order.setItems(newItems);
         order.setTotalAmount(newTotal);
+        order.setTotalPurchaseCost(newPurchaseCost); // Теперь и при правке пишется себестоимость
         orderRepository.save(order);
+
 
         // 6. Запись в общий аудит админки
         AuditLog log = new AuditLog();
@@ -169,7 +175,11 @@ public class AdminManagementController {
         ret.setReturnReason(ReasonsReturn.fromString((String) payload.get("returnReason")));
 
         Map<String, Integer> newItems = (Map<String, Integer>) payload.get("items");
-        double newTotal = calculateTotal(newItems);
+
+// Используем наш новый метод и берем только цену продажи
+        Map<String, Double> totals = calculateTotalSaleAndCost(newItems);
+        double newTotal = totals.get("totalSale");
+
         ret.setItems(newItems);
         ret.setTotalAmount(newTotal);
         returnOrderRepository.save(ret);
@@ -215,6 +225,10 @@ public class AdminManagementController {
         order.setStatus(OrderStatus.RESERVED);
         order.setCreatedAt(LocalDateTime.now().format(DATETIME_FORMATTER));
 
+        Map<String, Double> totals = calculateTotalSaleAndCost(order.getItems());
+        order.setTotalAmount(totals.get("totalSale"));
+        order.setTotalPurchaseCost(totals.get("totalCost")); // Устанавливаем себестоимость
+
         stockService.reserveItemsFromStock(order.getItems(), "Ручной заказ #" + order.getId());
         Order saved = orderRepository.save(order);
 
@@ -226,7 +240,7 @@ public class AdminManagementController {
         log.setEntityType("ORDER");
         auditLogRepository.save(log);
 
-        return ResponseEntity.ok(Map.of("message", "Заказ создан и списан со склада", "id", saved.getId()));
+        return ResponseEntity.ok(Map.of("message", "Заказ создан", "id", saved.getId(), "totalCost", totals.get("totalCost")));
     }
 
     @PostMapping("/returns/{id}/confirm")
@@ -304,13 +318,18 @@ public class AdminManagementController {
         return ResponseEntity.ok(Map.of("message", "Возврат успешно удален"));
     }
 
-    private double calculateTotal(Map<String, Integer> items) {
-        double total = 0;
+    private Map<String, Double> calculateTotalSaleAndCost(Map<String, Integer> items) {
+        double totalSale = 0;
+        double totalCost = 0;
         for (Map.Entry<String, Integer> entry : items.entrySet()) {
             Product p = productRepository.findByNameWithLock(entry.getKey())
                     .orElseThrow(() -> new RuntimeException("Товар не найден: " + entry.getKey()));
-            total += p.getPrice() * entry.getValue();
+            totalSale += p.getPrice() * entry.getValue();
+            totalCost += (p.getPurchasePrice() != null ? p.getPurchasePrice() : 0.0) * entry.getValue();
         }
-        return total;
+        Map<String, Double> result = new HashMap<>();
+        result.put("totalSale", totalSale);
+        result.put("totalCost", totalCost);
+        return result;
     }
 }

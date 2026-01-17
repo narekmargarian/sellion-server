@@ -588,6 +588,7 @@ async function loadClientStatement(id) {
     const start = document.getElementById('statement-start').value;
     const end = document.getElementById('statement-end').value;
     const tbody = document.getElementById('client-transactions-body');
+    const scrollContainer = document.getElementById('table-scroll-container-client'); // Контейнер таблицы
 
     if (!start || !end) return showToast("Выберите даты периода", "error");
 
@@ -611,11 +612,19 @@ async function loadClientStatement(id) {
                     <td style="font-weight:700;">${tx.balanceAfter.toLocaleString()} ֏</td>
                 </tr>`;
             }).join('') || '<tr><td colspan="5" style="text-align:center;">За этот период операций не найдено</td></tr>';
+
+            // --- НОВОЕ: Автоматический скролл вниз после загрузки ---
+            if (scrollContainer) {
+                setTimeout(() => {
+                    scrollContainer.scrollTop = scrollContainer.scrollHeight;
+                }, 100);
+            }
         }
     } catch (e) {
-        tbody.innerHTML = '<tr><td colspan="5" style="color:red; text-align:center;">Ошибка загрузки истории</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" style="color:red; text-align:center;">Ошибка загрузки</td></tr>';
     }
 }
+
 
 // ПЕЧАТЬ С УЧЕТОМ ВЫБРАННЫХ ДАТ
 window.printClientStatement = function(id) {
@@ -631,20 +640,6 @@ window.printClientStatement = function(id) {
     printAction(url);
 };
 
-// Эту функцию вынеси отдельно, чтобы она не была внутри других функций
-window.printClientStatement = function(id) {
-    // Берем даты прямо из полей ввода на экране
-    const start = document.getElementById('statement-start').value;
-    const end = document.getElementById('statement-end').value;
-
-    if (!start || !end) {
-        showToast("Сначала выберите период", "error");
-        return;
-    }
-
-    const url = `/admin/clients/print-statement/${id}?start=${start}&end=${end}`;
-    printAction(url);
-};
 
 
 

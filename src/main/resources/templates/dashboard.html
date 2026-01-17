@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ru" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.w3.org/1999/xhtml">
+<html lang="ru" xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="UTF-8">
     <title>Sellion ERP 2026</title>
@@ -10,7 +10,6 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com" rel="stylesheet">
-
 
 
     <link rel="stylesheet" th:href="@{/css/style.css}">
@@ -64,7 +63,7 @@
 
             <div class="filter-bar">
                 <input type="text" id="search-orders" onkeyup="filterTable('search-orders', 'orders-table-body')"
-                       placeholder="🔎 Поиск по магазину..." class="form-control w-25">
+                       placeholder="Поиск по магазину..." class="form-control w-25">
 
                 <form method="get" th:action="@{/admin}" class="d-inline-flex gap-2 align-items-center">
                     <input type="hidden" name="activeTab" value="tab-orders">
@@ -75,15 +74,15 @@
                     <input type="date" name="orderEndDate" class="form-control" th:value="${orderEndDate}">
 
                     <select name="orderManagerId" onchange="this.form.submit()" class="form-select">
-                        <option value="">Все менеджеры (Заказы)</option>
+                        <option value="">Все менеджеры</option>
                         <option th:each="m : ${managers}" th:value="${m}" th:text="${m}"
                                 th:selected="${m == selectedOrderManager}"></option>
                     </select>
 
-                    <button type="submit" class="btn-primary">Показать</button>
-                    <button type="button" class="btn-primary" style="background:#555;" onclick="printOrderList()">🖨️ Печать</button>
+                    <button type="submit" class="btn-primary">&#10227</button>
+                    <button type="button" class="btn-primary" onclick="printOrderList()">&#9113</button>
                 </form>
-                <button class="btn-primary" onclick="openCreateOrderModal()">+ Создать заказ</button>
+                <button class="btn-primary" onclick="openCreateOrderModal()">+</button>
 
             </div>
 
@@ -214,15 +213,18 @@
         <div id="tab-returns" class="tab-pane">
 
             <div class="summary-card" style="background: #fff1f2; border-color: #fecdd3;">
-                <div class="summary-item"><small>Возвратов всего:</small>
-                    <span th:text="${totalReturnsCount}">0</span>
-                </div>
-                <div class="summary-item"><small>Сумма возвратов:</small>
-                    <span class="price-down"
-                          th:text="${#numbers.formatInteger(totalReturnsSum, 1, 'WHITESPACE') + ' ֏'}">0</span>
-                </div>
+
+                    <div class="summary-item"><small>Возвратов всего:</small>
+                        <span th:text="${totalReturnsCount}">0</span>
+                    </div>
+                    <div class="summary-item"><small>Сумма возвратов:</small>
+                        <span class="price-down"
+                              th:text="${#numbers.formatInteger(totalReturnsSum, 1, 'WHITESPACE') + ' ֏'}">0</span>
+                    </div>
             </div>
             <div class="filter-bar">
+                <input type="text" id="search-returns" onkeyup="filterTable('search-returns', 'returns-table-body')"
+                       placeholder="Поиск по возврату..." class="form-control w-25">
                 <form method="get" th:action="@{/admin}" class="d-inline-flex gap-2 align-items-center">
                     <input type="hidden" name="activeTab" value="tab-returns">
 
@@ -232,15 +234,16 @@
                     <input type="date" name="returnEndDate" class="form-control" th:value="${returnEndDate}">
 
                     <select name="returnManagerId" onchange="this.form.submit()" class="form-select">
-                        <option value="">Все менеджеры (Возвраты)</option>
+                        <option value="">Все менеджеры</option>
                         <option th:each="m : ${managers}" th:value="${m}" th:text="${m}"
                                 th:selected="${m == selectedReturnManager}"></option>
                     </select>
 
-                    <button type="submit" class="btn-primary">Показать</button>
-                    <button type="button" class="btn-primary" style="background:#555;" onclick="printReturnList()">🖨️ Печать</button>
+                    <button type="submit" class="btn-primary">&#10227</button>
+                    <button type="button" class="btn-primary" onclick="printReturnList()">🖨️</button>
                 </form>
-                <button class="btn-primary" onclick="openCreateReturnModal()">+ Добавить возврат</button>
+
+                <button class="btn-primary" onclick="openCreateReturnModal()">+</button>
             </div>
 
             <div class="table-container">
@@ -256,7 +259,8 @@
                     </tr>
                     </thead>
                     <tbody id="returns-table-body">
-                    <tr th:each="r : ${returns}" th:onclick="'openReturnDetails(' + ${r.id} + ')'" style="cursor:pointer;">
+                    <tr th:each="r : ${returns}" th:onclick="'openReturnDetails(' + ${r.id} + ')'"
+                        style="cursor:pointer;">
 
                         <!-- ИСПРАВЛЕНО: Теперь показываем createdAt в главной таблице -->
                         <td th:with="dt=${r.createdAt}"
@@ -292,8 +296,9 @@
         <div id="tab-clients" class="tab-pane">
             <div class="filter-bar">
                 <input type="text" id="search-clients" onkeyup="filterTable('search-clients', 'clients-table-body')"
-                       placeholder="🔎 Поиск клиента или адреса..." class="form-control w-25">
-                <button class="btn-primary" onclick="openModal('modal-client')">+ Добавить клиента</button>
+                       placeholder="Поиск клиента или адреса..." class="form-control w-25">
+                <button class="btn-primary" onclick="openModal('modal-client')">+ Добвить
+                </button>
             </div>
             <div class="table-container">
                 <table class="table">
@@ -315,15 +320,21 @@
                 </table>
             </div>
         </div>
-
+        <!-------------------------------------->
         <!-- ВКЛАДКА СКЛАД -->
-        <div id="tab-products" class="tab-pane">
+        <div id="tab-products" class="tab-pane active">
+
+            <!-- Шапка вкладки -->
             <div class="filter-bar">
+
                 <input type="text" id="search-products" onkeyup="filterTable('search-products', 'products-table-body')"
-                       placeholder="🔎 Поиск товара или штрих-кода..."
-                       style="padding:8px; border-radius:8px; border:1px solid #ddd; flex-grow:1; margin-right:10px;">
-                <button class="btn-primary" onclick="openModal('modal-product-create-new')">+ Новый товар</button>
+                       placeholder="Поиск по складу..." class="form-control w-25">
+                <button class="btn-primary" onclick="openModal('modal-product-create-new')">Новый товар
+                </button>
+
             </div>
+
+            <!-- Контейнер таблицы -->
             <div class="table-container">
                 <table class="table">
                     <thead>
@@ -333,20 +344,22 @@
                         <th>Остаток</th>
                         <th>Упак.</th>
                         <th>Штрих-код</th>
-                        <th>Действие</th>
+                        <th style="width: 100px; text-align: right;">Действие</th>
                     </tr>
                     </thead>
                     <tbody id="products-table-body">
                     <tr th:each="p : ${products}" th:onclick="'openProductDetails(' + ${p.id} + ')'"
-                        style="cursor:pointer;">
-                        <td th:text="${p.name}" style="font-weight:600"></td>
+                        class="cursor-pointer">
+                        <td class="fw-bold" th:text="${p.name}"></td>
                         <td th:text="${#numbers.formatInteger(p.price, 1, 'WHITESPACE') + ' ֏'}"></td>
-                        <td th:text="${p.stockQuantity + ' шт.'}"></td>
-                        <td th:text="${p.itemsPerBox}"></td>
-                        <td th:text="${p.barcode}"></td>
                         <td>
-                            <button class="btn-primary" style="padding:5px 10px;"
-                                    th:onclick="'event.stopPropagation(); editProduct(' + ${p.id} + ')'">Изменить
+                            <span class="badge" th:text="${p.stockQuantity + ' шт.'}"></span>
+                        </td>
+                        <td th:text="${p.itemsPerBox}"></td>
+                        <td class="text-muted" th:text="${p.barcode}"></td>
+                        <td onclick="event.stopPropagation()" style="text-align: right;">
+                            <button class="btn-air btn-sm" th:onclick="'editProduct(' + ${p.id} + ')'">
+                                Изменить
                             </button>
                         </td>
                     </tr>
@@ -355,99 +368,100 @@
             </div>
         </div>
 
+
+        <!-------------------------------------->
+        <!--        stexic main n e-->
+
+
         <div id="tab-main" class="tab-pane">
-            <div class="row g-3">
-                <!-- 1. Блок Статистики -->
-                <div class="col-md-4">
-                    <div class="summary-card"
-                         style="background: white; flex-direction: column; align-items: flex-start; gap: 10px; height: 100%;">
-                        <h5 style="color: var(--text-muted); font-size: 14px; margin: 0;">📊 ПОКАЗАТЕЛИ СЕГОДНЯ</h5>
-                        <div style="font-size: 20px; font-weight: 800; margin-top: 10px;">
-                            Средний чек: <span class="price-up" id="stat-avg-check">0 ֏</span>
-                        </div>
-                        <div style="font-size: 16px;">
-                            Заказов в ожидании: <b id="stat-pending-orders">0</b>
-                        </div>
+            <div class="modern-grid-top"
+                 style="grid-template-columns: 1fr 1fr 1.2fr 0.8fr; gap: 15px; margin-bottom: 20px;">
+
+                <!-- 1. Средний чек -->
+                <div class="glass-card">
+                    <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 4px;">
+                        <span class="dot dot-accent"></span>Средний чек
+                    </div>
+                    <div style="font-size: 22px; font-weight: 800; letter-spacing: -0.5px;" id="stat-avg-check">0 ֏
+                    </div>
+                    <div style="font-size: 11px; color: #64748b; margin-top: 2px;">Ожидает: <span
+                            id="stat-pending-orders" style="font-weight: 700;">0</span></div>
+                </div>
+
+                <!-- 2. Прибыль -->
+                <div class="glass-card"
+                     style="background: linear-gradient(to bottom right, #ffffff, #f0fdf4) !important;">
+                    <div style="font-size: 11px; font-weight: 700; color: #15803d; text-transform: uppercase; margin-bottom: 4px;">
+                        <span class="dot" style="background: #22c55e;"></span>Прибыль
+                    </div>
+                    <div style="font-size: 22px; font-weight: 800; color: #15803d; letter-spacing: -0.5px;"
+                         th:text="${#numbers.formatInteger(netProfit, 1, 'WHITESPACE') + ' ֏'}">0 ֏
                     </div>
                 </div>
 
-                <!-- 2. Блок Импорта -->
-                <div class="col-md-4">
-                    <div class="summary-card"
-                         style="background: white; flex-direction: column; align-items: flex-start; gap: 10px; height: 100%;">
-                        <h5 style="color: var(--text-muted); font-size: 14px; margin: 0;">🔌 ИМПОРТ ДАННЫХ
-                            (Excel/1C)</h5>
-                        <div style="width: 100%; display: flex; flex-direction: column; gap: 8px; margin-top: 10px;">
-                            <button class="btn-primary" style="width: 100%; background: #6366f1;"
-                                    onclick="triggerImport()">
-                                Загрузить приход товара
-                            </button>
-                            <button class="btn-primary" style="width: 100%; background: #64748b;"
-                                    onclick="exportInventory()">
-                                Выгрузить остатки
-                            </button>
-                        </div>
+                <!-- 3. Управление данными (Кнопки в ряд) -->
+                <div class="glass-card">
+                    <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 8px;">
+                        Actions
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn-ghost" style="flex: 1;" onclick="triggerImport()">
+                            <i class="fas fa-download" style="margin-right: 5px; opacity: 0.5;"></i> Import
+                        </button>
+                        <button class="btn-ghost" style="flex: 1;" onclick="exportInventory()">
+                            <i class="fas fa-upload" style="margin-right: 5px; opacity: 0.5;"></i> Export
+                        </button>
                     </div>
                 </div>
 
-                <!-- 3. Блок "Кто в сети" -->
-                <div class="col-md-4">
-                    <div class="summary-card"
-                         style="background: white; flex-direction: column; align-items: flex-start; gap: 10px; height: 100%;">
-                        <h5 style="color: var(--text-muted); font-size: 14px; margin: 0;">🟢 СЕЙЧАС В СИСТЕМЕ</h5>
-                        <div id="online-users-list"
-                             style="display: flex; flex-direction: column; gap: 5px; margin-top: 10px; width: 100%;">
-                            <span class="badge" style="background: #dcfce7; color: #166534; width: fit-content;">Администратор (Вы)</span>
-                        </div>
+                <!-- 4. Статус системы -->
+                <div class="glass-card" style="align-items: center; text-align: center;">
+                    <div style="font-size: 10px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 5px;">
+                        System
                     </div>
-                </div>
-            </div> <!-- Конец row g-3 -->
-<!--            <div class="col-md-4" sec:authorize="hasRole('ADMIN')">-->
-            <div class="col-md-4">
-                <div class="summary-card" style="background: #f0fdf4; border: 1px solid #bbf7d0;">
-                    <h5 style="color: #166534; font-size: 14px;">📈 ВАЛОВАЯ ПРИБЫЛЬ</h5>
-                    <div style="font-size: 24px; font-weight: 800; color: #15803d;">
-                        <span th:text="${#numbers.formatInteger(totalProfit, 1, 'WHITESPACE') + ' ֏'}"></span>
+                    <div style="display: flex; align-items: center; background: #f0fdf4; padding: 6px 12px; border-radius: 12px;">
+                        <span class="dot dot-online"></span>
+                        <span style="font-size: 12px; font-weight: 700; color: #166534;">Online</span>
                     </div>
-                    <small style="color: #166534;">Доход за вычетом закупки</small>
+                    <div style="font-size: 10px; color: #94a3b8; margin-top: 4px;">Admin Mode</div>
                 </div>
             </div>
-
-            <div class="summary-card" style="background: white; flex-direction: column;">
-                <h5 style="font-weight: 700;">🚛 ЛОГИСТИКА И МАРШРУТЫ</h5>
-                <div class="d-flex gap-2 mt-2">
-                    <select id="route-manager-select" class="form-select">
-                        <option th:each="m : ${managers}" th:value="${m}" th:text="${m}"></option>
-                    </select>
-                    <input type="date" id="route-date-select" class="form-control" th:value="${#temporals.format(#temporals.createNow(), 'yyyy-MM-dd')}">
-                    <button class="btn-primary" onclick="printRouteSheet()">Печать маршрута</button>
-                </div>
+            <!-- ЛОГИСТИКА: Узкая полоса -->
+            <div class="logistics-bar">
+                <div class="card-label" style="margin: 0; white-space: nowrap;">🚛 Логистика:</div>
+                <select id="route-manager-select" class="form-select form-select-sm border-0 bg-light"
+                        style="max-width: 200px;">
+                    <option th:each="m : ${managers}" th:value="${m}" th:text="${m}"></option>
+                </select>
+                <input type="date" id="route-date-select" class="form-control form-select-sm border-0 bg-light"
+                       style="max-width: 150px;"
+                       th:value="${#temporals.format(#temporals.createNow(), 'yyyy-MM-dd')}">
+                <button class="btn-primary btn-sm" style="height: 32px;" onclick="printRouteSheet()">Печать маршрута
+                </button>
             </div>
 
-            <!-- Секция таблицы (Поступления) идет СРАЗУ после row -->
-            <div class="table-container" style="margin-top: 25px;">
-                <h5 style="padding: 15px; margin: 0; border-bottom: 1px solid var(--border); font-size: 15px; font-weight: 700;">
-                    Последние поступления (Импорт)
-                </h5>
+            <!-- ТАБЛИЦА: Занимает всё оставшееся место -->
+            <div class="table-container" style="flex-grow: 1;">
+                <div style="padding: 12px 20px; border-bottom: 1px solid var(--border); background: #fff; position: sticky; top: 0; z-index: 10;">
+                    <h5 style="margin: 0; font-weight: 700; font-size: 14px; display: flex; align-items: center; gap: 10px;">
+                        Последние операции <span class="badge" style="font-weight: 400;">Audit Log 2026</span>
+                    </h5>
+                </div>
                 <table class="table">
                     <thead>
                     <tr>
-                        <th>Дата</th>
-                        <th>Действие</th>
-                        <th>Детали</th>
+                        <th style="width: 150px;">Дата</th>
+                        <th style="width: 200px;">Действие</th>
+                        <th>Детали операции</th>
                     </tr>
                     </thead>
                     <tbody id="import-log-body">
-                    <!-- В 2026 данные сюда подтянутся через Thymeleaf или JS из AuditLog -->
                     <tr th:each="log : ${auditLogs}">
-                        <td th:text="${#temporals.format(log.timestamp, 'dd.MM.yyyy HH:mm')}"></td>
-                        <td th:text="${log.action}"></td>
+                        <td style="color: var(--text-muted)"
+                            th:text="${#temporals.format(log.timestamp, 'dd.MM HH:mm')}"></td>
+                        <td><span class="badge" style="background: #eef2ff; color: #4338ca; border: none;"
+                                  th:text="${log.action}"></span></td>
                         <td th:text="${log.details}"></td>
-                    </tr>
-                    <tr th:if="${#lists.isEmpty(auditLogs)}">
-                        <td colspan="3" style="text-align:center; color: var(--text-muted); padding: 20px;">История
-                            пуста
-                        </td>
                     </tr>
                     </tbody>
                 </table>
@@ -503,6 +517,7 @@
                     <!--                     style="display: grid; gap: 15px; background: #f8fafc; padding: 15px; border-radius: 10px; margin-top: 10px; flex-shrink: 0;"-->
 
                 </div>
+
 
                 <!-- Здесь можно добавить таблицу заказов клиента, если нужно. Пока оставим пусто -->
                 <div id="table-scroll-container-client" style="flex-grow: 1; overflow-y: auto; margin: 10px 0;">
@@ -623,37 +638,58 @@
                 </div>
             </div>
         </div>
-
-        <!-- ВКЛАДКА ПЕРСОНАЛ -->
+        <!----------------------------------------------------------------->
         <div id="tab-users" class="tab-pane">
-            <div class="filter-bar">
-                <input type="text" id="search-users" onkeyup="filterTable('search-users', 'users-table-body')"
-                       placeholder="🔎 Поиск по логину или ФИО..." class="form-control w-25">
-                <!-- Современная панель администрирования обычно позволяет добавить пользователя через модальное окно -->
-                <button class="btn-primary" onclick="openCreateUserModal()">+ Новый сотрудник</button>
+            <!-- Панель управления -->
+            <div class="d-flex justify-content-between align-items-center mb-4" style="gap: 20px;">
+                <div class="search-wrapper">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="search-users"
+                           onkeyup="filterTable('search-users', 'users-table-body')"
+                           placeholder="Поиск сотрудников..."
+                           class="form-control w-25">
+                </div>
+                <button class="btn-primary" onclick="openCreateUserModal()">
+                    <i class="fas fa-plus"></i> Добавить сотрудника
+                </button>
             </div>
 
+            <!-- Контейнер таблицы -->
             <div class="table-container">
                 <table class="table">
                     <thead>
                     <tr>
+                        <th style="width: 50px;"></th> <!-- Для аватара -->
                         <th>Логин</th>
-                        <th>ФИО</th>
-                        <th>Роль</th>
-                        <th style="width: 150px;">Действие</th>
+                        <th>Сотрудник (ФИО)</th>
+                        <th>Уровень доступа</th>
+                        <th style="width: 150px; text-align: right;">Управление</th>
                     </tr>
                     </thead>
                     <tbody id="users-table-body">
-                    <tr th:each="u : ${users}" style="cursor:pointer;" th:onclick="|openUserDetailsModal('${u.id}')|">
-                        <td th:text="${u.username}" style="font-weight:600;"></td>
-                        <td th:text="${u.fullName}"></td>
+                    <tr th:each="u : ${users}" th:onclick="|openUserDetailsModal('${u.id}')|" class="cursor-pointer">
+                        <!-- Аватар -->
                         <td>
-                    <span th:class="'badge ' + (${u.role == 'ADMIN' ? 'bg-primary text-white' : 'bg-secondary text-white'})"
-                          th:text="${u.role}"></span>
+                            <div class="user-avatar" th:text="${#strings.substring(u.fullName,0,1)}">A</div>
                         </td>
-                        <td onclick="event.stopPropagation()">
-                            <button class="btn-warning" onclick="resetPassword(/*[[${u.id}]]*/[])">
-                                Сброс пароля
+                        <!-- Логин -->
+                        <td th:text="${u.username}" style="font-weight:600; color: var(--accent);"></td>
+                        <!-- ФИО -->
+                        <td>
+                            <div th:text="${u.fullName}" style="font-weight: 700; font-size: 13px;"></div>
+                            <div style="font-size: 11px; color: var(--text-muted);">Активен в системе</div>
+                        </td>
+                        <!-- Роль -->
+                        <td>
+                    <span th:class="'role-badge ' + (${u.role == 'ADMIN' ? 'role-admin' : 'role-user'})"
+                          th:text="${u.role}">
+                    </span>
+                        </td>
+                        <!-- Действие -->
+                        <td onclick="event.stopPropagation()" style="text-align: right;">
+                            <button class="btn-air btn-sm" onclick="resetPassword(/*[[${u.id}]]*/[])"
+                                    title="Сбросить пароль">
+                                <i class="fas fa-key" style="margin-right: 5px;"></i> Сброс
                             </button>
                         </td>
                     </tr>
@@ -661,6 +697,7 @@
                 </table>
             </div>
         </div>
+        <!----------------------------------------------->
 
         <!-- МОДАЛЬНОЕ ОКНО СОЗДАНИЯ СОТРУДНИКА -->
         <div id="modal-user-create" class="modal">
@@ -668,8 +705,10 @@
                 <h2 style="margin-bottom:20px;">🧑‍💻 Добавление нового сотрудника</h2>
                 <div class="modal-info-row">
                     <div style="flex:1">
-                        <label>Логин (Username)</label><input type="text" id="new-u-username" placeholder="op1, acc1, boss">
-                        <label>Полное ФИО</label><input type="text" id="new-u-fullname" placeholder="Иванов Иван Иванович">
+                        <label>Логин (Username)</label><input type="text" id="new-u-username"
+                                                              placeholder="op1, acc1, boss">
+                        <label>Полное ФИО</label><input type="text" id="new-u-fullname"
+                                                        placeholder="Иванов Иван Иванович">
                     </div>
                 </div>
                 <div class="modal-info-row" style="margin-top:10px;">
@@ -685,8 +724,12 @@
                     </div>
                 </div>
                 <div style="display: flex; gap: 10px; margin-top: 25px; justify-content: flex-end;">
-                    <button class="btn-primary" onclick="submitCreateUser()" style="background:#10b981">Создать сотрудника</button>
-                    <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-user-create')">Отмена</button>
+                    <button class="btn-primary" onclick="submitCreateUser()" style="background:#10b981">Создать
+                        сотрудника
+                    </button>
+                    <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-user-create')">
+                        Отмена
+                    </button>
                 </div>
             </div>
         </div>
@@ -731,8 +774,6 @@
         </div>
 
 
-
-
         <!-- МОДАЛЬНОЕ ОКНО ПОДТВЕРЖДЕНИЯ (ТОЧНО КАК НА ИЗОБРАЖЕНИИ) -->
         <dialog id="confirm-modal" class="confirm-modal-image-style">
             <div class="confirm-modal-content">
@@ -748,14 +789,10 @@
         </dialog>
 
 
-
         <!-- Перед вашим script.js -->
 
         <script th:src="@{/js/sockjs.min.js}"></script>
         <script th:src="@{/js/stomp.min.js}"></script>
-
-
-
 
 
         <script th:inline="javascript">

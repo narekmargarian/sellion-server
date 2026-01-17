@@ -1,10 +1,8 @@
 package com.sellion.sellionserver.controller;
 
-import com.sellion.sellionserver.entity.Order;
-import com.sellion.sellionserver.entity.OrderStatus;
-import com.sellion.sellionserver.entity.ReturnOrder;
-import com.sellion.sellionserver.entity.ReturnStatus;
+import com.sellion.sellionserver.entity.*;
 import com.sellion.sellionserver.repository.OrderRepository;
+import com.sellion.sellionserver.repository.ProductRepository;
 import com.sellion.sellionserver.repository.ReturnOrderRepository;
 import com.sellion.sellionserver.services.StockService;
 import jakarta.transaction.Transactional;
@@ -29,6 +27,8 @@ public class SyncController {
     private final ReturnOrderRepository returnOrderRepository;
     private final SimpMessagingTemplate messagingTemplate;
     private final StockService stockService; // ДОБАВЛЕНО
+    private final ProductRepository productRepository;
+
 
     @PostMapping("/orders/sync")
     @Transactional
@@ -43,6 +43,8 @@ public class SyncController {
                     order.setCreatedAt(LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
                 }
 
+                // !!! НОВОЕ: Рассчитываем и устанавливаем себестоимость перед сохранением !!!
+                order.setTotalPurchaseCost(calculatePurchaseCost(order.getItems()));
                 // КРИТИЧЕСКИЙ МОМЕНТ: Списываем товары со склада при получении заказа
                 try {
                     stockService.reserveItemsFromStock(order.getItems(), "Заказ с Android (" + order.getShopName() + ")");
@@ -105,5 +107,16 @@ public class SyncController {
         return ResponseEntity.ok(returnOrderRepository.findReturnsByManagerAndDateRange(managerId, start, end));
     }
 
+    // --- НОВЫЙ ВСПОМОГАТЕЛЬНЫЙ МЕТОД ---
+    private double calculatePurchaseCost(Map<String, Integer> items) {
+        double cost = 0;
+        for (Map.Entry<String, Integer> entry : items.entrySet()) {
+            Product p = productRepository.findByNameAndIsDeletedFalse(entry.getKey())
+                    .orElseThrow(() -> new RuntimeException("Товар не найден: " + entry.getKey()));
+            // Используем цену закупки (purchasePrice)
+            cost += p.getPurchasePrice() != null ? p.getPurchasePrice() * entry.getValue() : 0.0;
+        }
+        return cost;
+    }
 
 }
