@@ -296,7 +296,7 @@ function openOrderDetails(id) {
 
 function enableOrderEdit(id) {
     const order = ordersData.find(o => o.id == id);
-    document.getElementById('modal-title').innerText = "Режим редактирования заказа #" + id;
+    document.getElementById('modal-title').innerText = "Редактирование заказа #" + id;
     const info = document.getElementById('order-info');
 
     let clientOptions = clientsData.map(c => `<option value="${c.name}" ${c.name === order.shopName ? 'selected' : ''}>${c.name}</option>`).join('');
@@ -306,11 +306,13 @@ function enableOrderEdit(id) {
         return `<option value="${val}" ${order.paymentMethod === val ? 'selected' : ''}>${label}</option>`;
     }).join('');
 
+    // ИСПРАВЛЕНО: Теперь вызываем formatOrderDate вместо прямой вставки объекта
+    const formattedDeliveryDate = formatOrderDate(order.deliveryDate);
 
     info.innerHTML = `
         <div class="modal-info-row">
             <div><label>Магазин</label><select id="edit-shop">${clientOptions}</select></div>
-            <div><label>Доставка</label><input type="text" id="edit-delivery" value="${order.deliveryDate || ''}"></div>
+            <div><label>Доставка</label><input type="text" id="edit-delivery" value="${formattedDeliveryDate}"></div>
             <div><label>Оплата</label><select id="edit-payment">${paymentOptions}</select></div>
             <div><label>Отд. Фактура</label>
                 <select id="edit-invoice-type">
@@ -1496,10 +1498,6 @@ async function submitInventoryAdjustment() {
 }
 
 
-// Запустить при старте
-document.addEventListener("DOMContentLoaded", () => {
-    connectWebSocket();
-});
 
 
 // Функции для печати всего списка заказов/возвратов (для доставщиков)
@@ -1525,9 +1523,20 @@ window.printReturnList = function () {
 }
 
 
+
+
+// ИСПРАВЛЕНО: Единая точка входа
 document.addEventListener("DOMContentLoaded", async () => {
-    // Используем await, чтобы дождаться загрузки списка менеджеров перед переключением вкладок
+    console.log("Sellion ERP 2026 initialized");
+
+    // 1. Подключаем сокеты
+    connectWebSocket();
+
+    // 2. Загружаем справочники
     await loadManagerIds();
-    showTab(localStorage.getItem('sellion_tab') || 'tab-orders');
+
+    // 3. Открываем вкладку
+    const lastTab = localStorage.getItem('sellion_tab') || 'tab-orders';
+    showTab(lastTab);
 });
 

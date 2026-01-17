@@ -23,59 +23,55 @@ import java.util.List;
 public class SecurityConfig {
 
     @Bean
-    @Order(1)
-    public SecurityFilterChain apiSecurityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-                .securityMatcher("/api/**")
-                .csrf(AbstractHttpConfigurer::disable)
-                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                // ДОБАВИТЬ ЭТО:
-                .headers(headers -> headers.frameOptions(HeadersConfigurer.FrameOptionsConfig::sameOrigin))
 
-
+        .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/ws-sellion/**").permitAll() // РАЗРЕШАЕМ WS
+                        // Игнорируем запросы от Chrome DevTools
+                        .requestMatchers("/.well-known/**").permitAll()
+                        .requestMatchers("/ws-sellion/**", "/login", "/css/**", "/js/**").permitAll()
+                        .requestMatchers("/api/**", "/admin/**").permitAll()
+                        // Все остальные запросы тоже разрешены
                         .anyRequest().permitAll()
+                )
+
+                // 5. Настройка логина
+                .formLogin(form -> form
+                        .loginPage("/login")         // Указываем вашу страницу
+                        .defaultSuccessUrl("/admin") // Куда идти после логина
+                        .permitAll()
+                )
+
+                // 6. Настройка выхода
+                .logout(logout -> logout
+                        .logoutUrl("/logout")
+                        .logoutSuccessUrl("/login")
+                        .permitAll()
                 );
 
-
         return http.build();
     }
-
-    @Bean
-    @Order(2)
-    public SecurityFilterChain formLoginSecurityFilterChain(HttpSecurity http) throws Exception {
-        http
-                .csrf(AbstractHttpConfigurer::disable)
-                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                // ДОБАВИТЬ ЭТО:
-                .headers(headers -> headers.frameOptions(HeadersConfigurer.FrameOptionsConfig::sameOrigin))
-                .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
-                .formLogin(AbstractHttpConfigurer::disable)
-                .httpBasic(AbstractHttpConfigurer::disable);
-
-        return http.build();
-    }
-
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
+        // В 2026 году для allowCredentials(true) нельзя использовать "*",
+        // нужно использовать setAllowedOriginPatterns
         configuration.setAllowedOriginPatterns(List.of("*"));
-        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true);
+        configuration.setExposedHeaders(List.of("Authorization")); // Полезно для API
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
         return source;
     }
 
-
-    @SuppressWarnings("deprecation")
     @Bean
     public PasswordEncoder passwordEncoder() {
-        // ВАЖНО: NoOpPasswordEncoder только для тестов! Для продакшена используйте BCryptPasswordEncoder
+        // Оставляем NoOp только если это учебный проект/тесты
         return NoOpPasswordEncoder.getInstance();
     }
 }

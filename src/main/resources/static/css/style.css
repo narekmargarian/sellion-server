@@ -596,3 +596,60 @@ body {
 
 .cursor-pointer { cursor: pointer; }
 .fw-bold { font-weight: 700 !important; }
+
+/* Базовый стиль всех кнопок системы */
+.btn-primary, .btn-danger, .btn-success, .btn-warning, .btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 18px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 13px;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    text-decoration: none;
+    gap: 8px;
+}
+
+/* Эффект при наведении для всех кнопок */
+.btn-primary:hover, .btn-danger:hover, .btn-success:hover, .btn-warning:hover {
+    transform: translateY(-1px);
+    filter: brightness(0.9); /* Автоматически притемняет любой цвет */
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+/* Цветовые схемы (только фон и текст) */
+.btn-primary {
+    background: var(--accent);
+    color: white;
+}
+
+.btn-danger {
+    background-color: var(--danger);
+    color: white;
+}
+
+.btn-success {
+    background-color: var(--success) !important;
+    color: white;
+}
+
+.btn-warning {
+    background-color: var(--warning);
+    color: white;
+}
+
+.btn-secondary {
+    background-color: var(--text-muted);
+    color: white;
+}
+
+/* Компактный размер (модификатор) */
+.btn-sm {
+    padding: 5px 10px !important;
+    font-size: 11px !important;
+    border-radius: 6px !important;
+}

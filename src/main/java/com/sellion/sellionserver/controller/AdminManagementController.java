@@ -91,27 +91,33 @@ public class AdminManagementController {
         return ResponseEntity.ok(Map.of("finalSum", newTotal, "message", "Заказ успешно обновлен"));
     }
 
-
     @PostMapping("/orders/{id}/cancel")
     @Transactional
     public ResponseEntity<?> cancelOrder(@PathVariable Long id) {
         Order order = orderRepository.findById(id).orElseThrow();
-        if (order.getStatus() == OrderStatus.PROCESSED) {
-            stockService.returnItemsToStock(order.getItems());
+
+        // ИСПРАВЛЕНО: Убрано условие только для PROCESSED.
+        // Возвращаем товар, если заказ в любом активном статусе (кроме уже отмененного)
+        if (order.getStatus() != OrderStatus.CANCELLED) {
+            stockService.returnItemsToStock(order.getItems(), "Отмена заказа #" + id);
         }
+
         order.setStatus(OrderStatus.CANCELLED);
         orderRepository.save(order);
 
         AuditLog log = new AuditLog();
         log.setUsername("ADMIN");
         log.setAction("ОТМЕНА ЗАКАЗА");
-        log.setDetails("Заказ отменен, товары возвращены на склад");
+        log.setDetails("Заказ #" + id + " отменен, товары возвращены на склад");
         log.setEntityId(id);
         log.setEntityType("ORDER");
         auditLogRepository.save(log);
 
-        return ResponseEntity.ok(Map.of("message", "Заказ отменен, товар вернут на склад"));
+        return ResponseEntity.ok(Map.of("message", "Заказ отменен, товар возвращен на склад"));
     }
+
+
+
 
     @PutMapping("/products/{id}/edit")
     @Transactional
