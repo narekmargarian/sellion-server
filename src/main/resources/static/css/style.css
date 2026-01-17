@@ -583,6 +583,7 @@ body {
 .btn-success:hover {
     background-color: #059669 !important; /* Чуть темнее при наведении */
 }
+
 .btn-sm {
     padding: 5px 10px !important;
     font-size: 11px !important;

@@ -1,13 +1,7 @@
 package com.sellion.sellionserver.controller;
 
-import com.sellion.sellionserver.entity.Order;
-import com.sellion.sellionserver.entity.OrderStatus;
-import com.sellion.sellionserver.entity.Product;
-import com.sellion.sellionserver.entity.ReturnOrder;
-import com.sellion.sellionserver.repository.ClientRepository;
-import com.sellion.sellionserver.repository.OrderRepository;
-import com.sellion.sellionserver.repository.ProductRepository;
-import com.sellion.sellionserver.repository.ReturnOrderRepository;
+import com.sellion.sellionserver.entity.*;
+import com.sellion.sellionserver.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -21,6 +15,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Controller
 @RequestMapping("/admin")
@@ -31,7 +26,7 @@ public class PrintController {
     private final ReturnOrderRepository returnOrderRepository;
     private final ProductRepository productRepository;
     private final ClientRepository clientRepository; // Добавьте в final поля
-
+    private final TransactionRepository transactionRepository;
 
     // Вспомогательный класс для шаблона печати (DTO)
     public static class PrintItemDto {
@@ -182,6 +177,33 @@ public class PrintController {
 
         return "print_route_template";
     }
+
+    @GetMapping("/clients/print-statement/{id}")
+    public String printClientStatement(
+            @PathVariable Long id,
+            @RequestParam String start,
+            @RequestParam String end,
+            Model model) {
+
+        Client client = clientRepository.findById(id).orElseThrow();
+        LocalDate startDate = LocalDate.parse(start);
+        LocalDate endDate = LocalDate.parse(end);
+
+        List<Transaction> transactions = transactionRepository.findAllByClientIdOrderByTimestampAsc(id)
+                .stream()
+                .filter(tx -> !tx.getTimestamp().toLocalDate().isBefore(startDate) &&
+                        !tx.getTimestamp().toLocalDate().isAfter(endDate))
+                .collect(Collectors.toList());
+
+        model.addAttribute("client", client);
+        model.addAttribute("transactions", transactions);
+        model.addAttribute("startDate", start);
+        model.addAttribute("endDate", end);
+        model.addAttribute("title", "Акт сверки");
+
+        return "print_statement_template";
+    }
+
 
 }
 

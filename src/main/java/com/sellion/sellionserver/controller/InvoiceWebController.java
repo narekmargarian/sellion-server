@@ -1,13 +1,11 @@
 package com.sellion.sellionserver.controller;
 
-import com.sellion.sellionserver.entity.Invoice;
-import com.sellion.sellionserver.entity.Order;
-import com.sellion.sellionserver.entity.OrderStatus;
-import com.sellion.sellionserver.entity.Product;
+import com.sellion.sellionserver.entity.*;
 import com.sellion.sellionserver.repository.ClientRepository;
 import com.sellion.sellionserver.repository.InvoiceRepository;
 import com.sellion.sellionserver.repository.OrderRepository;
 import com.sellion.sellionserver.repository.ProductRepository;
+import com.sellion.sellionserver.services.FinanceService;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Controller;
@@ -18,9 +16,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
-
 import java.time.LocalDateTime;
 import java.util.Map;
+
 @Controller
 @RequestMapping("/admin/invoices")
 @RequiredArgsConstructor
@@ -30,6 +28,7 @@ public class InvoiceWebController {
     private final OrderRepository orderRepository;
     private final ClientRepository clientRepository;
     private final ProductRepository productRepository;
+    private final FinanceService financeService;
 
     @PostMapping("/create-from-order/{orderId}")
     @Transactional
@@ -52,6 +51,9 @@ public class InvoiceWebController {
                 return "redirect:/admin?activeTab=tab-orders";
             }
         }
+        // Находим клиента, чтобы получить его ID для финансов
+        Client client = clientRepository.findByName(order.getShopName())
+                .orElseThrow(() -> new RuntimeException("Клиент не найден: " + order.getShopName()));
 
         // Создание Invoice
         Invoice invoice = new Invoice();
@@ -62,19 +64,22 @@ public class InvoiceWebController {
         invoice.setStatus("UNPAID");
         invoiceRepository.save(invoice);
 
-        // Увеличиваем долг клиента
-        clientRepository.findByName(order.getShopName()).ifPresent(client -> {
-            double currentDebt = (client.getDebt() != null) ? client.getDebt() : 0.0;
-            client.setDebt(currentDebt + order.getTotalAmount());
-            clientRepository.save(client);
-        });
+        // ВМЕСТО старого ручного обновления долга вызываем FinanceService
+        financeService.registerOperation(
+                client.getId(),
+                "ORDER",
+                order.getTotalAmount(),
+                order.getId(),
+                "Выставлен счет № " + invoice.getInvoiceNumber()
+        );
+
 
         order.setStatus(OrderStatus.INVOICED);
         order.setInvoiceId(invoice.getId());
         orderRepository.save(order);
 
         // Теперь и здесь успех будет работать!
-        redirectAttributes.addFlashAttribute("success", "Счет успешно выставлен, долг клиента обновлен.");
+        redirectAttributes.addFlashAttribute("success", "Счет выставлен, операция записана в финансовый журнал.");
         return "redirect:/admin?activeTab=tab-invoices";
     }
 

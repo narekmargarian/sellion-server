@@ -25,8 +25,12 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-
-        .csrf(AbstractHttpConfigurer::disable)
+                .csrf(AbstractHttpConfigurer::disable)
+                // --- ДОБАВЛЕНО ДЛЯ ПЕЧАТИ ЧЕРЕЗ IFRAME ---
+                .headers(headers -> headers
+                        .frameOptions(frame -> frame.sameOrigin())
+                )
+                // -----------------------------------------
                 .authorizeHttpRequests(auth -> auth
                         // Игнорируем запросы от Chrome DevTools
                         .requestMatchers("/.well-known/**").permitAll()

@@ -2,6 +2,7 @@ package com.sellion.sellionserver.controller;
 
 import com.sellion.sellionserver.entity.*;
 import com.sellion.sellionserver.repository.*;
+import com.sellion.sellionserver.services.FinanceService;
 import com.sellion.sellionserver.services.StockService;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +27,7 @@ public class AdminManagementController {
     private final StockService stockService;
     private final ClientRepository clientRepository;
     private final AuditLogRepository auditLogRepository;
+    private final FinanceService financeService;
 
     // Форматтер для системных дат (создание записи)
     private static final DateTimeFormatter DATETIME_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
@@ -230,13 +232,22 @@ public class AdminManagementController {
     @PostMapping("/returns/{id}/confirm")
     @Transactional
     public ResponseEntity<?> confirmReturn(@PathVariable Long id) {
-        ReturnOrder ret = returnOrderRepository.findById(id).orElseThrow();
+        ReturnOrder ret = returnOrderRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Возврат не найден"));
+
         if (ret.getStatus() != ReturnStatus.CONFIRMED) {
-            clientRepository.findByName(ret.getShopName()).ifPresent(client -> {
-                double currentDebt = client.getDebt() != null ? client.getDebt() : 0.0;
-                client.setDebt(Math.max(0, currentDebt - ret.getTotalAmount()));
-                clientRepository.save(client);
-            });
+            // Находим клиента по имени из возврата
+            Client client = clientRepository.findByName(ret.getShopName())
+                    .orElseThrow(() -> new RuntimeException("Клиент не найден"));
+
+            // Вызываем сервис финансов
+            financeService.registerOperation(
+                    client.getId(),
+                    "RETURN",
+                    ret.getTotalAmount(),
+                    ret.getId(), // Используем геттер getId()
+                    "Возврат товара (Акт №" + ret.getId() + ")"
+            );
 
             ret.setStatus(ReturnStatus.CONFIRMED);
             returnOrderRepository.save(ret);
@@ -249,7 +260,7 @@ public class AdminManagementController {
             log.setEntityType("RETURN");
             auditLogRepository.save(log);
         }
-        return ResponseEntity.ok(Map.of("message", "Возврат подтвержден, долг клиента уменьшен"));
+        return ResponseEntity.ok(Map.of("message", "Возврат подтвержден и записан в историю"));
     }
 
 

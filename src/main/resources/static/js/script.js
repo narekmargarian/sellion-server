@@ -514,11 +514,19 @@ function cancelClientEdit(id) {
 }
 
 // 2. Полная карточка клиента (все поля)
-function openClientDetails(id) {
+// 2. Полная карточка клиента (все поля)
+async function openClientDetails(id) {
     const client = clientsData.find(c => c.id == id);
     if (!client) return;
     window.currentClientId = id;
+
     document.getElementById('modal-client-title').innerHTML = `Детали клиента <span class="badge">${client.name}</span>`;
+
+    // Установка дат по умолчанию (с 1-го числа текущего месяца по сегодня 2026 года)
+    const now = new Date();
+    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+    const today = now.toISOString().split('T')[0];
+
     const info = document.getElementById('client-info');
     info.innerHTML = `
         <div class="modal-info-row">
@@ -531,13 +539,115 @@ function openClientDetails(id) {
             <div><small>Адрес:</small><br><b>${client.address || '---'}</b></div>
             <div><small>Текущий долг:</small><br><b class="price-down">${(client.debt || 0).toLocaleString()} ֏</b></div>
         </div>
+
+        <!-- БЛОК ВЫБОРА ПЕРИОДА (Как в 1С) -->
+        <div style="margin-top:20px; background: #f1f5f9; padding: 12px; border-radius: 12px; border: 1px solid #cbd5e1;">
+            <label style="font-size: 11px; font-weight: 800; color: var(--text-muted); display:block; margin-bottom:5px;">📅 ПЕРИОД АКТА СВЕРКИ</label>
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <input type="date" id="statement-start" class="form-control" style="font-size: 12px; height: 30px;" value="${firstDay}">
+                <input type="date" id="statement-end" class="form-control" style="font-size: 12px; height: 30px;" value="${today}">
+                <button class="btn-primary" style="padding: 5px 15px; font-size: 12px;" onclick="loadClientStatement(${id})">Обновить</button>
+            </div>
+        </div>
     `;
+
+    const historyContainer = document.getElementById('table-scroll-container-client');
+    historyContainer.innerHTML = `
+        <div class="table-container" style="max-height: 250px; font-size: 11px; margin-top: 15px;">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Дата</th>
+                        <th>Тип</th>
+                        <th>Сумма</th>
+                        <th>Комментарий</th>
+                        <th>Остаток</th>
+                    </tr>
+                </thead>
+                <tbody id="client-transactions-body">
+                    <tr><td colspan="5" style="text-align:center;">Загрузка истории...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    `;
+
     document.getElementById('client-footer-actions').innerHTML = `
+        <button class="btn-primary" style="background:#475569" onclick="printClientStatement(${client.id})">🖨 Печать Акта</button>
         <button class="btn-primary" onclick="enableClientEdit()">Изменить данные</button>
-        <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-client-view')">Закрыть</button>`;
+        <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-client-view')">Закрыть</button>
+    `;
 
     openModal('modal-client-view');
+
+    // Первичная загрузка за выбранный период
+    loadClientStatement(id);
 }
+
+// ФУНКЦИЯ ЗАГРУЗКИ ТРАНЗАКЦИЙ ЗА ПЕРИОД
+async function loadClientStatement(id) {
+    const start = document.getElementById('statement-start').value;
+    const end = document.getElementById('statement-end').value;
+    const tbody = document.getElementById('client-transactions-body');
+
+    if (!start || !end) return showToast("Выберите даты периода", "error");
+
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Загрузка данных...</td></tr>';
+
+    try {
+        const response = await fetch(`/api/clients/${id}/statement?start=${start}&end=${end}`);
+        if (response.ok) {
+            const data = await response.json();
+            const transactions = data.transactions;
+
+            tbody.innerHTML = transactions.map(tx => {
+                const isDebit = tx.type === 'ORDER';
+                const color = isDebit ? '#ef4444' : '#10b981';
+                return `
+                <tr>
+                    <td>${fmt(tx.timestamp)}</td>
+                    <td><span class="badge" style="background:${color}; color:white;">${tx.type}</span></td>
+                    <td style="color:${color}"><b>${isDebit ? '+' : '-'}${tx.amount.toLocaleString()}</b></td>
+                    <td><small>${tx.comment || '---'}</small></td>
+                    <td style="font-weight:700;">${tx.balanceAfter.toLocaleString()} ֏</td>
+                </tr>`;
+            }).join('') || '<tr><td colspan="5" style="text-align:center;">За этот период операций не найдено</td></tr>';
+        }
+    } catch (e) {
+        tbody.innerHTML = '<tr><td colspan="5" style="color:red; text-align:center;">Ошибка загрузки истории</td></tr>';
+    }
+}
+
+// ПЕЧАТЬ С УЧЕТОМ ВЫБРАННЫХ ДАТ
+window.printClientStatement = function(id) {
+    const start = document.getElementById('statement-start').value;
+    const end = document.getElementById('statement-end').value;
+
+    if (!start || !end) {
+        showToast("Сначала выберите период", "error");
+        return;
+    }
+
+    const url = `/admin/clients/print-statement/${id}?start=${start}&end=${end}`;
+    printAction(url);
+};
+
+// Эту функцию вынеси отдельно, чтобы она не была внутри других функций
+window.printClientStatement = function(id) {
+    // Берем даты прямо из полей ввода на экране
+    const start = document.getElementById('statement-start').value;
+    const end = document.getElementById('statement-end').value;
+
+    if (!start || !end) {
+        showToast("Сначала выберите период", "error");
+        return;
+    }
+
+    const url = `/admin/clients/print-statement/${id}?start=${start}&end=${end}`;
+    printAction(url);
+};
+
+
+
 
 function enableClientEdit() {
     const client = clientsData.find(c => c.id === window.currentClientId);
@@ -1361,29 +1471,33 @@ function printAction(url) {
         return;
     }
 
-
-    // Очистка фрейма перед новой загрузкой
+    // 1. Сначала «очищаем» фрейм
     frame.src = "about:blank";
 
-    setTimeout(() => {
-        frame.src = url;
-        frame.onload = function () {
-            // Печатаем только один раз, когда фрейм загрузился
-            try {
-                // Добавляем проверку, чтобы не печатать пустой src
-                if (frame.src === "about:blank") return;
+    // 2. Устанавливаем обработчик события загрузки ПЕРЕД тем как задать URL
+    frame.onload = function () {
+        // Пропускаем, если это очистка фрейма
+        if (frame.src === "about:blank" || frame.contentWindow.location.href === "about:blank") return;
 
-                setTimeout(() => {
-                    frame.contentWindow.focus();
-                    frame.contentWindow.print();
-                }, 500);
+        // Небольшая пауза, чтобы стили 2026 года успели примениться
+        setTimeout(() => {
+            try {
+                frame.contentWindow.focus();
+                frame.contentWindow.print();
             } catch (e) {
-                console.error("Ошибка печати:", e);
+                console.error("Ошибка печати через iframe, открываю в новом окне:", e);
                 window.open(url, '_blank');
             }
-        };
-    }, 100);
+        }, 300);
+
+        // Сбрасываем обработчик, чтобы он не сработал повторно
+        frame.onload = null;
+    };
+
+    // 3. Загружаем реальный URL
+    frame.src = url;
 }
+
 
 function printRouteSheet() {
     const mId = document.getElementById('route-manager-select').value;

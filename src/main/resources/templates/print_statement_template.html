@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="ru" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: 'Inter', sans-serif; font-size: 12px; padding: 20px; }
+        .header { text-align: center; margin-bottom: 30px; }
+        .details { margin-bottom: 20px; border: 1px solid #000; padding: 10px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { border: 1px solid #000; padding: 8px; text-align: left; }
+        th { background: #f2f2f2; }
+        .sum-row { font-weight: bold; background: #fafafa; }
+        .footer { margin-top: 50px; display: flex; justify-content: space-between; }
+        .sign { border-top: 1px solid #000; width: 200px; text-align: center; padding-top: 5px; }
+    </style>
+</head>
+<body>
+<div class="header">
+    <h2>АКТ СВЕРКИ ВЗАИМОРАСЧЕТОВ</h2>
+    <p>за период с <span th:text="${startDate}"></span> по <span th:text="${endDate}"></span></p>
+</div>
+
+<div class="details">
+    <strong>Организация:</strong> SELLION ERP 2026<br>
+    <strong>Контрагент:</strong> <span th:text="${client.name}"></span><br>
+    <strong>Адрес:</strong> <span th:text="${client.address}"></span>
+</div>
+
+<table>
+    <thead>
+    <tr>
+        <th>Дата</th>
+        <th>Документ</th>
+        <th>Дебет (Заказ)</th>
+        <th>Кредит (Оплата/Возврат)</th>
+        <th>Остаток</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr th:each="tx : ${transactions}">
+        <td th:text="${#temporals.format(tx.timestamp, 'dd.MM.yyyy')}"></td>
+        <td th:text="${tx.comment}"></td>
+        <td th:text="${tx.type == 'ORDER' ? #numbers.formatInteger(tx.amount, 1, 'WHITESPACE') : ''}"></td>
+        <td th:text="${tx.type != 'ORDER' ? #numbers.formatInteger(tx.amount, 1, 'WHITESPACE') : ''}"></td>
+        <td th:text="${#numbers.formatInteger(tx.balanceAfter, 1, 'WHITESPACE') + ' ֏'}"></td>
+    </tr>
+    </tbody>
+</table>
+
+<div class="footer">
+    <div>
+        От SELLION ERP:<br><br>
+        <div class="sign">(Подпись, печать)</div>
+    </div>
+    <div>
+        От <span th:text="${client.name}"></span>:<br><br>
+        <div class="sign">(Подпись, печать)</div>
+    </div>
+</div>
+</body>
+</html>

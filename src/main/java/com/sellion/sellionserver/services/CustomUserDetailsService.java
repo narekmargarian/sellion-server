@@ -1,4 +1,4 @@
-package com.sellion.sellionserver.service;
+package com.sellion.sellionserver.services;
 
 import com.sellion.sellionserver.entity.User;
 import com.sellion.sellionserver.repository.UserRepository;
