@@ -35,6 +35,7 @@ body {
     flex-shrink: 0;
 }
 
+
 /* Основная область - ТЕПЕРЬ БЕЗ ОБЩЕГО СКРОЛЛА */
 .main {
     flex-grow: 1;
@@ -689,7 +690,26 @@ body {
 }
 
 /* 2. Основная структура (Layout) */
-.sidebar { width: 260px; background: var(--sidebar); color: white; display: flex; flex-direction: column; flex-shrink: 0; }
+.sidebar {
+    width: 260px;
+    background: var(--sidebar);
+    color: white;
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    height: 100vh;
+    left: 0;
+    top: 0;
+    padding-bottom: 15px;
+}
+
+/* Этот контейнер поможет кнопке выхода всегда прилипать к низу */
+.sidebar form {
+    margin-top: auto !important; /* Выталкивает кнопку максимально вниз */
+    padding: 10px;
+    background: rgba(0,0,0,0.1);
+}
+
 .main { flex-grow: 1; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
 .scroll-area { padding: 25px; display: flex; flex-direction: column; height: 100%; box-sizing: border-box; overflow: hidden; }
 
@@ -1029,4 +1049,48 @@ body {
 /* Когда вкладка активна — она превращается в flex-контейнер */
 .tab-pane.active {
     display: flex;
+}
+/* Строка заголовка категории */
+.category-header-row td {
+    pointer-events: none; /* Чтобы заголовок не реагировал на клики как товар */
+}
+
+/* Эффект при наведении на товар */
+.product-row-hover:hover {
+    background-color: #f1f5f9 !important;
+    transition: background 0.2s ease;
+}
+
+/* Бейдж остатка (красный, если мало товара) */
+.badge.bg-danger {
+    background-color: #fee2e2 !important;
+    color: #991b1b !important;
+    border: 1px solid #fecdd3;
+}
+
+/* Отступ для товаров внутри категории */
+.cursor-pointer td:first-child {
+    position: relative;
+}
+
+.category-header-row:hover td {
+    background-color: #f1f5f9 !important;
+}
+
+/* Плавный переход для иконки стрелочки */
+.category-header-row span {
+    transition: transform 0.2s ease;
+}
+/* Принудительный курсор для заголовков категорий */
+.js-category-toggle {
+    cursor: pointer !important;
+}
+
+.js-category-toggle:hover {
+    background-color: #f1f5f9 !important;
+}
+
+/* Чтобы клик не проваливался мимо строки */
+.js-category-toggle td {
+    pointer-events: auto !important;
 }

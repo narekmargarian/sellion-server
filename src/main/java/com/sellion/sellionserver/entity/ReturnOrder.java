@@ -63,7 +63,6 @@ public class ReturnOrder {
             this.createdAt = now.format(fullFormatter);
         }
 
-        // Логика для returnDate удалена, так как JPA и Jackson автоматически
-        // обработают LocalDate и сохранят его в формате YYYY-MM-DD.
     }
+
 }

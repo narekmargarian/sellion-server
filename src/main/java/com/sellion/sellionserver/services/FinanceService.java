@@ -18,28 +18,27 @@ public class FinanceService {
 
     @Transactional
     public void registerOperation(Long clientId, String type, Double amount, Long refId, String comment) {
-        Client client = clientRepository.findById(clientId)
-                .orElseThrow(() -> new RuntimeException("Клиент не найден"));
+        Client client = clientRepository.findById(clientId).orElseThrow();
 
-        // Вычисляем дельту. Заказ увеличивает долг (+), оплата и возврат уменьшают (-)
         double delta = type.equals("ORDER") ? amount : -amount;
 
-        // Обновляем долг в базе
-        client.setDebt(client.getDebt() + delta);
+        // ИСПРАВЛЕНО: Математически точное округление для 2026 года
+        double newDebt = Math.round((client.getDebt() + delta) * 100.0) / 100.0;
+        client.setDebt(newDebt);
         clientRepository.save(client);
 
-        // Пишем транзакцию (Акт сверки)
         Transaction tx = Transaction.builder()
                 .clientId(client.getId())
                 .clientName(client.getName())
                 .type(type)
                 .referenceId(refId)
                 .amount(amount)
-                .balanceAfter(client.getDebt())
+                .balanceAfter(newDebt)
                 .comment(comment)
                 .timestamp(LocalDateTime.now())
                 .build();
 
         transactionRepository.save(tx);
     }
+
 }

@@ -26,4 +26,14 @@ public class Product {
     private Integer stockQuantity;
     private boolean isDeleted = false; // Флаг мягкого удаления
 
+    public Product(Long id, String name, Double price, Integer itemsPerBox, String barcode, String category, Double purchasePrice, Integer stockQuantity) {
+        this.id = id;
+        this.name = name;
+        this.price = price;
+        this.itemsPerBox = itemsPerBox;
+        this.barcode = barcode;
+        this.category = category;
+        this.purchasePrice = purchasePrice;
+        this.stockQuantity = stockQuantity;
+    }
 }

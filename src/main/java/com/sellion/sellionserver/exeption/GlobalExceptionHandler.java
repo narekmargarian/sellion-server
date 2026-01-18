@@ -22,7 +22,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     public String handleInternalError(Exception ex, Model model) {
         // Логируем ошибку в консоль сервера для отладки
-        System.err.println(">>> КРИТИЧЕСКАЯ ОШИБКА: " + ex.getMessage());
+        System.err.println(">>> КРИТИЧЕСКАЯ ОШИБКА: Ошибка в коде или базе данных :" + ex.getMessage());
         ex.printStackTrace();
 
         model.addAttribute("errorTitle", "Внутренняя ошибка сервера");

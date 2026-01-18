@@ -113,6 +113,9 @@ public class AdminManagementController {
         }
 
         order.setStatus(OrderStatus.CANCELLED);
+        order.setTotalAmount(0.0); // Обнуляем для верности отчетов
+        order.setTotalPurchaseCost(0.0); // Обнуляем себестоимость в отчете
+        orderRepository.save(order);
         orderRepository.save(order);
 
         AuditLog log = new AuditLog();

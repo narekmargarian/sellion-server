@@ -33,54 +33,68 @@ public class SyncController {
     @PostMapping("/orders/sync")
     @Transactional
     public ResponseEntity<?> syncOrders(@RequestBody List<Order> orders) {
-        if (orders != null && !orders.isEmpty()) {
-            orders.forEach(order -> {
-                order.setId(null);
-                order.setStatus(OrderStatus.RESERVED);
+        if (orders == null || orders.isEmpty()) return ResponseEntity.ok(Map.of("status", "empty"));
 
-                // Установка даты создания
-                if (order.getCreatedAt() == null || order.getCreatedAt().isEmpty()) {
-                    order.setCreatedAt(LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
-                }
+        int savedCount = 0;
+        for (Order order : orders) {
+            // Проверка: если такой заказ (по androidId) уже есть — пропускаем
+            if (order.getAndroidId() != null && orderRepository.existsByAndroidId(order.getAndroidId())) {
+                continue;
+            }
 
-                // !!! НОВОЕ: Рассчитываем и устанавливаем себестоимость перед сохранением !!!
-                order.setTotalPurchaseCost(calculatePurchaseCost(order.getItems()));
-                // КРИТИЧЕСКИЙ МОМЕНТ: Списываем товары со склада при получении заказа
-                try {
-                    stockService.reserveItemsFromStock(order.getItems(), "Заказ с Android (" + order.getShopName() + ")");
-                } catch (Exception e) {
-                    // Если товара не хватило, логируем ошибку, но заказ сохраняем (или можно выкинуть ошибку)
-                    System.err.println("Ошибка списания при синхронизации: " + e.getMessage());
-                }
-            });
+            order.setId(null);
+            order.setStatus(OrderStatus.RESERVED);
 
-            orderRepository.saveAll(orders);
-            messagingTemplate.convertAndSend("/topic/new-order", "Новый заказ получен!");
+            if (order.getCreatedAt() == null || order.getCreatedAt().isEmpty()) {
+                order.setCreatedAt(LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
+            }
 
-            return ResponseEntity.ok(Map.of("status", "success", "count", orders.size()));
+            order.setTotalPurchaseCost(calculatePurchaseCost(order.getItems()));
+
+            try {
+                stockService.reserveItemsFromStock(order.getItems(), "Заказ Android: " + order.getShopName());
+                orderRepository.save(order);
+                savedCount++;
+            } catch (Exception e) {
+                System.err.println("Ошибка склада: " + e.getMessage());
+            }
         }
-        return ResponseEntity.ok(Map.of("status", "empty"));
+
+        if (savedCount > 0) messagingTemplate.convertAndSend("/topic/new-order", "Новых заказов: " + savedCount);
+        return ResponseEntity.ok(Map.of("status", "success", "count", savedCount));
     }
 
 
-    // Путь будет: /api/returns/sync
+
     @PostMapping("/returns/sync")
     @Transactional
     public ResponseEntity<?> syncReturns(@RequestBody List<ReturnOrder> returns) {
-        if (returns != null && !returns.isEmpty()) {
-            returns.forEach(ret -> {
-                ret.setId(null);
-                ret.setStatus(ReturnStatus.DRAFT);
-                // ДОБАВЛЕНО: Устанавливаем текущую дату, если Android не прислал
-                if (ret.getCreatedAt() == null || ret.getCreatedAt().isEmpty()) {
-                    ret.setCreatedAt(LocalDateTime.now().toString());
+        if (returns == null || returns.isEmpty()) return ResponseEntity.ok(Map.of("status", "empty"));
+
+        returns.forEach(ret -> {
+            ret.setId(null);
+            ret.setStatus(ReturnStatus.DRAFT);
+
+            // РАСЧЕТ СУММЫ ВОЗВРАТА (чтобы не было 0)
+            double total = 0;
+            if (ret.getItems() != null) {
+                for (Map.Entry<String, Integer> entry : ret.getItems().entrySet()) {
+                    double price = productRepository.findByName(entry.getKey())
+                            .map(Product::getPrice).orElse(0.0);
+                    total += price * entry.getValue();
                 }
-            });
-            returnOrderRepository.saveAll(returns);
-            return ResponseEntity.ok(Map.of("status", "success", "count", returns.size()));
-        }
-        return ResponseEntity.ok(Map.of("status", "empty"));
+            }
+            ret.setTotalAmount(total);
+
+            if (ret.getCreatedAt() == null || ret.getCreatedAt().isEmpty()) {
+                ret.setCreatedAt(LocalDateTime.now().toString());
+            }
+        });
+
+        returnOrderRepository.saveAll(returns);
+        return ResponseEntity.ok(Map.of("status", "success", "count", returns.size()));
     }
+
 
     @GetMapping("/orders/manager/{managerId}/current-month")
     public ResponseEntity<List<Order>> getOrdersByManagerCurrentMonth(@PathVariable String managerId) {

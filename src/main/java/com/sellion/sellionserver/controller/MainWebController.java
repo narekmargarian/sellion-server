@@ -138,8 +138,19 @@ public class MainWebController {
         model.addAttribute("avgCheck", avgCheck);
         model.addAttribute("invoices", invoices);
         model.addAttribute("totalInvoiceDebt", totalInvoiceDebt);
+        // Группировка с сортировкой ключей (TreeMap) для красивого порядка
+        Map<String, List<Product>> groupedProducts = productRepository.findAllActive().stream()
+                .collect(Collectors.groupingBy(
+                        p -> (p.getCategory() == null || p.getCategory().isBlank()) ? "Без категории" : p.getCategory(),
+                        TreeMap::new, // Это автоматически отсортирует категории А-Я
+                        Collectors.toList()
+                ));
 
-        model.addAttribute("products", productRepository.findAllActive() != null ? productRepository.findAllActive() : new ArrayList<>());
+        model.addAttribute("groupedProducts", groupedProducts);
+
+        // Оставляем обычный список для поиска (если он используется в JS)
+        model.addAttribute("products", productRepository.findAllActive());
+
         model.addAttribute("clients", clientRepository.findAllActive() != null ? clientRepository.findAllActive() : new ArrayList<>());
         model.addAttribute("users", userRepository.findAll() != null ? userRepository.findAll() : new ArrayList<>());
 

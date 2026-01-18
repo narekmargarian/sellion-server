@@ -64,6 +64,8 @@ public class Order {
 
     private String comment;
 
+    @Column(unique = true) // База данных сама не даст создать дубликат
+    private String androidId;
 
 
     @PrePersist
@@ -80,10 +82,7 @@ public class Order {
                 this.createdAt = now.format(appFormatter);
             }
         }
-        // deliveryDate теперь LocalDate, JPA автоматически сохранит его в формате YYYY-MM-DD
     }
-
-
 
 }
 

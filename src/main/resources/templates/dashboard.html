@@ -18,24 +18,28 @@
 
 <div class="sidebar">
     <div class="brand">SELLION 2026</div>
+    <div onclick="showTab('tab-main')" class="nav-link" id="btn-main"><i class="bi bi-speedometer2"></i> Обзор</div>
     <div onclick="showTab('tab-orders')" class="nav-link" id="btn-orders"><i class="bi bi-cart"></i> Заказы</div>
+    <div onclick="showTab('tab-delivery')" class="nav-link" id="btn-delivery"><i class="bi bi-truck"></i> Доставка</div>
+    <!-- НОВОЕ -->
     <div onclick="showTab('tab-returns')" class="nav-link" id="btn-returns"><i class="bi bi-arrow-counterclockwise"></i>
         Возвраты
     </div>
     <div onclick="showTab('tab-clients')" class="nav-link" id="btn-clients"><i class="bi bi-people"></i> Клиенты</div>
-    <div onclick="showTab('tab-products')" class="nav-link" id="btn-products"><i class="bi bi-box-seam"></i> Склад /
-        Цены
+    <div onclick="showTab('tab-managers')" class="nav-link" id="btn-managers"><i class="bi bi-person-badge-fill"></i>
+        Менеджеры
+    </div> <!-- НОВОЕ -->
+    <div onclick="showTab('tab-products')" class="nav-link" id="btn-products"><i class="bi bi-box-seam"></i> Склад</div>
+    <div onclick="showTab('tab-invoices')" class="nav-link" id="btn-invoices"><i class="bi bi-file-earmark-text"></i>
+        Счета / Оплата
     </div>
-
-    <div onclick="showTab('tab-invoices')" class="nav-link" id="btn-invoices">
-        <i class="bi bi-file-earmark-text"></i> Счета / Оплата
-    </div>
-    <div onclick="showTab('tab-users')" class="nav-link" id="btn-users"><i class="bi bi-person-badge"></i> Персонал
-    </div>
-
-    <div onclick="showTab('tab-main')" class="nav-link" id="btn-main">
-        <i class="bi bi-speedometer2"></i> Обзор системы
-    </div>
+    <div onclick="showTab('tab-reports')" class="nav-link" id="btn-reports"><i class="bi bi-graph-up"></i> Отчеты</div>
+    <!-- НОВОЕ -->
+    <div onclick="showTab('tab-imports')" class="nav-link" id="btn-imports"><i class="bi bi-cloud-arrow-up"></i> Импорт
+    </div> <!-- НОВОЕ -->
+    <div onclick="showTab('tab-users')" class="nav-link" id="btn-users"><i class="bi bi-shield-lock"></i> Персонал</div>
+    <div onclick="showTab('tab-settings')" class="nav-link" id="btn-settings"><i class="bi bi-gear"></i> Настройки</div>
+    <!-- НОВОЕ -->
 
 
     <form th:action="@{/logout}" method="post" style="margin-top:auto; padding:20px;">
@@ -105,9 +109,7 @@
 
                         style="cursor:pointer;">
                         <!-- ИСПРАВЛЕНО: Безопасное форматирование createdAt -->
-                        <td th:with="dt=${o.createdAt}"
-                            th:text="${dt != null ? #strings.replace((dt.length() > 16 ? #strings.substring(dt, 0, 16) : dt), 'T', ' ') : ''}">
-                        </td>
+                        <td th:text="${o.createdAt != null && o.createdAt.length() >= 10 ? #strings.replace(#strings.substring(o.createdAt, 0, 16), 'T', ' ') : o.createdAt}"></td>
 
 
                         <td th:unless="${o.createdAt != null}"></td>
@@ -121,9 +123,8 @@
                         <!-- ИСПРАВЛЕНО: TRANSFER -> Перевод -->
 
                         <td>
-                            <span class="badge"
-                                  th:text="${o.paymentMethod != null ? o.paymentMethod.displayName : o.status}">
-                             </span>
+                            <span class="badge" th:text="${o.status}"></span>
+                            <small th:text="${o.paymentMethod?.displayName}"></small>
                         </td>
 
 
@@ -214,13 +215,13 @@
 
             <div class="summary-card" style="background: #fff1f2; border-color: #fecdd3;">
 
-                    <div class="summary-item"><small>Возвратов всего:</small>
-                        <span th:text="${totalReturnsCount}">0</span>
-                    </div>
-                    <div class="summary-item"><small>Сумма возвратов:</small>
-                        <span class="price-down"
-                              th:text="${#numbers.formatInteger(totalReturnsSum, 1, 'WHITESPACE') + ' ֏'}">0</span>
-                    </div>
+                <div class="summary-item"><small>Возвратов всего:</small>
+                    <span th:text="${totalReturnsCount}">0</span>
+                </div>
+                <div class="summary-item"><small>Сумма возвратов:</small>
+                    <span class="price-down"
+                          th:text="${#numbers.formatInteger(totalReturnsSum, 1, 'WHITESPACE') + ' ֏'}">0</span>
+                </div>
             </div>
             <div class="filter-bar">
                 <input type="text" id="search-returns" onkeyup="filterTable('search-returns', 'returns-table-body')"
@@ -320,57 +321,103 @@
                 </table>
             </div>
         </div>
-        <!-------------------------------------->
-        <!-- ВКЛАДКА СКЛАД -->
-        <div id="tab-products" class="tab-pane active">
+        <!--       Productssss-->
 
-            <!-- Шапка вкладки -->
+        <div id="tab-products" class="tab-pane">
             <div class="filter-bar">
-
                 <input type="text" id="search-products" onkeyup="filterTable('search-products', 'products-table-body')"
                        placeholder="Поиск по складу..." class="form-control w-25">
-                <button class="btn-primary" onclick="openModal('modal-product-create-new')">Новый товар
-                </button>
-
+                <button class="btn-primary" onclick="openModal('modal-product-create-new')">+ Новый товар</button>
             </div>
 
-            <!-- Контейнер таблицы -->
             <div class="table-container">
                 <table class="table">
                     <thead>
                     <tr>
-                        <th>Товар</th>
+                        <th style="width: 40%;">Товар</th>
                         <th>Цена</th>
                         <th>Остаток</th>
                         <th>Упак.</th>
                         <th>Штрих-код</th>
-                        <th style="width: 100px; text-align: right;">Действие</th>
                     </tr>
                     </thead>
+
+
                     <tbody id="products-table-body">
-                    <tr th:each="p : ${products}" th:onclick="'openProductDetails(' + ${p.id} + ')'"
-                        class="cursor-pointer">
-                        <td class="fw-bold" th:text="${p.name}"></td>
-                        <td th:text="${#numbers.formatInteger(p.price, 1, 'WHITESPACE') + ' ֏'}"></td>
-                        <td>
-                            <span class="badge" th:text="${p.stockQuantity + ' шт.'}"></span>
-                        </td>
-                        <td th:text="${p.itemsPerBox}"></td>
-                        <td class="text-muted" th:text="${p.barcode}"></td>
-                        <td onclick="event.stopPropagation()" style="text-align: right;">
-                            <button class="btn-air btn-sm" th:onclick="'editProduct(' + ${p.id} + ')'">
-                                Изменить
-                            </button>
-                        </td>
-                    </tr>
+                    <th:block th:each="entry, iterStat : ${groupedProducts}">
+                        <!-- Заголовок категории -->
+                        <tr class="js-category-toggle"
+                            th:attr="data-target='cat-' + ${iterStat.index}"
+                            style="cursor: pointer; background: #f8fafc;">
+                            <td colspan="5" style="padding: 12px 15px; border-left: 4px solid var(--accent); border-bottom: 1px solid #e2e8f0;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; pointer-events: none;">
+                    <span style="font-weight: 800; color: #1e293b; text-transform: uppercase; font-size: 11px;">
+                        📂 <span th:text="${entry.key}"></span>
+                    </span>
+                                    <span class="toggle-icon" style="font-size: 10px; color: #94a3b8;">▼</span>
+                                </div>
+                            </td>
+                        </tr>
+
+                        <!-- Товары категории -->
+                        <tr th:each="p : ${entry.value}"
+                            th:class="'cursor-pointer product-row-hover cat-' + ${iterStat.index}"
+                            th:onclick="'openProductDetails(' + ${p.id} + ')'">
+                            <td style="padding-left: 30px;">
+                                <div style="font-weight: 600;" th:text="${p.name}"></div>
+                            </td>
+                            <td th:text="${#numbers.formatInteger(p.price, 1, 'WHITESPACE') + ' ֏'}"></td>
+                            <td>
+                <span th:class="|badge ${p.stockQuantity > 10 ? 'bg-light text-dark' : 'bg-danger text-white'}|"
+                      th:text="${p.stockQuantity + ' шт.'}"></span>
+                            </td>
+                            <td th:text="${p.itemsPerBox}"></td>
+                            <td class="text-muted" style="font-size: 11px;" th:text="${p.barcode}"></td>
+                        </tr>
+                    </th:block>
                     </tbody>
+
+
+
+
                 </table>
             </div>
         </div>
 
 
         <!-------------------------------------->
-        <!--        stexic main n e-->
+
+        <div id="tab-delivery" class="tab-pane">
+            <div class="summary-card" style="background: #eff6ff;">
+                <div class="summary-item"><small>Активных маршрутов:</small> <span th:text="${managers.size()}">0</span>
+                </div>
+                <div class="summary-item"><small>Дата:</small> <span
+                        th:text="${#temporals.format(#temporals.createNow(), 'dd MMMM yyyy')}"></span></div>
+            </div>
+            <div class="logistics-bar" style="margin-top: 20px;">
+                <label>Выберите водителя/менеджера для печати листа:</label>
+                <select id="delivery-manager-select" class="form-select w-25">
+                    <option th:each="m : ${managers}" th:value="${m}" th:text="${m}"></option>
+                </select>
+                <button class="btn-primary" onclick="printRouteSheet()">Сформировать маршрут</button>
+            </div>
+        </div>
+
+        <div id="tab-imports" class="tab-pane">
+            <div class="glass-card" style="max-width: 600px; margin: 20px auto; text-align: center; padding: 40px;">
+                <i class="bi bi-file-earmark-excel" style="font-size: 50px; color: #10b981;"></i>
+                <h3>Загрузка данных из Excel</h3>
+                <p>Выберите файл .xlsx для массового обновления остатков и цен на складе.</p>
+                <button class="btn-primary" style="width: 100%;" onclick="triggerImport()">Выбрать файл и
+                    импортировать
+                </button>
+                <hr>
+                <small>Последние логи импорта можно увидеть во вкладке "Обзор"</small>
+            </div>
+        </div>
+
+
+        <!--        ---------------------->
 
 
         <div id="tab-main" class="tab-pane">
@@ -423,7 +470,7 @@
                         <span class="dot dot-online"></span>
                         <span style="font-size: 12px; font-weight: 700; color: #166534;">Online</span>
                     </div>
-                    <div style="font-size: 10px; color: #94a3b8; margin-top: 4px;">Admin Mode</div>
+                    <div style="font-size: 10px; color: #94a3b8; margin-top: 4px;">ADMIN</div>
                 </div>
             </div>
             <!-- ЛОГИСТИКА: Узкая полоса -->

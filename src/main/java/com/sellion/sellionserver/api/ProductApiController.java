@@ -1,5 +1,6 @@
 package com.sellion.sellionserver.api;
 
+import com.sellion.sellionserver.dto.CategoryGroupDto;
 import com.sellion.sellionserver.entity.AuditLog;
 import com.sellion.sellionserver.entity.Product;
 import com.sellion.sellionserver.entity.StockMovement;
@@ -17,8 +18,10 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
 import java.time.LocalDateTime;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/products")
@@ -116,4 +119,24 @@ public class ProductApiController {
         productRepository.softDeleteById(id);
         return ResponseEntity.ok(Map.of("message", "Товар скрыт (мягко удален)"));
     }
+//TODO AY ES HASCEIN BDI DIME ANDROID@ KATALGI HAMAR
+    @GetMapping("/catalog")
+    public List<CategoryGroupDto> getAndroidCatalog() {
+        // 1. Получаем все активные товары
+        List<Product> allProducts = productRepository.findAllActive();
+
+        // 2. Группируем их по полю category
+        Map<String, List<Product>> grouped = allProducts.stream()
+                .collect(Collectors.groupingBy(p ->
+                        (p.getCategory() == null || p.getCategory().isBlank()) ? "Прочее" : p.getCategory()
+                ));
+
+        // 3. Преобразуем в список DTO для Android
+        return grouped.entrySet().stream()
+                .map(entry -> new CategoryGroupDto(entry.getKey(), entry.getValue()))
+                .sorted(Comparator.comparing(CategoryGroupDto::getCategoryName)) // Сортировка категорий по алфавиту
+                .collect(Collectors.toList());
+    }
+
+
 }

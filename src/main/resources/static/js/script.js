@@ -438,9 +438,10 @@ async function confirmReturn(id) {
 function enableReturnEdit(id) {
     const ret = returnsData.find(r => r.id == id);
     if (!ret) return;
+
     document.getElementById('modal-title').innerText = "Редактирование возврата #" + id;
     const info = document.getElementById('order-info');
-    // info.style.gridTemplateColumns = '1fr';
+
     let reasonOptions = returnReasons.map(r => {
         const val = (typeof r === 'object') ? r.name : r;
         const label = translateReason(r);
@@ -449,10 +450,13 @@ function enableReturnEdit(id) {
 
     let clientOptions = clientsData.map(c => `<option value="${c.name}" ${c.name === ret.shopName ? 'selected' : ''}>${c.name}</option>`).join('');
 
+    // ИСПРАВЛЕНО: Используем formatOrderDate, чтобы не было [object Object]
+    const formattedDate = formatOrderDate(ret.returnDate);
+
     info.innerHTML = `
         <div class="modal-info-row">
             <div><label>Магазин</label><select id="edit-ret-shop">${clientOptions}</select></div>
-            <div><label>Дата возврата</label><input type="text" id="edit-ret-date" value="${ret.returnDate || ''}"></div>
+            <div><label>Дата возврата</label><input type="text" id="edit-ret-date" value="${formattedDate}"></div>
             <div><label>Причина</label><select id="edit-ret-reason">${reasonOptions}</select></div>
         </div>`;
 
@@ -462,6 +466,69 @@ function enableReturnEdit(id) {
         <button class="btn-primary" style="background:#10b981" onclick="saveReturnChanges(${id})">Сохранить</button>
         <button class="btn-primary" style="background:#64748b" onclick="cancelReturnEdit(${id})">Отмена</button>`;
 }
+
+async function saveNewManualOperation(type) {
+    if (Object.keys(tempItems).length === 0) {
+        showToast("Добавьте хотя бы один товар!");
+        return;
+    }
+
+    const url = type === 'order' ? '/api/admin/orders/create-manual' : '/api/returns/sync';
+    const baseDate = document.getElementById('new-op-date').value;
+    if (!baseDate) {
+        showToast("Выберите дату!");
+        return;
+    }
+
+    // ИСПРАВЛЕНО: Более надежный конвертер дат для 2026 года
+    const toRuDate = (isoStr) => {
+        const d = new Date(isoStr);
+        const months = ["января", "февраля", "марта", "апреля", "мая", "июня",
+            "июля", "августа", "сентября", "октября", "ноября", "декабря"];
+        return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+    };
+
+    const russianDate = toRuDate(baseDate);
+    const formattedDateTime = `${baseDate}T${getCurrentTimeFormat()}`;
+
+    const data = {
+        shopName: document.getElementById('new-op-shop').value,
+        managerId: document.getElementById('new-op-manager').value,
+        items: tempItems,
+        totalAmount: calculateCurrentTempTotal(),
+        createdAt: formattedDateTime,
+        androidId: "MANUAL-" + Date.now() // Добавляем ID для защиты от дублей
+    };
+
+    if (type === 'order') {
+        data.comment = document.getElementById('new-op-comment').value;
+        data.deliveryDate = russianDate;
+        data.paymentMethod = document.getElementById('new-op-payment').value;
+        data.needsSeparateInvoice = document.getElementById('new-op-invoice').value === "true";
+    } else {
+        data.returnReason = document.getElementById('new-op-reason').value;
+        data.returnDate = russianDate;
+    }
+
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(type === 'order' ? data : [data])
+        });
+
+        if (response.ok) {
+            showToast("Успешно сохранено", "success");
+            location.reload();
+        } else {
+            const err = await response.json();
+            showStatus(err.error || "Ошибка сохранения", true);
+        }
+    } catch (e) {
+        showStatus("Ошибка сети", true);
+    }
+}
+
 
 function cancelReturnEdit(id) {
     openReturnDetails(id);
@@ -627,7 +694,7 @@ async function loadClientStatement(id) {
 
 
 // ПЕЧАТЬ С УЧЕТОМ ВЫБРАННЫХ ДАТ
-window.printClientStatement = function(id) {
+window.printClientStatement = function (id) {
     const start = document.getElementById('statement-start').value;
     const end = document.getElementById('statement-end').value;
 
@@ -639,9 +706,6 @@ window.printClientStatement = function(id) {
     const url = `/admin/clients/print-statement/${id}?start=${start}&end=${end}`;
     printAction(url);
 };
-
-
-
 
 
 function enableClientEdit() {
@@ -1057,79 +1121,6 @@ function getCurrentTimeFormat() {
 // --- УНИВЕРСАЛЬНОЕ СОХРАНЕНИЕ ---
 // --- 7. УНИВЕРСАЛЬНОЕ СОХРАНЕНИЕ ---
 
-async function saveNewManualOperation(type) {
-    if (Object.keys(tempItems).length === 0) {
-        showToast("Добавьте хотя бы один товар!");
-        return;
-    }
-
-    const url = type === 'order' ? '/api/admin/orders/create-manual' : '/api/returns/sync';
-
-    // 1. Получаем дату из календаря (например, "2026-01-16")
-    const baseDate = document.getElementById('new-op-date').value;
-    if (!baseDate) {
-        showToast("Выберите дату!");
-        return;
-    }
-
-    // 2. Вспомогательная функция для конвертации в русский формат "16 января 2026"
-    // Это именно то, что ожидает ваш сервер в LocalDate
-    const toRuDate = (isoStr) => {
-        const d = new Date(isoStr);
-        const months = ["января", "февраля", "марта", "апреля", "мая", "июня",
-            "июля", "августа", "сентября", "октября", "ноября", "декабря"];
-        return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
-    };
-
-    const russianDate = toRuDate(baseDate); // Результат: "16 января 2026"
-    const formattedDateTime = `${baseDate}T${getCurrentTimeFormat()}`; // Для createdAt
-
-
-    const data = {
-        shopName: document.getElementById('new-op-shop').value,
-        managerId: document.getElementById('new-op-manager').value,
-        items: tempItems,
-        totalAmount: calculateCurrentTempTotal(),
-        createdAt: formattedDateTime,
-        // ОТПРАВЛЯЕМ ЧИСТУЮ ДАТУ ISO
-        deliveryDate: baseDate,
-        returnDate: baseDate
-    };
-
-    // Добавляем специфичные данные
-    if (type === 'order') {
-        data.comment = document.getElementById('new-op-comment').value;
-        // ИСПРАВЛЕНО: Отправляем только дату БЕЗ ВРЕМЕНИ в формате "16 января 2026"
-        data.deliveryDate = russianDate;
-        data.paymentMethod = document.getElementById('new-op-payment').value;
-        data.needsSeparateInvoice = document.getElementById('new-op-invoice').value === "true";
-        data.status = "ACCEPTED";
-    } else {
-        data.returnReason = document.getElementById('new-op-reason').value;
-        // ИСПРАВЛЕНО: Отправляем только дату БЕЗ ВРЕМЕНИ в формате "16 января 2026"
-        data.returnDate = russianDate;
-    }
-
-    try {
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(type === 'order' ? data : [data])
-        });
-
-        if (response.ok) {
-            showToast(`✅ ${type === 'order' ? 'Заказ' : 'Возврат'} успешно создан`, "success");
-            location.reload();
-        } else {
-            const result = await response.json();
-            // Если сервер вернет ошибку валидации даты, мы увидим её здесь
-            showStatus(result.error || "Ошибка сервера при парсинге даты", true);
-        }
-    } catch (e) {
-        showStatus("Ошибка сети", true);
-    }
-}
-
 
 function printInvoiceInline(invoiceId) {
     const url = `/admin/invoices/print/${invoiceId}`;
@@ -1221,38 +1212,56 @@ async function showOrderHistory(orderId) {
 }
 
 
+// --- ИСПРАВЛЕННАЯ ФУНКЦИЯ ПЕРЕКЛЮЧЕНИЯ ТАБОВ ---
 function showTab(tabId) {
     // 1. Стандартная логика переключения
     document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
     const target = document.getElementById(tabId);
     if (target) target.classList.add('active');
+
     document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
     const btnId = tabId.replace('tab-', 'btn-');
-    if (document.getElementById(btnId)) document.getElementById(btnId).classList.add('active');
+    const activeBtn = document.getElementById(btnId);
+    if (activeBtn) activeBtn.classList.add('active');
+
     localStorage.setItem('sellion_tab', tabId);
-    // 2. НОВАЯ ЛОГИКА: Если открыт Обзор, обновляем данные
+
+    // 2. Вызываем обновление только если мы перешли на главную вкладку
     if (tabId === 'tab-main') {
         updateDashboardStats();
     }
 }
 
+// --- ИСПРАВЛЕННАЯ ФУНКЦИЯ ОБНОВЛЕНИЯ СТАТИСТИКИ (БЕЗ ОШИБОК) ---
 function updateDashboardStats() {
-    // Считаем средний чек по актуальным данным ordersData
+    // Проверяем наличие элементов перед тем как что-то в них писать
+    const statAvgCheck = document.getElementById('stat-avg-check');
+    const statPendingOrders = document.getElementById('stat-pending-orders');
+    const onlineList = document.getElementById('online-users-list');
+
+    // Расчет данных
     const totalSum = ordersData.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
     const avg = ordersData.length > 0 ? (totalSum / ordersData.length) : 0;
-    document.getElementById('stat-avg-check').innerText = Math.round(avg).toLocaleString() + " ֏";
-    document.getElementById('stat-pending-orders').innerText = ordersData.filter(o => o.status === 'NEW').length;
+    const pendingCount = ordersData.filter(o => o.status === 'NEW' || o.status === 'RESERVED').length;
 
-    // Имитация "Кто в сети" (в 2026 можно сделать через WebSocket, пока берем из базы)
-    const onlineList = document.getElementById('online-users-list');
-    onlineList.innerHTML = `<span class="badge" style="background:#dcfce7; color:#166534;">● Администратор (Вы)</span>`;
+    // Безопасная запись данных
+    if (statAvgCheck) {
+        statAvgCheck.innerText = Math.round(avg).toLocaleString() + " ֏";
+    }
 
-    // Добавим пару случайных операторов для вида (или из usersData)
-    const operators = ["Оператор Арам", "Оператор Анна"];
-    operators.forEach(op => {
-        onlineList.innerHTML += `<span class="badge" style="background:#f1f5f9; color:#475569;">● ${op}</span>`;
-    });
+    if (statPendingOrders) {
+        statPendingOrders.innerText = pendingCount;
+    }
+
+    if (onlineList) {
+        onlineList.innerHTML = `<span class="badge" style="background:#dcfce7; color:#166534;">● Администратор (Вы)</span>`;
+        const operators = ["Оператор Арам", "Оператор Анна"];
+        operators.forEach(op => {
+            onlineList.innerHTML += `<span class="badge" style="background:#f1f5f9; color:#475569;">● ${op}</span>`;
+        });
+    }
 }
+
 
 async function deleteReturnOrder(id) {
     showConfirmModal("Удалить возврат?", "Вы уверены, что хотите удалить этот возврат?", async () => {
@@ -1577,6 +1586,31 @@ function doInventory() {
     openModal('modal-inventory');
 }
 
+/**
+ * Сворачивание и разворачивание категории товаров
+ * @param {string} categoryClass - уникальный ID категории (напр. 'cat-0')
+ */
+function toggleCategory(categoryClass) {
+    // Находим все строки товаров, у которых есть этот класс
+    const rows = document.getElementsByClassName(categoryClass);
+    const icon = document.getElementById('icon-' + categoryClass);
+
+    if (rows.length === 0) return;
+
+    // Проверяем состояние по первой строке
+    const isHidden = rows[0].style.display === "none";
+
+    for (let i = 0; i < rows.length; i++) {
+        rows[i].style.display = isHidden ? "" : "none";
+    }
+
+    // Меняем иконку
+    if (icon) {
+        icon.innerText = isHidden ? "▼" : "▶";
+    }
+}
+
+
 
 // Отправляет данные с модалки на сервер
 async function submitInventoryAdjustment() {
@@ -1609,8 +1643,6 @@ async function submitInventoryAdjustment() {
 }
 
 
-
-
 // Функции для печати всего списка заказов/возвратов (для доставщиков)
 
 window.printOrderList = function () {
@@ -1634,20 +1666,39 @@ window.printReturnList = function () {
 }
 
 
-
-
 // ИСПРАВЛЕНО: Единая точка входа
 document.addEventListener("DOMContentLoaded", async () => {
     console.log("Sellion ERP 2026 initialized");
 
-    // 1. Подключаем сокеты
-    connectWebSocket();
-
-    // 2. Загружаем справочники
-    await loadManagerIds();
-
-    // 3. Открываем вкладку
+    // Инициализация ваших функций
+    if (typeof connectWebSocket === 'function') connectWebSocket();
+    if (typeof loadManagerIds === 'function') await loadManagerIds();
     const lastTab = localStorage.getItem('sellion_tab') || 'tab-orders';
-    showTab(lastTab);
+    if (typeof showTab === 'function') showTab(lastTab);
+
+    // ЛОГИКА СВОРАЧИВАНИЯ
+    document.body.addEventListener('click', function(e) {
+        // Ищем строку заголовка через восхождение по DOM
+        const header = e.target.closest('.js-category-toggle');
+        if (!header) return;
+
+
+        const targetClass = header.getAttribute('data-target');
+        const rows = document.getElementsByClassName(targetClass);
+        const icon = header.querySelector('.toggle-icon');
+
+        if (rows.length > 0) {
+            // Проверяем состояние первой строки
+            const isHidden = rows[0].style.display === "none";
+
+            for (let i = 0; i < rows.length; i++) {
+                rows[i].style.display = isHidden ? "table-row" : "none";
+            }
+
+            if (icon) {
+                icon.innerText = isHidden ? "▼" : "▶";
+            }
+        }
+    });
 });
 

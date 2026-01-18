@@ -26,8 +26,6 @@ public class ClientApiController {
     private final TransactionRepository transactionRepository;
 
 
-
-
     @GetMapping
     public List<Client> getAllClients() {
         // Возвращаем всех клиентов, отсортированных по имени для удобства в JS
@@ -69,6 +67,7 @@ public class ClientApiController {
 
         return ResponseEntity.ok(response);
     }
+
     @GetMapping("/{id}/transactions")
     public List<Transaction> getClientTransactions(@PathVariable Long id) {
         return transactionRepository.findAllByClientIdOrderByTimestampAsc(id);
