@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -29,7 +30,7 @@ public class ReportApiController {
     private final OrderRepository orderRepository;
     private final ReturnOrderRepository returnOrderRepository;
     private final InvoiceExcelService invoiceExcelService;
-    private final EmailService emailService; // <<< EmailService инжектирован обратно
+    private final EmailService emailService;
 
     // Метод для детального отчета по заказам (возвращает файл или ошибку для toast)
     @GetMapping("/orders-detailed")
@@ -59,15 +60,27 @@ public class ReportApiController {
         return getResponseEntity(workbook, "Detailed_Report_Returns_" + start + ".xlsx");
     }
 
-    // <<< МЕТОД ДЛЯ ОТПРАВКИ НА EMAIL (РАБОТАЕТ ЧЕРЕЗ JSON-ОТВЕТ)
+    // <<< МЕТОД ДЛЯ ОТПРАВКИ НА EMAIL (Теперь с выбором типа отчета) >>>
     @PostMapping("/send-to-accountant")
     public ResponseEntity<?> sendToAccountant(
             @RequestParam String start,
             @RequestParam String end,
-            @RequestParam String email) {
+            @RequestParam String email,
+            @RequestParam(required = false) List<String> types) { // Принимаем список типов: "orders", "returns"
         try {
-            List<Order> orders = orderRepository.findOrdersBetweenDates(start + "T00:00:00", end + "T23:59:59");
-            List<ReturnOrder> returns = returnOrderRepository.findReturnsBetweenDates(start + "T00:00:00", end + "T23:59:59");
+            // Убеждаемся, что список типов не null, если не передан, делаем пустым
+            List<String> reportTypes = (types != null) ? types : Collections.emptyList();
+
+            List<Order> orders = Collections.emptyList();
+            List<ReturnOrder> returns = Collections.emptyList();
+
+            // Загружаем только те данные, которые выбрал пользователь
+            if (reportTypes.contains("orders")) {
+                orders = orderRepository.findOrdersBetweenDates(start + "T00:00:00", end + "T23:59:59");
+            }
+            if (reportTypes.contains("returns")) {
+                returns = returnOrderRepository.findReturnsBetweenDates(start + "T00:00:00", end + "T23:59:59");
+            }
 
             if (orders.isEmpty() && returns.isEmpty()) {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND)
@@ -98,7 +111,7 @@ public class ReportApiController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", "Ошибка: " + e.getMessage()));
         }
     }
-    // >>> КОНЕЦ МЕТОДА EMAIL
+    // >>> КОНЕЦ ИЗМЕНЕННОГО МЕТОДА EMAIL
 
     // Вспомогательный метод для формирования HTTP-ответа с файлом
     private ResponseEntity<byte[]> getResponseEntity(Workbook workbook, String fileName) throws IOException {
@@ -118,6 +131,4 @@ public class ReportApiController {
 
         return new ResponseEntity<>(bytes, headers, HttpStatus.OK);
     }
-
-
 }

@@ -1657,6 +1657,90 @@ async function submitInventoryAdjustment() {
 
 
 
+// function downloadExcel(type) {
+//     const start = document.getElementById('report-start').value;
+//     const end = document.getElementById('report-end').value;
+//
+//     if (!start || !end) {
+//         showToast("Выберите период!", "error");
+//         return;
+//     }
+//
+//     // URL для запросов с использованием fetch
+//     const url = type === 'orders' ?
+//         `/api/reports/excel/orders-detailed?start=${start}&end=${end}` :
+//         `/api/reports/excel/returns-detailed?start=${start}&end=${end}`; // Используем detailed эндпоинт
+//
+//     // Используем fetch для контроля над ответами и показа toast
+//     fetch(url)
+//         .then(response => {
+//             if (response.ok) {
+//                 // Если статус 200 OK, пришел файл. Обрабатываем скачивание:
+//                 return response.blob().then(blob => {
+//                     const downloadUrl = window.URL.createObjectURL(blob);
+//                     const a = document.createElement('a');
+//                     a.style.display = 'none';
+//                     a.href = downloadUrl;
+//                     a.download = `${type}_report_${start}.xlsx`;
+//                     document.body.appendChild(a);
+//                     a.click();
+//                     window.URL.revokeObjectURL(downloadUrl);
+//                     showToast('Отчет успешно скачан!', 'success');
+//                 });
+//             } else {
+//                 // Если ошибка (например, 404), пришел JSON с сообщением
+//                 return response.json().then(data => {
+//                     showToast(data.message || 'Ошибка сервера', 'error');
+//                 });
+//             }
+//         })
+//         .catch(error => {
+//             showToast('Ошибка сети при скачивании отчета.', 'error');
+//         });
+// }
+//
+// // Убедитесь, что у вас есть функция showToast в вашем проекте:
+// // function showToast(message, type) { ... }
+
+
+// async function sendToEmail() {
+//     const start = document.getElementById('report-start').value;
+//     const end = document.getElementById('report-end').value;
+//     const email = document.getElementById('report-email').value;
+//
+//     if (!start || !end || !email) {
+//         showToast("Заполните даты и Email!", "error");
+//         return;
+//     }
+//
+//     // Простая проверка формата email
+//     if (!email.includes('@')) {
+//         showToast("Введите корректный Email", "error");
+//         return;
+//     }
+//
+//     showToast("Формирование и отправка отчета...", "info");
+//
+//     try {
+//         const response = await fetch(`/api/reports/excel/send-to-accountant?start=${start}&end=${end}&email=${encodeURIComponent(email)}`, {
+//             method: 'POST'
+//         });
+//
+//         if (response.ok) {
+//             showToast("✅ Отчет успешно отправлен на " + email, "success");
+//         } else {
+//             const err = await response.json();
+//             showToast("❌ Ошибка: " + (err.error || "Не удалось отправить"), "error");
+//         }
+//     } catch (e) {
+//         showToast("Ошибка сети при отправке почты", "error");
+//     }
+// }
+//
+
+
+
+// Функция для скачивания отдельного типа отчета
 function downloadExcel(type) {
     const start = document.getElementById('report-start').value;
     const end = document.getElementById('report-end').value;
@@ -1666,16 +1750,15 @@ function downloadExcel(type) {
         return;
     }
 
-    // URL для запросов с использованием fetch
     const url = type === 'orders' ?
         `/api/reports/excel/orders-detailed?start=${start}&end=${end}` :
-        `/api/reports/excel/returns-detailed?start=${start}&end=${end}`; // Используем detailed эндпоинт
+        `/api/reports/excel/returns-detailed?start=${start}&end=${end}`;
 
-    // Используем fetch для контроля над ответами и показа toast
+    // Используем fetch для контроля ответа
     fetch(url)
         .then(response => {
             if (response.ok) {
-                // Если статус 200 OK, пришел файл. Обрабатываем скачивание:
+                // Если OK, обрабатываем скачивание файла
                 return response.blob().then(blob => {
                     const downloadUrl = window.URL.createObjectURL(blob);
                     const a = document.createElement('a');
@@ -1688,7 +1771,7 @@ function downloadExcel(type) {
                     showToast('Отчет успешно скачан!', 'success');
                 });
             } else {
-                // Если ошибка (например, 404), пришел JSON с сообщением
+                // Если ошибка (например, 404), показываем toast
                 return response.json().then(data => {
                     showToast(data.message || 'Ошибка сервера', 'error');
                 });
@@ -1699,45 +1782,57 @@ function downloadExcel(type) {
         });
 }
 
-// Убедитесь, что у вас есть функция showToast в вашем проекте:
-// function showToast(message, type) { ... }
-
-
-async function sendToEmail() {
+// Функция для отправки отчета по Email (использует чекбоксы)
+function sendToEmail() {
     const start = document.getElementById('report-start').value;
     const end = document.getElementById('report-end').value;
     const email = document.getElementById('report-email').value;
 
     if (!start || !end || !email) {
-        showToast("Заполните даты и Email!", "error");
+        showToast("Выберите период и введите email!", "error");
         return;
     }
 
-    // Простая проверка формата email
-    if (!email.includes('@')) {
-        showToast("Введите корректный Email", "error");
+    // Собираем выбранные типы отчетов из чекбоксов
+    const types = [];
+    if (document.getElementById('check-orders').checked) {
+        types.push('orders');
+    }
+    if (document.getElementById('check-returns').checked) {
+        types.push('returns');
+    }
+
+    if (types.length === 0) {
+        showToast("Выберите хотя бы один тип отчета (заказы или возвраты)!", "error");
         return;
     }
 
-    showToast("Формирование и отправка отчета...", "info");
+    // Формируем тело запроса для POST (URLSearchParams удобен для form-data)
+    const params = new URLSearchParams();
+    params.append('start', start);
+    params.append('end', end);
+    params.append('email', email);
+    types.forEach(type => params.append('types', type)); // Добавляем каждый тип как отдельный параметр
 
-    try {
-        const response = await fetch(`/api/reports/excel/send-to-accountant?start=${start}&end=${end}&email=${encodeURIComponent(email)}`, {
-            method: 'POST'
+    fetch('/api/reports/excel/send-to-accountant', {
+        method: 'POST',
+        body: params
+    })
+        .then(response => response.json())
+        .then(data => {
+            if (data.message) {
+                showToast(data.message, 'success');
+            } else if (data.error) {
+                showToast(data.error, 'error');
+            }
+        })
+        .catch(error => {
+            showToast('Ошибка сети при отправке отчета.', 'error');
         });
-
-        if (response.ok) {
-            showToast("✅ Отчет успешно отправлен на " + email, "success");
-        } else {
-            const err = await response.json();
-            showToast("❌ Ошибка: " + (err.error || "Не удалось отправить"), "error");
-        }
-    } catch (e) {
-        showToast("Ошибка сети при отправке почты", "error");
-    }
 }
 
-
+// Убедитесь, что эта функция showToast() у вас определена
+// function showToast(text, type = 'info') { ... }
 
 
 

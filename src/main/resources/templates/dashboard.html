@@ -446,6 +446,15 @@
                                placeholder="accountant@company.am" value="accountant@company.am">
                     </div>
 
+                    <!-- Блок выбора типа отчета (НОВЫЕ ЧЕКБОКСЫ) -->
+                    <div>
+                        <label style="font-size: 11px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">Тип данных</label>
+                        <div style="display: flex; gap: 15px; margin-top: 8px; align-items: center; height: 38px;">
+                            <label><input type="checkbox" id="check-orders" checked> Заказы</label>
+                            <label><input type="checkbox" id="check-returns"> Возвраты</label>
+                        </div>
+                    </div>
+
                     <!-- Кнопки действий -->
                     <div style="display: flex; gap: 10px;">
                         <button class="btn-primary" title="Скачать отчет по заказам"
@@ -468,12 +477,13 @@
 
                 <div style="margin-top: 30px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
                     <div style="padding: 15px; background: #f0fdf4; border-radius: 10px; border: 1px solid #bbf7d0; font-size: 12px; color: #166534;">
-                        <b>💡 Инструкция:</b> В конце дня проверьте все заказы и нажмите «Отправить». Письмо уйдет на указанный почтовый ящик. Можно указать несколько адресов через запятую.
+                        <b>💡 Инструкция:</b> В конце дня проверьте все заказы и нажмите «Отправить». Письмо уйдет на указанный почтовый ящик с выбранными типами данных.
                     </div>
                 </div>
             </div>
         </div>
-
+        <!-- Убедитесь, что у вас есть контейнер для toast-уведомлений -->
+        <div id="toast-container" style="position: fixed; bottom: 20px; right: 20px; z-index: 1000;"></div>
 
 
 
