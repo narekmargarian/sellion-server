@@ -39,11 +39,20 @@ public class SyncController {
         if (orders == null || orders.isEmpty()) return ResponseEntity.ok(Map.of("status", "empty"));
 
         int savedCount = 0;
+        LocalDate today = LocalDate.now(); // Текущая дата сервера (2026 год)
         for (Order order : orders) {
-            // Проверка: если такой заказ (по androidId) уже есть — пропускаем
+            // Проверка 1: Дата доставки не может быть в прошлом
+            if (order.getDeliveryDate() != null && order.getDeliveryDate().isBefore(today)) {
+                log.error("Заказ отклонен: дата доставки {} уже прошла", order.getDeliveryDate());
+                continue; // Пропускаем некорректный заказ
+            }
+
+            // Проверка 2: Дубликаты (ваш существующий код)
             if (order.getAndroidId() != null && orderRepository.existsByAndroidId(order.getAndroidId())) {
+                savedCount++;
                 continue;
             }
+
 
             order.setId(null);
             order.setStatus(OrderStatus.RESERVED);

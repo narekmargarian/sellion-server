@@ -20,26 +20,26 @@
     <div class="brand">SELLION 2026</div>
     <div onclick="showTab('tab-main')" class="nav-link" id="btn-main"><i class="bi bi-speedometer2"></i> Обзор</div>
     <div onclick="showTab('tab-orders')" class="nav-link" id="btn-orders"><i class="bi bi-cart"></i> Заказы</div>
-    <div onclick="showTab('tab-delivery')" class="nav-link" id="btn-delivery"><i class="bi bi-truck"></i> Доставка</div>
-    <!-- НОВОЕ -->
+
     <div onclick="showTab('tab-returns')" class="nav-link" id="btn-returns"><i class="bi bi-arrow-counterclockwise"></i>
         Возвраты
     </div>
+    <div onclick="showTab('tab-delivery')" class="nav-link" id="btn-delivery"><i class="bi bi-truck"></i> Доставка</div>
     <div onclick="showTab('tab-clients')" class="nav-link" id="btn-clients"><i class="bi bi-people"></i> Клиенты</div>
     <div onclick="showTab('tab-managers')" class="nav-link" id="btn-managers"><i class="bi bi-person-badge-fill"></i>
         Менеджеры
-    </div> <!-- НОВОЕ -->
+    </div>
     <div onclick="showTab('tab-products')" class="nav-link" id="btn-products"><i class="bi bi-box-seam"></i> Склад</div>
     <div onclick="showTab('tab-invoices')" class="nav-link" id="btn-invoices"><i class="bi bi-file-earmark-text"></i>
         Счета / Оплата
     </div>
     <div onclick="showTab('tab-reports')" class="nav-link" id="btn-reports"><i class="bi bi-graph-up"></i> Отчеты</div>
-    <!-- НОВОЕ -->
+
     <div onclick="showTab('tab-imports')" class="nav-link" id="btn-imports"><i class="bi bi-cloud-arrow-up"></i> Импорт
-    </div> <!-- НОВОЕ -->
+    </div>
     <div onclick="showTab('tab-users')" class="nav-link" id="btn-users"><i class="bi bi-shield-lock"></i> Персонал</div>
     <div onclick="showTab('tab-settings')" class="nav-link" id="btn-settings"><i class="bi bi-gear"></i> Настройки</div>
-    <!-- НОВОЕ -->
+
 
 
     <form th:action="@{/logout}" method="post" style="margin-top:auto; padding:20px;">
@@ -105,39 +105,44 @@
                     </tr>
                     </thead>
                     <tbody id="orders-table-body">
-                    <tr th:each="o : ${orders}" th:onclick="'openOrderDetails(' + ${o.id} + ')'"
+                    <tr th:each="o : ${orders}" th:onclick="'openOrderDetails(' + ${o.id} + ')'" style="cursor:pointer;">
+                        <!-- Дата создания заказа -->
+<!--                        <td th:text="${o.createdAt != null ? #strings.replace(#strings.substring(o.createdAt, 0, 16), 'T', ' ') : '-'}"></td>-->
 
-                        style="cursor:pointer;">
-                        <!-- ИСПРАВЛЕНО: Безопасное форматирование createdAt -->
-                        <td th:text="${o.createdAt != null && o.createdAt.length() >= 10 ? #strings.replace(#strings.substring(o.createdAt, 0, 16), 'T', ' ') : o.createdAt}"></td>
-
-
-                        <td th:unless="${o.createdAt != null}"></td>
+                        <td class="js-date-format" th:text="${o.createdAt}"></td>
 
                         <td th:text="${o.managerId}" style="font-weight:600; color:var(--accent);"></td>
                         <td th:text="${o.shopName}" style="font-weight:700;"></td>
-                        <td class="price-up"
-                            th:text="${#numbers.formatInteger(o.totalAmount, 1, 'WHITESPACE') + ' ֏'}"></td>
-                        <td th:text="${o.deliveryDate}"></td>
+                        <td class="price-up" th:text="${o.totalAmount != null ? #numbers.formatInteger(o.totalAmount, 1, 'WHITESPACE') + ' ֏' : '0 ֏'}"></td>
 
-                        <!-- ИСПРАВЛЕНО: TRANSFER -> Перевод -->
+                        <!-- Дата доставки (технический формат из базы) -->
+<!--                        <td th:text="${o.deliveryDate}"></td>-->
+
+
+
+                        <td class="js-date-format" th:text="${o.deliveryDate}"></td>
+
+
+
 
                         <td>
-                            <span class="badge" th:text="${o.status}"></span>
-                            <small th:text="${o.paymentMethod?.displayName}"></small>
+                            <!-- Статус из Enum (Android шлет RESERVED) -->
+                            <span th:class="|badge ${o.status.name() == 'RESERVED' ? 'bg-info text-white' : (o.status.name() == 'CONFIRMED' ? 'bg-success text-white' : 'bg-primary')}|"
+                                  th:text="${o.status.name() == 'RESERVED' ? 'В резерве' : (o.status.name() == 'CONFIRMED' ? 'Проведено' : 'Новый')}">
+            </span>
+                            <br/>
+                            <small class="text-muted" th:text="${o.paymentMethod != null ? (o.paymentMethod.name() == 'TRANSFER' ? 'Перевод' : 'Наличные') : ''}"></small>
                         </td>
 
-
                         <td onclick="event.stopPropagation()">
-                            <form th:if="${o.invoiceId == null}"
-                                  th:action="@{'/admin/invoices/create-from-order/' + ${o.id}}" method="post">
-                                <button type="submit" class="btn-primary" style="padding:5px 10px; font-size:11px;">
-                                    Счет
-                                </button>
+                            <form th:if="${o.invoiceId == null}" th:action="@{'/admin/invoices/create-from-order/' + ${o.id}}" method="post">
+                                <button type="submit" class="btn-primary" style="padding:5px 10px; font-size:11px;">Счет</button>
                             </form>
+                            <span th:if="${o.invoiceId != null}" class="badge bg-light text-dark" style="border:1px solid #ccc;">Счет №[[${o.invoiceId}]]</span>
                         </td>
                     </tr>
                     </tbody>
+
                 </table>
             </div>
         </div>
@@ -214,7 +219,6 @@
         <div id="tab-returns" class="tab-pane">
 
             <div class="summary-card" style="background: #fff1f2; border-color: #fecdd3;">
-
                 <div class="summary-item"><small>Возвратов всего:</small>
                     <span th:text="${totalReturnsCount}">0</span>
                 </div>
@@ -240,7 +244,7 @@
                                 th:selected="${m == selectedReturnManager}"></option>
                     </select>
 
-                    <button type="submit" class="btn-primary">&#10227</button>
+                    <button type="submit" class="btn-primary">&#10227;</button>
                     <button type="button" class="btn-primary" onclick="printReturnList()">🖨️</button>
                 </form>
 
@@ -260,32 +264,22 @@
                     </tr>
                     </thead>
                     <tbody id="returns-table-body">
-                    <tr th:each="r : ${returns}" th:onclick="'openReturnDetails(' + ${r.id} + ')'"
-                        style="cursor:pointer;">
+                    <tr th:each="r : ${returns}" th:onclick="'openReturnDetails(' + ${r.id} + ')'" style="cursor:pointer;">
 
-                        <!-- ИСПРАВЛЕНО: Теперь показываем createdAt в главной таблице -->
-                        <td th:with="dt=${r.createdAt}"
-                            th:text="${dt != null ? #strings.replace((dt.length() > 16 ? #strings.substring(dt, 0, 16) : dt), 'T', ' ') : ''}">
-                        </td>
-
-                        <!--                        <td th:unless="${r.returnDate != null}"></td>-->
+                        <!-- ИСПРАВЛЕНО: Дата создания теперь форматируется через JS-метод -->
+                        <td class="js-date-format" th:text="${r.createdAt}"></td>
 
                         <td th:text="${r.managerId}"></td>
                         <td th:text="${r.shopName}"></td>
 
-                        <!-- ИСПРАВЛЕНО: EXPIRED -> Просрочка -->
-                        <td th:text="${r.returnReason != null && r.returnReason.toString() == 'EXPIRED' ? 'Просрочка' : (r.returnReason != null ? r.returnReason : '')}"></td>
+                        <!-- ИСПРАВЛЕНО: Универсальное отображение причины на русском языке -->
+                        <td class="js-reason-translate" th:text="${r.returnReason != null ? r.returnReason.name() : '-'}"></td>
 
-                        <td class="price-down"
-                            th:text="${#numbers.formatInteger(r.totalAmount, 1, 'WHITESPACE') + ' ֏'}"></td>
-
+                        <td class="price-down" th:text="${r.totalAmount != null ? #numbers.formatInteger(r.totalAmount, 1, 'WHITESPACE') + ' ֏' : '0 ֏'}"></td>
 
                         <td>
-
-                            <span th:class="|badge ${r.status.name() == 'CONFIRMED' ? 'bg-success text-white' : (r.status.name() == 'DRAFT' ? 'bg-warning text-dark' : 'bg-secondary text-white')}|"
-                                  th:text="${r.status.name() == 'CONFIRMED' ? 'Проведено' : (r.status.name() == 'DRAFT' ? 'Черновик' : r.status.name())}">
-                            </span>
-
+                            <!-- Просто выводим английский ключ и добавляем класс для JS -->
+                            <span class="js-status-translate" th:text="${r.status.name()}"></span>
                         </td>
                     </tr>
                     </tbody>
@@ -517,7 +511,7 @@
 
 
         <!-- Убедитесь, что у вас есть контейнер для toast-уведомлений -->
-        <div id="toast-container" style="position: fixed; bottom: 20px; right: 20px; z-index: 1000;"></div>
+
 
 
 
@@ -943,6 +937,7 @@
             </div>
         </dialog>
 
+        <div id="toast-container"></div>
 
         <!-- Перед вашим script.js -->
 
@@ -951,11 +946,6 @@
 
 
         <script th:inline="javascript">
-            const fmt = (s) => {
-                if (!s || typeof s !== 'string') return s;
-                let clean = s.replace('T', ' ');
-                return clean.length > 16 ? clean.substring(0, 16) : clean;
-            };
 
             // Добавляем проверку на null через Thymeleaf (стандарт 2026)
             const ordersData = /*[[${orders}]]*/ [];

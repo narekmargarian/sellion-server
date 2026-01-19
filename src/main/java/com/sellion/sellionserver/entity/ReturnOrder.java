@@ -27,7 +27,7 @@ public class ReturnOrder {
     @JsonProperty("shopName")
     private String shopName;
 
-    @ElementCollection
+    @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "return_items", joinColumns = @JoinColumn(name = "return_id"))
     @MapKeyColumn(name = "product_name")
     @Column(name = "quantity")
@@ -36,7 +36,7 @@ public class ReturnOrder {
     private ReasonsReturn returnReason;
 
     @JsonProperty("returnDate")
-    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "d MMMM yyyy", locale = "ru")
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd")
     private LocalDate returnDate;
 
 

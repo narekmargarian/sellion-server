@@ -20,22 +20,53 @@ function closeModal(id) {
 }
 
 
-// Безопасное форматирование даты (убирает T и секунды)
 function formatOrderDate(dateVal) {
-    if (!dateVal) return '---';
+    if (!dateVal || dateVal === '---') return '---';
+
+    // Обработка объектов Java (если придут)
     if (typeof dateVal === 'object' && dateVal.year) {
-        const months = {
-            'JANUARY': 'января', 'FEBRUARY': 'февраля', 'MARCH': 'марта', 'APRIL': 'апреля',
-            'MAY': 'мая', 'JUNE': 'июня', 'JULY': 'июля', 'AUGUST': 'августа',
-            'SEPTEMBER': 'сентября', 'OCTOBER': 'октября', 'NOVEMBER': 'ноября', 'DECEMBER': 'декабря'
-        };
-        return `${dateVal.dayOfMonth} ${months[dateVal.month] || dateVal.monthValue} ${dateVal.year}`;
+        const d = String(dateVal.dayOfMonth || dateVal.day).padStart(2, '0');
+        const m = String(dateVal.monthValue || dateVal.month || 1).padStart(2, '0');
+        const y = dateVal.year;
+        const time = dateVal.hour !== undefined ?
+            ` ${String(dateVal.hour).padStart(2, '0')}:${String(dateVal.minute).padStart(2, '0')}` : '';
+        return `${d}.${m}.${y}${time}`;
     }
+
+    // Обработка строк (ISO формат 2026-01-20T01:17:00)
     if (typeof dateVal === 'string') {
-        return dateVal.includes('T') ? dateVal.replace('T', ' ').substring(0, 16) : dateVal;
+        // Убираем возможные запятые или слэши от ошибок ввода
+        let clean = dateVal.replace(/[,/]/g, '.');
+
+        // Если в строке есть дата и время (содержит T или пробел)
+        if (clean.includes('T') || (clean.includes('-') && clean.includes(':'))) {
+            const parts = clean.split(/[T ]/);
+            const dParts = parts[0].split('-'); // yyyy-mm-dd
+            if (dParts.length === 3) {
+                const date = `${dParts[2]}.${dParts[1]}.${dParts[0]}`;
+                const time = parts[1].substring(0, 5); // hh:mm
+                return `${date} ${time}`;
+            }
+        }
+
+        // Если в строке только дата (yyyy-mm-dd)
+        if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) {
+            const d = clean.split('-');
+            return `${d[2]}.${d[1]}.${d[0]}`;
+        }
     }
+
     return dateVal;
 }
+
+// Запуск форматирования при загрузке страницы
+document.addEventListener("DOMContentLoaded", function() {
+    document.querySelectorAll('.js-date-format').forEach(function(cell) {
+        const result = formatOrderDate(cell.innerText);
+        if (result) cell.innerText = result;
+    });
+});
+
 
 
 // Утилита для перевода методов оплаты
@@ -60,6 +91,19 @@ function translateReason(r) {
         'OTHER': 'Другое'
     };
     return mapping[val] || val;
+}
+
+function translateReturnStatus(status) {
+    switch (status) {
+        case 'CONFIRMED':
+            return { text: 'Проведено', class: 'bg-success text-white' };
+        case 'SENT':
+            return { text: 'Новый', class: 'bg-info text-white' };
+        case 'DRAFT':
+            return { text: 'Черновик', class: 'bg-warning text-dark' };
+        default:
+            return { text: status, class: 'bg-secondary text-white' };
+    }
 }
 
 function showStatus(text, isError = false) {
@@ -90,18 +134,35 @@ function showStatus(text, isError = false) {
     }, 6000);
 }
 
-// Обновление строки заказа в главной таблице
+// Обновление строки ЗАКАЗА
 function updateRowInTable(order) {
     const row = document.querySelector(`tr[onclick*="openOrderDetails(${order.id})"]`);
     if (row) {
         row.cells[0].innerText = formatOrderDate(order.createdAt);
         row.cells[2].innerText = order.shopName;
         row.cells[3].innerText = (order.totalAmount || 0).toLocaleString() + ' ֏';
-        row.cells[4].innerText = order.deliveryDate || '---';
-        const statusText = translatePayment(order.status || order.paymentMethod);
-        row.cells[5].innerHTML = `<span class="badge">${statusText}</span>`;
+        row.cells[4].innerText = formatOrderDate(order.deliveryDate); // Красивая дата
+
+        // Красивый статус
+        const status = order.status || 'NEW';
+        const badgeClass = status === 'RESERVED' ? 'bg-info' : (status === 'CONFIRMED' ? 'bg-success' : 'bg-primary');
+        row.cells[5].innerHTML = `<span class="badge ${badgeClass}">${status}</span>`;
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 // --- 2. Логика состава (общая) ---
 function applySingleQty(encodedName) {
@@ -265,7 +326,8 @@ function openOrderDetails(id) {
             <!-- ИСПРАВЛЕНО: Используем нашу функцию форматирования для даты доставки -->
             <div><small>Доставка:</small><br><b>${formatOrderDate(order.deliveryDate)}</b></div>
             <div><small>Оплата:</small><br><b>${translatePayment(order.paymentMethod)}</b></div>
-            <div><small>Фактура:</small><br><b>${order.needsSeparateInvoice ? 'ДА' : 'НЕТ'}</b></div>
+          
+           <div><small>Фактура:</small><br><b>${order.needsSeparateInvoice ? 'ДА' : 'НЕТ'}</b></div>
         </div>
     `;
 
@@ -307,12 +369,12 @@ function enableOrderEdit(id) {
     }).join('');
 
     // ИСПРАВЛЕНО: Теперь вызываем formatOrderDate вместо прямой вставки объекта
-    const formattedDeliveryDate = formatOrderDate(order.deliveryDate);
+    const formattedDeliveryDate = convertDateToISO(order.deliveryDate);
 
     info.innerHTML = `
         <div class="modal-info-row">
             <div><label>Магазин</label><select id="edit-shop">${clientOptions}</select></div>
-            <div><label>Доставка</label><input type="text" id="edit-delivery" value="${formattedDeliveryDate}"></div>
+            <div><label>Доставка</label><input type="date" id="edit-delivery" value="${formattedDeliveryDate}"></div>
             <div><label>Номер автомобиля</label><input type="text" id="edit-car-number" value="${order.carNumber || ''}"></div>
             <div><label>Оплата</label><select id="edit-payment">${paymentOptions}</select></div>
             <div><label>Отд. Фактура</label>
@@ -323,6 +385,7 @@ function enableOrderEdit(id) {
             </div>
         </div>`;
 
+    setMinDateToday('edit-delivery');
     renderItemsTable(tempItems, true);
     document.getElementById('order-total-price').innerText = "Редактирование состава...";
     document.getElementById('order-footer-actions').innerHTML = `
@@ -392,12 +455,12 @@ function openReturnDetails(id) {
     `;
 
     document.getElementById('order-info').innerHTML = `
-        <div class="modal-info-row">
-            <div><small>Магазин:</small><br><b>${ret.shopName}</b></div>
-            <div><small>Дата возврата:</small><br><b>${formatOrderDate(ret.returnDate)}</b></div>
-            <div><small>Причина:</small><br><b style="color: #ef4444;">${displayReason}</b></div>
-        </div>
-    `;
+    <div class="modal-info-row" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; background: #fff1f2; padding: 15px; border-radius: 10px; margin-top: 20px;">
+        <div><small>Магазин:</small><br><b>${ret.shopName}</b></div>
+        <div><small>Дата возврата:</small><br><b>${formatOrderDate(ret.returnDate)}</b></div>
+        <div><small>Причина:</small><br><b style="color:#ef4444;">${displayReason}</b></div>
+    </div>
+`;
 
     // Рендерим таблицу товаров
     renderItemsTable(tempItems, false);
@@ -420,7 +483,7 @@ function openReturnDetails(id) {
             <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-order-view')">Закрыть</button>
         `;
     }
-    // *********************************************************
+
 
     openModal('modal-order-view');
 }
@@ -444,23 +507,29 @@ function enableReturnEdit(id) {
     document.getElementById('modal-title').innerText = "Редактирование возврата #" + id;
     const info = document.getElementById('order-info');
 
+    // Подготовка опций для выпадающих списков
     let reasonOptions = returnReasons.map(r => {
         const val = (typeof r === 'object') ? r.name : r;
-        const label = translateReason(r);
+        const label = translateReason(r); // Используем вашу функцию перевода
         return `<option value="${val}" ${ret.returnReason === val ? 'selected' : ''}>${label}</option>`;
     }).join('');
 
     let clientOptions = clientsData.map(c => `<option value="${c.name}" ${c.name === ret.shopName ? 'selected' : ''}>${c.name}</option>`).join('');
 
-    // ИСПРАВЛЕНО: Используем formatOrderDate, чтобы не было [object Object]
-    const formattedDate = formatOrderDate(ret.returnDate);
+    // ИСПРАВЛЕНО: Используем оригинальную дату из БД (формат YYYY-MM-DD)
+    // чтобы <input type="date"> мог её прочитать.
+
+    const formattedReturnDate = convertDateToISO(ret.returnDate);
 
     info.innerHTML = `
         <div class="modal-info-row">
             <div><label>Магазин</label><select id="edit-ret-shop">${clientOptions}</select></div>
-            <div><label>Дата возврата</label><input type="text" id="edit-ret-date" value="${formattedDate}"></div>
+            <div><label>Дата возврата</label><input type="date" id="edit-ret-date" value="${formattedReturnDate}"></div>
             <div><label>Причина</label><select id="edit-ret-reason">${reasonOptions}</select></div>
         </div>`;
+
+    setMinDateToday('edit-ret-date');
+    // ... остальной код функции ...
 
     renderItemsTable(tempItems, true);
     document.getElementById('order-total-price').innerText = "Редактирование состава...";
@@ -469,47 +538,47 @@ function enableReturnEdit(id) {
         <button class="btn-primary" style="background:#64748b" onclick="cancelReturnEdit(${id})">Отмена</button>`;
 }
 
+
 async function saveNewManualOperation(type) {
+    // 1. Получаем чистую дату из инпута (она всегда в формате yyyy-MM-dd)
+    const baseDate = document.getElementById('new-op-date').value;
+
     if (Object.keys(tempItems).length === 0) {
         showToast("Добавьте хотя бы один товар!");
         return;
     }
 
-    const url = type === 'order' ? '/api/admin/orders/create-manual' : '/api/returns/sync';
-    const baseDate = document.getElementById('new-op-date').value;
     if (!baseDate) {
-        showToast("Выберите дату!");
+        showToast("Пожалуйста, выберите дату!");
         return;
     }
 
-    // ИСПРАВЛЕНО: Более надежный конвертер дат для 2026 года
-    const toRuDate = (isoStr) => {
-        const d = new Date(isoStr);
-        const months = ["января", "февраля", "марта", "апреля", "мая", "июня",
-            "июля", "августа", "сентября", "октября", "ноября", "декабря"];
-        return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
-    };
+    const url = type === 'order' ? '/api/admin/orders/create-manual' : '/api/returns/sync';
 
-    const russianDate = toRuDate(baseDate);
-    const formattedDateTime = `${baseDate}T${getCurrentTimeFormat()}`;
+    // Формируем дату создания с текущим временем сервера 2026 года
+    const now = new Date();
+    const currentTime = now.toTimeString().substring(0, 8); // "01:05:30"
+    const formattedDateTime = `${baseDate}T${currentTime}`;
 
+    // Базовый объект данных
     const data = {
         shopName: document.getElementById('new-op-shop').value,
         managerId: document.getElementById('new-op-manager').value,
         items: tempItems,
         totalAmount: calculateCurrentTempTotal(),
-        createdAt: formattedDateTime,
-        androidId: "MANUAL-" + Date.now() // Добавляем ID для защиты от дублей
+        createdAt: formattedDateTime, // ISO формат
+        androidId: "MANUAL-" + Date.now()
     };
 
+    // 2. ИСПРАВЛЕНО: Отправляем на сервер ТОЛЬКО baseDate (yyyy-MM-dd)
     if (type === 'order') {
         data.comment = document.getElementById('new-op-comment').value;
-        data.deliveryDate = russianDate;
+        data.deliveryDate = baseDate; // ОТПРАВЛЯЕМ "2026-01-20"
         data.paymentMethod = document.getElementById('new-op-payment').value;
         data.needsSeparateInvoice = document.getElementById('new-op-invoice').value === "true";
     } else {
         data.returnReason = document.getElementById('new-op-reason').value;
-        data.returnDate = russianDate;
+        data.returnDate = baseDate; // ОТПРАВЛЯЕМ "2026-01-20"
     }
 
     try {
@@ -521,15 +590,19 @@ async function saveNewManualOperation(type) {
 
         if (response.ok) {
             showToast("Успешно сохранено", "success");
+            // В 2026 году лучше обновлять данные без полной перезагрузки,
+            // но если проект так настроен, оставляем reload
             location.reload();
         } else {
-            const err = await response.json();
-            showStatus(err.error || "Ошибка сохранения", true);
+            const err = await response.text(); // Используем text(), так как сервер может вернуть не JSON
+            showToast("Ошибка: " + err, "error");
         }
     } catch (e) {
-        showStatus("Ошибка сети", true);
+        console.error(e);
+        showToast("Ошибка сети или сервера", "error");
     }
 }
+
 
 
 function cancelReturnEdit(id) {
@@ -565,17 +638,25 @@ async function saveReturnChanges(id) {
     }
 }
 
-// Обновление строки возврата в главной таблице
+
+
+// Обновление строки ВОЗВРАТА
 function updateReturnRowInTable(ret) {
     const row = document.querySelector(`tr[onclick*="openReturnDetails(${ret.id})"]`);
     if (row) {
-        row.cells[0].innerText = formatOrderDate(ret.returnDate);
-        row.cells[1].innerText = ret.managerId; // Менеджер обычно не меняется при редактировании возврата
+        // Для возвратов обычно показываем дату создания или returnDate
+        row.cells[0].innerText = formatOrderDate(ret.returnDate || ret.createdAt);
+
         row.cells[2].innerText = ret.shopName;
         row.cells[3].innerText = translateReason(ret.returnReason);
         row.cells[4].innerText = (ret.totalAmount || 0).toLocaleString() + ' ֏';
+
+        const status = ret.status || 'DRAFT';
+        const badgeClass = status === 'CONFIRMED' ? 'bg-success' : (status === 'SENT' ? 'bg-info' : 'bg-warning');
+        row.cells[5].innerHTML = `<span class="badge ${badgeClass}">${status}</span>`;
     }
 }
+
 
 // --- НОВАЯ ЛОГИКА ДЛЯ КЛИЕНТОВ (CLIENTS) ---
 function cancelClientEdit(id) {
@@ -1062,12 +1143,12 @@ async function openCreateOrderModal() {
     let clientOptions = clientsData.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
     // ИСПРАВЛЕНО: Теперь переменная определена
     let managerOptions = getManagerOptionsHTML();
-
+    const today = new Date().toLocaleDateString('en-CA');
     document.getElementById('order-info').innerHTML = `
         <div class="modal-info-row">
             <div><label>Магазин:</label><select id="new-op-shop">${clientOptions}</select></div>
             <div><label>Менеджер:</label><select id="new-op-manager">${managerOptions}</select></div>
-            <div><label>Доставка:</label><input type="date" id="new-op-date" value="${new Date().toISOString().split('T')[0]}"></div>
+               <div><label>Доставка:</label><input type="date" id="new-op-date" value="${today}"></div>
         </div>
         <div class="modal-info-row">
             <div><label>Оплата:</label>
@@ -1083,8 +1164,10 @@ async function openCreateOrderModal() {
                 </select>
             </div>
              <div><label>Комментарий:</label><input type="text" id="new-op-comment" placeholder="Любой текст"></div>
-        </div>`;
+        </div>
+        `;
 
+    setMinDateToday('new-op-date');
     renderItemsTable(tempItems, true);
     document.getElementById('order-footer-actions').innerHTML = `
         <button class="btn-primary" style="background:#10b981" onclick="saveNewManualOperation('order')">Создать заказ</button>
@@ -1104,14 +1187,18 @@ async function openCreateReturnModal() {
     // ИСПРАВЛЕНО: Используем общую функцию со списком менеджеров
     let managerOptions = getManagerOptionsHTML();
 
+    const today = new Date().toLocaleDateString('en-CA');
     document.getElementById('order-info').innerHTML = `
         <div class="modal-info-row">
             <div><label>Магазин:</label><select id="new-op-shop">${clientOptions}</select></div>
             <div><label>Менеджер:</label><select id="new-op-manager">${managerOptions}</select></div>
             <div><label>Причина:</label><select id="new-op-reason">${reasonOptions}</select></div>
-            <div><label>Дата возврата:</label><input type="date" id="new-op-date" value="${new Date().toISOString().split('T')[0]}"></div>
+             <div><label>Дата возврата::</label><input type="date" id="edit-ret-date" value="${today}"></div>
+           
+          
         </div>`;
 
+    setMinDateToday('edit-ret-date');
     renderItemsTable(tempItems, true);
     document.getElementById('order-footer-actions').innerHTML = `
         <button class="btn-primary" style="background:#10b981" onclick="saveNewManualOperation('return')">Создать возврат</button>
@@ -1329,19 +1416,50 @@ function triggerImport() {
     input.click();
 }
 
-//todo Toast//
+// //todo Toast//
+// function showToast(text, type = 'info') {
+//     const container = document.getElementById('toast-container');
+//     const toast = document.createElement('div');
+//     toast.className = `toast-msg toast-${type}`;
+//     const icon = type === 'success' ? '✅' : (type === 'error' ? '❌' : 'ℹ️');
+//     toast.innerHTML = `<span>${icon}</span> <span>${text}</span>`;
+//     container.appendChild(toast);
+//     setTimeout(() => {
+//         toast.style.opacity = '0';
+//         setTimeout(() => toast.remove(), 500);
+//     }, 4000);
+// }
+
+
+
+
 function showToast(text, type = 'info') {
     const container = document.getElementById('toast-container');
+    if (!container) {
+        console.error("Контейнер для тостов не найден!");
+        return;
+    }
+
     const toast = document.createElement('div');
+    // Добавляем класс, который мы только что определили в CSS
     toast.className = `toast-msg toast-${type}`;
+
     const icon = type === 'success' ? '✅' : (type === 'error' ? '❌' : 'ℹ️');
     toast.innerHTML = `<span>${icon}</span> <span>${text}</span>`;
     container.appendChild(toast);
+
+    // Убедитесь, что начальная видимость не '0'
+    toast.style.opacity = '1';
+
     setTimeout(() => {
         toast.style.opacity = '0';
         setTimeout(() => toast.remove(), 500);
     }, 4000);
 }
+
+
+
+
 
 
 function openUserDetailsModal(id) {
@@ -1770,6 +1888,68 @@ async function saveAllSettings() {
 }
 
 
+/**
+ * Преобразует различные форматы даты в формат ISO YYYY-MM-DD, необходимый для <input type="date">.
+ */
+function convertDateToISO(dateVal) {
+    if (!dateVal) return '';
+
+    // Если это уже строка ISO "2026-01-20", возвращаем её как есть
+    if (typeof dateVal === 'string' && /^\d{4}-\d{2}-\d{2}/.test(dateVal)) {
+        return dateVal.substring(0, 10);
+    }
+
+    // Если это объект Java/Hibernate с полями year, month, dayOfMonth
+    if (typeof dateVal === 'object' && dateVal.year) {
+        const y = dateVal.year;
+        const m = String(dateVal.monthValue || dateVal.monthIndex + 1).padStart(2, '0');
+        const d = String(dateVal.dayOfMonth || dateVal.day).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+    }
+
+    // Если это русская строка типа "20 января 2026", пытаемся распарсить
+    if (typeof dateVal === 'string' && dateVal.includes('января')) {
+        const parts = dateVal.split(' ');
+        const monthMap = {'января': '01', 'февраля': '02', 'марта': '03', 'апреля': '04', 'мая': '05', 'июня': '06',
+            'июля': '07', 'августа': '08', 'сентября': '09', 'октября': '10', 'ноября': '11', 'декабря': '12'};
+        const month = monthMap[parts[1]];
+        return `${parts[2]}-${month}-${String(parts[0]).padStart(2, '0')}`;
+    }
+
+    // В крайнем случае пытаемся создать объект Date и форматировать его
+    try {
+        const d = new Date(dateVal);
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+    } catch (e) {
+        return '';
+    }
+}
+/**
+ * Устанавливает минимальную дату для поля ввода <input type="date">,
+ * предотвращая выбор прошедших дней.
+ */
+function setMinDateToday(inputId) {
+    const dateInput = document.getElementById(inputId);
+    if (dateInput) {
+        // Получаем текущую дату в формате YYYY-MM-DD
+        const today = new Date();
+        const yyyy = today.getFullYear();
+        const mm = String(today.getMonth() + 1).padStart(2, '0');
+        const dd = String(today.getDate()).padStart(2, '0');
+        const todayISO = `${yyyy}-${mm}-${dd}`;
+
+        // Устанавливаем минимальное значение (min="2026-01-20")
+        dateInput.min = todayISO;
+    }
+}
+
+
+
+
+
 // Функции для печати всего списка заказов/возвратов (для доставщиков)
 
 window.printOrderList = function () {
@@ -1793,6 +1973,27 @@ window.printReturnList = function () {
 }
 
 
+// Авто-исправление разделителей в полях ввода дат
+document.addEventListener('input', function (e) {
+    if (e.target.classList.contains('date-input-check')) {
+        // Заменяем запятые и слэши на точки мгновенно
+        e.target.value = e.target.value.replace(/[,/]/g, '.');
+    }
+});
+
+// Пример того, как должна выглядеть проверка перед отправкой на сервер
+function validateDate(dateStr) {
+    // Регулярное выражение для dd.mm.yyyy
+    const regex = /^\d{2}\.\d{2}\.\d{4}$/;
+    if (!regex.test(dateStr)) {
+        alert("Ошибка! Введите дату в формате ДД.ММ.ГГГГ (например 20.01.2026)");
+        return false;
+    }
+    return true;
+}
+
+
+
 // ИСПРАВЛЕНО: Единая точка входа
 document.addEventListener("DOMContentLoaded", async () => {
     console.log("Sellion ERP 2026 initialized");
@@ -1803,19 +2004,46 @@ document.addEventListener("DOMContentLoaded", async () => {
     const lastTab = localStorage.getItem('sellion_tab') || 'tab-orders';
     if (typeof showTab === 'function') showTab(lastTab);
 
-    // ЛОГИКА СВОРАЧИВАНИЯ
+    // --- 1. ФОРМАТИРОВАНИЕ ДАТ ПРИ ЗАГРУЗКЕ ---
+    // Предполагается, что функция formatOrderDate определена в script.js
+    document.querySelectorAll('.js-date-format').forEach(function(cell) {
+        const rawDate = cell.innerText;
+        // Проверяем, что дата еще не отформатирована (нет точек), чтобы не форматировать дважды
+        if (rawDate && rawDate !== '---' && !rawDate.includes('.')) {
+            cell.innerText = formatOrderDate(rawDate);
+        }
+    });
+
+    // --- 2. ПЕРЕВОД ПРИЧИН ВОЗВРАТОВ ПРИ ЗАГРУЗКЕ ---
+    // Предполагается, что функция translateReason определена в script.js
+    document.querySelectorAll('.js-reason-translate').forEach(function(cell) {
+        const englishReason = cell.innerText;
+        if (englishReason && englishReason !== '---') {
+            cell.innerText = translateReason(englishReason);
+        }
+    });
+
+    // --- 3. ПЕРЕВОД СТАТУСОВ ВОЗВРАТОВ ПРИ ЗАГРУЗКЕ ---
+    // Предполагается, что функция translateReturnStatus определена в script.js
+    document.querySelectorAll('.js-status-translate').forEach(function(cell) {
+        const englishStatus = cell.innerText;
+        const statusInfo = translateReturnStatus(englishStatus);
+
+        // Заменяем сырой текст на красивый бейдж с классом
+        cell.innerHTML = `<span class="badge ${statusInfo.class}">${statusInfo.text}</span>`;
+    });
+
+
+    // --- 4. ЛОГИКА СВОРАЧИВАНИЯ КАТЕГОРИЙ (Ваш существующий код) ---
     document.body.addEventListener('click', function(e) {
-        // Ищем строку заголовка через восхождение по DOM
         const header = e.target.closest('.js-category-toggle');
         if (!header) return;
-
 
         const targetClass = header.getAttribute('data-target');
         const rows = document.getElementsByClassName(targetClass);
         const icon = header.querySelector('.toggle-icon');
 
         if (rows.length > 0) {
-            // Проверяем состояние первой строки
             const isHidden = rows[0].style.display === "none";
 
             for (let i = 0; i < rows.length; i++) {
@@ -1828,4 +2056,3 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     });
 });
-

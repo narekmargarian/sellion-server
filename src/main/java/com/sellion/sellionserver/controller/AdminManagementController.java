@@ -6,12 +6,9 @@ import com.sellion.sellionserver.services.FinanceService;
 import com.sellion.sellionserver.services.StockService;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.logging.Log;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -21,7 +18,6 @@ import java.time.format.DateTimeParseException;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
-
 
 
 @RestController
@@ -42,8 +38,7 @@ public class AdminManagementController {
     // Форматтер для системных дат (создание записи)
     private static final DateTimeFormatter DATETIME_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
 
-    // ФОРМАТТЕР ДЛЯ РУССКИХ ДАТ (например: "17 января 2026")
-    private static final DateTimeFormatter RU_DATE_FORMATTER = DateTimeFormatter.ofPattern("d MMMM yyyy", new Locale("ru"));
+
     private static final Logger log = LoggerFactory.getLogger(AdminManagementController.class);
 
 
@@ -141,8 +136,6 @@ public class AdminManagementController {
 
         return ResponseEntity.ok(Map.of("message", "Заказ отменен, товар возвращен на склад"));
     }
-
-
 
 
     @PutMapping("/products/{id}/edit")

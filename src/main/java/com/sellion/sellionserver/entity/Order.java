@@ -29,14 +29,14 @@ public class Order {
     @JsonProperty("shopName")
     private String shopName;
 
-    @ElementCollection
+    @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "order_items", joinColumns = @JoinColumn(name = "order_id"))
     @MapKeyColumn(name = "product_name")
     @Column(name = "quantity")
     private Map<String, Integer> items;
 
     @JsonProperty("deliveryDate")
-    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "d MMMM yyyy", locale = "ru")
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd")
     private LocalDate deliveryDate;
 
 

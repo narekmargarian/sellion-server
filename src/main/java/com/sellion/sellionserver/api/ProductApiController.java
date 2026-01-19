@@ -36,7 +36,7 @@ public class ProductApiController {
 
     @GetMapping
     public List<Product> getAllProducts() {
-        return productRepository.findAll();
+        return productRepository.findAllActive();
     }
 
     @PostMapping("/import")
@@ -120,23 +120,21 @@ public class ProductApiController {
         return ResponseEntity.ok(Map.of("message", "Товар скрыт (мягко удален)"));
     }
 //TODO AY ES HASCEIN BDI DIME ANDROID@ KATALGI HAMAR
-    @GetMapping("/catalog")
-    public List<CategoryGroupDto> getAndroidCatalog() {
-        // 1. Получаем все активные товары
-        List<Product> allProducts = productRepository.findAllActive();
+@GetMapping("/catalog")
+public List<CategoryGroupDto> getAndroidCatalog() {
+    // Используем findAllActive(), чтобы удаленные товары не попали в каталог
+    List<Product> allProducts = productRepository.findAllActive();
 
-        // 2. Группируем их по полю category
-        Map<String, List<Product>> grouped = allProducts.stream()
-                .collect(Collectors.groupingBy(p ->
-                        (p.getCategory() == null || p.getCategory().isBlank()) ? "Прочее" : p.getCategory()
-                ));
+    Map<String, List<Product>> grouped = allProducts.stream()
+            .collect(Collectors.groupingBy(p ->
+                    (p.getCategory() == null || p.getCategory().isBlank()) ? "Прочее" : p.getCategory()
+            ));
 
-        // 3. Преобразуем в список DTO для Android
-        return grouped.entrySet().stream()
-                .map(entry -> new CategoryGroupDto(entry.getKey(), entry.getValue()))
-                .sorted(Comparator.comparing(CategoryGroupDto::getCategoryName)) // Сортировка категорий по алфавиту
-                .collect(Collectors.toList());
-    }
+    return grouped.entrySet().stream()
+            .map(entry -> new CategoryGroupDto(entry.getKey(), entry.getValue()))
+            .sorted(Comparator.comparing(CategoryGroupDto::getCategoryName))
+            .collect(Collectors.toList());
+}
 
 
 }
