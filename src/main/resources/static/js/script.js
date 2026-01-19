@@ -1677,11 +1677,40 @@ function downloadExcel(type) {
 
 
 async function sendToEmail() {
-    // В 2026 году для отправки почты нужен отдельный сервис,
-    // пока сделаем уведомление, что функция готова к интеграции
-    showToast("Подготовка архива и отправка на email бухгалтера...", "info");
-    // Здесь будет вызов fetch('/api/reports/send-email?period=...')
+    const start = document.getElementById('report-start').value;
+    const end = document.getElementById('report-end').value;
+    const email = document.getElementById('report-email').value;
+
+    if (!start || !end || !email) {
+        showToast("Заполните даты и Email!", "error");
+        return;
+    }
+
+    // Простая проверка формата email
+    if (!email.includes('@')) {
+        showToast("Введите корректный Email", "error");
+        return;
+    }
+
+    showToast("Формирование и отправка отчета...", "info");
+
+    try {
+        const response = await fetch(`/api/reports/excel/send-to-accountant?start=${start}&end=${end}&email=${encodeURIComponent(email)}`, {
+            method: 'POST'
+        });
+
+        if (response.ok) {
+            showToast("✅ Отчет успешно отправлен на " + email, "success");
+        } else {
+            const err = await response.json();
+            showToast("❌ Ошибка: " + (err.error || "Не удалось отправить"), "error");
+        }
+    } catch (e) {
+        showToast("Ошибка сети при отправке почты", "error");
+    }
 }
+
+
 
 
 
