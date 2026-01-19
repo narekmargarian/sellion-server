@@ -23,7 +23,8 @@ public class CustomUserDetailsService implements UserDetailsService {
         return org.springframework.security.core.userdetails.User.builder()
                 .username(user.getUsername())
                 .password(user.getPassword())
-                .authorities(user.getRole().name()) // Даем роль (OPERATOR, ADMIN и т.д.)
+                // Добавляем префикс ROLE_ как требует Spring Security
+                .authorities("ROLE_" + user.getRole().name())
                 .build();
     }
 }

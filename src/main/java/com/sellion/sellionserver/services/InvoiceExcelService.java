@@ -13,6 +13,8 @@ import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.streaming.SXSSFWorkbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -26,6 +28,7 @@ public class InvoiceExcelService {
     private final ProductRepository productRepository;
     private final ClientRepository clientRepository;
     private final CompanySettings companySettings;
+    private static final Logger log = LoggerFactory.getLogger(InvoiceExcelService.class);
 
 
     // Метод для одного заказа (решает ошибку "Provided: Order")
@@ -80,7 +83,7 @@ public class InvoiceExcelService {
 
                 // === ТАБЛИЦА ТОВАРОВ ===
                 Row header = sheet.createRow(rowIdx++);
-                String[] cols = {"Ապրանք", "Կոդ (SKU)", "Միավոր", "Քանակ", "Գին (առանց ԱԱՀ)", "ԱԱՀ գումար", "Ընդհանուր գումար"};
+                String[] cols = {"Ապրանք", "Կոդ (ԱՏԳ)", "Միավոր", "Քանակ", "Գին (առանց ԱԱՀ)", "ԱԱՀ գումար", "Ընդհանուր գումար"};
                 for (int i = 0; i < cols.length; i++) header.createCell(i).setCellValue(cols[i]);
 
                 double orderTotalAmount = 0.0;
@@ -126,7 +129,7 @@ public class InvoiceExcelService {
 
                 // ... (логика таблицы и итогов для возврата)
                 Row header = sheet.createRow(rowIdx++);
-                String[] cols = {"Ապրանք", "Կոդ (SKU)", "Միավոր", "Քանակ", "Գին (առանց ԱԱՀ)", "ԱԱՀ գումար", "Ընդհանուր գումար"};
+                String[] cols = {"Ապրանք", "Կոդ (ԱՏԳ)", "Միավոր", "Քանակ", "Գին (առանց ԱԱՀ)", "ԱԱՀ գումար", "Ընդհանուր գումար"};
                 for (int i = 0; i < cols.length; i++) header.createCell(i).setCellValue(cols[i]);
 
                 double returnTotalAmount = 0.0;

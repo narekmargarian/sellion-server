@@ -8,6 +8,9 @@ import com.sellion.sellionserver.repository.TransactionRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 
 @Service
@@ -20,11 +23,15 @@ public class FinanceService {
     public void registerOperation(Long clientId, String type, Double amount, Long refId, String comment) {
         Client client = clientRepository.findById(clientId).orElseThrow();
 
-        double delta = type.equals("ORDER") ? amount : -amount;
+        // --- ИСПОЛЬЗУЕМ BIGDECIMAL ДЛЯ ТОЧНЫХ ФИНАНСОВЫХ РАСЧЕТОВ ---
+        BigDecimal currentDebt = BigDecimal.valueOf(client.getDebt());
+        BigDecimal opAmount = BigDecimal.valueOf(amount);
 
-        // ИСПРАВЛЕНО: Математически точное округление для 2026 года
-        double newDebt = Math.round((client.getDebt() + delta) * 100.0) / 100.0;
-        client.setDebt(newDebt);
+        BigDecimal delta = type.equals("ORDER") ? opAmount : opAmount.negate();
+        // Округляем до двух знаков после запятой
+        BigDecimal newDebt = currentDebt.add(delta).setScale(2, RoundingMode.HALF_UP);
+
+        client.setDebt(newDebt.doubleValue());
         clientRepository.save(client);
 
         Transaction tx = Transaction.builder()
@@ -33,12 +40,11 @@ public class FinanceService {
                 .type(type)
                 .referenceId(refId)
                 .amount(amount)
-                .balanceAfter(newDebt)
+                .balanceAfter(newDebt.doubleValue())
                 .comment(comment)
                 .timestamp(LocalDateTime.now())
                 .build();
 
         transactionRepository.save(tx);
     }
-
 }

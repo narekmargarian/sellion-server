@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+
 @RestController // Важно: RestController возвращает JSON
 @RequestMapping("/api/admin/users") // Все API-пути для админки начинаются здесь
 @RequiredArgsConstructor

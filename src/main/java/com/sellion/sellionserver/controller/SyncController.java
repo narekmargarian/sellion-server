@@ -7,6 +7,8 @@ import com.sellion.sellionserver.repository.ReturnOrderRepository;
 import com.sellion.sellionserver.services.StockService;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.web.bind.annotation.*;
@@ -28,6 +30,7 @@ public class SyncController {
     private final SimpMessagingTemplate messagingTemplate;
     private final StockService stockService; // ДОБАВЛЕНО
     private final ProductRepository productRepository;
+    private static final Logger log = LoggerFactory.getLogger(SyncController.class);
 
 
     @PostMapping("/orders/sync")
@@ -56,7 +59,8 @@ public class SyncController {
                 orderRepository.save(order);
                 savedCount++;
             } catch (Exception e) {
-                System.err.println("Ошибка склада: " + e.getMessage());
+                log.error("Ошибка склада при синхронизации заказа {}: {}", order.getAndroidId(), e.getMessage());
+
             }
         }
 

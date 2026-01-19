@@ -1522,37 +1522,33 @@ function printRouteSheet() {
     printAction(url); // Используем вашу готовую функцию печати
 }
 
-// В script.js
-// В script.js
+let stompClient = null;
 
 function connectWebSocket() {
-    // Проверка: загрузилась ли библиотека? (Можно удалить эту проверку, если файлы теперь локальные и загружаются сразу)
-    if (typeof SockJS === 'undefined') {
-        // console.warn("Библиотека SockJS еще не загружена. Повтор через 1 сек...");
-        setTimeout(connectWebSocket, 1000);
-        return;
-    }
+    // Если уже подключены - не создаем дубликат
+    if (stompClient !== null && stompClient.connected) return;
 
     const socket = new SockJS('/ws-sellion');
-    const stompClient = Stomp.over(socket);
-
-    stompClient.debug = null;
+    stompClient = Stomp.over(socket);
+    stompClient.debug = null; // Отключаем лишний спам в консоли
 
     stompClient.connect({}, function (frame) {
-        console.log('Уведомления Sellion 2026 подключены');
+        console.log('✅ Sellion Realtime Connected');
         stompClient.subscribe('/topic/new-order', function (message) {
             showToast("🔔 " + message.body, "info");
 
-            // СТРОКА ДЛЯ ЗВУКА УДАЛЕНА. Теперь только визуальное уведомление.
-            // new Audio('https://www.soundjay.com').play().catch(() => {});
+            // Получаем текущую активную вкладку
+            const currentTab = localStorage.getItem('sellion_tab');
 
-            if (localStorage.getItem('sellion_tab') === 'tab-orders') {
-                setTimeout(() => location.reload(), 2000);
+            // Если пользователь сейчас смотрит вкладку заказов ИЛИ возвратов — обновляем страницу
+            if (currentTab === 'tab-orders' || currentTab === 'tab-returns') {
+                console.log("Обновление данных для вкладки: " + currentTab);
+                setTimeout(() => location.reload(), 1500);
             }
         });
     }, function (error) {
-        console.error('Ошибка WS:', error);
-        setTimeout(connectWebSocket, 5000); // Реконнект
+        console.log('🔄 WS Reconnecting...');
+        setTimeout(connectWebSocket, 5000);
     });
 }
 
@@ -1655,91 +1651,6 @@ async function submitInventoryAdjustment() {
 
 
 
-
-
-// function downloadExcel(type) {
-//     const start = document.getElementById('report-start').value;
-//     const end = document.getElementById('report-end').value;
-//
-//     if (!start || !end) {
-//         showToast("Выберите период!", "error");
-//         return;
-//     }
-//
-//     // URL для запросов с использованием fetch
-//     const url = type === 'orders' ?
-//         `/api/reports/excel/orders-detailed?start=${start}&end=${end}` :
-//         `/api/reports/excel/returns-detailed?start=${start}&end=${end}`; // Используем detailed эндпоинт
-//
-//     // Используем fetch для контроля над ответами и показа toast
-//     fetch(url)
-//         .then(response => {
-//             if (response.ok) {
-//                 // Если статус 200 OK, пришел файл. Обрабатываем скачивание:
-//                 return response.blob().then(blob => {
-//                     const downloadUrl = window.URL.createObjectURL(blob);
-//                     const a = document.createElement('a');
-//                     a.style.display = 'none';
-//                     a.href = downloadUrl;
-//                     a.download = `${type}_report_${start}.xlsx`;
-//                     document.body.appendChild(a);
-//                     a.click();
-//                     window.URL.revokeObjectURL(downloadUrl);
-//                     showToast('Отчет успешно скачан!', 'success');
-//                 });
-//             } else {
-//                 // Если ошибка (например, 404), пришел JSON с сообщением
-//                 return response.json().then(data => {
-//                     showToast(data.message || 'Ошибка сервера', 'error');
-//                 });
-//             }
-//         })
-//         .catch(error => {
-//             showToast('Ошибка сети при скачивании отчета.', 'error');
-//         });
-// }
-//
-// // Убедитесь, что у вас есть функция showToast в вашем проекте:
-// // function showToast(message, type) { ... }
-
-
-// async function sendToEmail() {
-//     const start = document.getElementById('report-start').value;
-//     const end = document.getElementById('report-end').value;
-//     const email = document.getElementById('report-email').value;
-//
-//     if (!start || !end || !email) {
-//         showToast("Заполните даты и Email!", "error");
-//         return;
-//     }
-//
-//     // Простая проверка формата email
-//     if (!email.includes('@')) {
-//         showToast("Введите корректный Email", "error");
-//         return;
-//     }
-//
-//     showToast("Формирование и отправка отчета...", "info");
-//
-//     try {
-//         const response = await fetch(`/api/reports/excel/send-to-accountant?start=${start}&end=${end}&email=${encodeURIComponent(email)}`, {
-//             method: 'POST'
-//         });
-//
-//         if (response.ok) {
-//             showToast("✅ Отчет успешно отправлен на " + email, "success");
-//         } else {
-//             const err = await response.json();
-//             showToast("❌ Ошибка: " + (err.error || "Не удалось отправить"), "error");
-//         }
-//     } catch (e) {
-//         showToast("Ошибка сети при отправке почты", "error");
-//     }
-// }
-//
-
-
-
 // Функция для скачивания отдельного типа отчета
 function downloadExcel(type) {
     const start = document.getElementById('report-start').value;
@@ -1834,6 +1745,29 @@ function sendToEmail() {
 // Убедитесь, что эта функция showToast() у вас определена
 // function showToast(text, type = 'info') { ... }
 
+
+async function saveAllSettings() {
+    const settings = {
+        COMPANY_NAME: document.getElementById('set-COMPANY_NAME').value,
+        ACCOUNTANT_EMAIL: document.getElementById('set-ACCOUNTANT_EMAIL').value,
+        COMPANY_INN: document.getElementById('set-COMPANY_INN').value,
+        COMPANY_IBAN: document.getElementById('set-COMPANY_IBAN').value,
+        COMPANY_ADDRESS: document.getElementById('set-COMPANY_ADDRESS').value
+    };
+
+    try {
+        const response = await fetch('/api/admin/settings/update-all', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(settings)
+        });
+        if (response.ok) {
+            showToast("Настройки успешно применены!", "success");
+        }
+    } catch (e) {
+        showToast("Ошибка при сохранении", "error");
+    }
+}
 
 
 // Функции для печати всего списка заказов/возвратов (для доставщиков)

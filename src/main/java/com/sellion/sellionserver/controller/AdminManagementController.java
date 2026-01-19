@@ -6,7 +6,12 @@ import com.sellion.sellionserver.services.FinanceService;
 import com.sellion.sellionserver.services.StockService;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.logging.Log;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -17,9 +22,13 @@ import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 
+
+
 @RestController
 @RequestMapping("/api/admin")
 @RequiredArgsConstructor
+//@PreAuthorize("hasRole('ADMIN')") // Только Админ
+
 public class AdminManagementController {
 
     private final OrderRepository orderRepository;
@@ -35,6 +44,8 @@ public class AdminManagementController {
 
     // ФОРМАТТЕР ДЛЯ РУССКИХ ДАТ (например: "17 января 2026")
     private static final DateTimeFormatter RU_DATE_FORMATTER = DateTimeFormatter.ofPattern("d MMMM yyyy", new Locale("ru"));
+    private static final Logger log = LoggerFactory.getLogger(AdminManagementController.class);
+
 
     @PutMapping("/orders/{id}/full-edit")
     @Transactional
@@ -56,8 +67,9 @@ public class AdminManagementController {
         String deliveryDateString = (String) payload.get("deliveryDate");
         if (deliveryDateString != null && !deliveryDateString.isEmpty()) {
             try {
-                order.setDeliveryDate(LocalDate.parse(deliveryDateString, RU_DATE_FORMATTER));
+//                order.setDeliveryDate(LocalDate.parse(deliveryDateString, RU_DATE_FORMATTER));
 //                order.setDeliveryDate(LocalDate.parse(deliveryDateString));
+                order.setDeliveryDate(parseFlexibleDate((String) payload.get("deliveryDate")));
 
             } catch (DateTimeParseException e) {
                 return ResponseEntity.badRequest().body(Map.of("error", "Неверный формат даты: " + deliveryDateString));
@@ -171,8 +183,9 @@ public class AdminManagementController {
         String returnDateString = (String) payload.get("returnDate");
         if (returnDateString != null && !returnDateString.isEmpty()) {
             try {
-                ret.setReturnDate(LocalDate.parse(returnDateString, RU_DATE_FORMATTER));
+//                ret.setReturnDate(LocalDate.parse(returnDateString, RU_DATE_FORMATTER));
 //                ret.setReturnDate(LocalDate.parse(returnDateString));
+                ret.setReturnDate(parseFlexibleDate((String) payload.get("returnDate")));
             } catch (DateTimeParseException e) {
                 return ResponseEntity.badRequest().body(Map.of("error", "Неверный формат даты возврата: " + returnDateString));
             }
@@ -338,5 +351,21 @@ public class AdminManagementController {
         result.put("totalSale", totalSale);
         result.put("totalCost", totalCost);
         return result;
+    }
+
+
+    private LocalDate parseFlexibleDate(String dateStr) {
+        if (dateStr == null || dateStr.isEmpty()) return LocalDate.now();
+        try {
+            // Если дата в формате 2026-01-19
+            if (dateStr.contains("-")) {
+                return LocalDate.parse(dateStr);
+            }
+            // Если дата в формате "19 января 2026"
+            return LocalDate.parse(dateStr, DateTimeFormatter.ofPattern("d MMMM yyyy", new Locale("ru")));
+        } catch (Exception e) {
+            log.error("Ошибка парсинга даты: {}", dateStr);
+            return LocalDate.now(); // Возвращаем сегодня как fallback
+        }
     }
 }

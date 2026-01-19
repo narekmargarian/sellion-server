@@ -4,15 +4,19 @@ import com.sellion.sellionserver.entity.Order;
 import com.sellion.sellionserver.entity.ReturnOrder;
 import com.sellion.sellionserver.repository.OrderRepository;
 import com.sellion.sellionserver.repository.ReturnOrderRepository;
+import com.sellion.sellionserver.services.CompanySettings;
 import com.sellion.sellionserver.services.EmailService;
 import com.sellion.sellionserver.services.InvoiceExcelService;
 import lombok.RequiredArgsConstructor;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.streaming.SXSSFWorkbook;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.ByteArrayOutputStream;
@@ -21,9 +25,11 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
+
 @RestController
 @RequestMapping("/api/reports/excel")
 @RequiredArgsConstructor
+//@PreAuthorize("hasAnyRole('ADMIN', 'ACCOUNTANT')")
 public class ReportApiController {
 
 
@@ -31,6 +37,9 @@ public class ReportApiController {
     private final ReturnOrderRepository returnOrderRepository;
     private final InvoiceExcelService invoiceExcelService;
     private final EmailService emailService;
+    private final CompanySettings companySettings;
+    private static final Logger log = LoggerFactory.getLogger(ReportApiController.class);
+
 
     // Метод для детального отчета по заказам (возвращает файл или ошибку для toast)
     @GetMapping("/orders-detailed")

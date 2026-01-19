@@ -482,8 +482,43 @@
                 </div>
             </div>
         </div>
+
+        <div id="tab-settings" class="tab-pane">
+            <div class="glass-card" style="max-width: 800px; margin: 20px auto; padding: 30px;">
+                <h3>⚙️ Настройки системы</h3>
+                <hr>
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label>Название компании</label>
+                        <input type="text" id="set-COMPANY_NAME" class="form-control" th:value="${@companySettings.getSetting('COMPANY_NAME', 'Սելլիոն ՍՊԸ')}">
+                    </div>
+                    <div class="col-md-6">
+                        <label>Email бухгалтера</label>
+                        <input type="email" id="set-ACCOUNTANT_EMAIL" class="form-control" th:value="${@companySettings.getAccountantEmail()}">
+                    </div>
+                    <div class="col-md-6">
+                        <label>ИНН (ՀՎՀՀ)</label>
+                        <input type="text" id="set-COMPANY_INN" class="form-control" th:value="${@companySettings.getSetting('COMPANY_INN', '01234567')}">
+                    </div>
+                    <div class="col-md-6">
+                        <label>Банковский счет (IBAN)</label>
+                        <input type="text" id="set-COMPANY_IBAN" class="form-control" th:value="${@companySettings.getSetting('COMPANY_IBAN', 'AM...')}">
+                    </div>
+                    <div class="col-12">
+                        <label>Юридический адрес</label>
+                        <input type="text" id="set-COMPANY_ADDRESS" class="form-control" th:value="${@companySettings.getSetting('COMPANY_ADDRESS', 'ՀՀ, ք. Երևան')}">
+                    </div>
+                </div>
+                <button class="btn-primary mt-4" style="width: 100%;" onclick="saveAllSettings()">Сохранить изменения</button>
+            </div>
+        </div>
+
+
+
+
         <!-- Убедитесь, что у вас есть контейнер для toast-уведомлений -->
         <div id="toast-container" style="position: fixed; bottom: 20px; right: 20px; z-index: 1000;"></div>
+
 
 
 
@@ -806,9 +841,10 @@
                         </td>
                         <!-- Действие -->
                         <td onclick="event.stopPropagation()" style="text-align: right;">
-                            <button class="btn-air btn-sm" onclick="resetPassword(/*[[${u.id}]]*/[])"
+                            <button class="btn-air btn-sm"
+                                    th:onclick="'event.stopPropagation(); resetPassword(' + ${u.id} + ')'"
                                     title="Сбросить пароль">
-                                <i class="fas fa-key" style="margin-right: 5px;"></i> Сброс
+                                <i class="fas fa-key"></i> Сброс
                             </button>
                         </td>
                     </tr>
@@ -934,7 +970,6 @@
         <script th:src="@{/js/script.js}"></script>
 
         <iframe id="printFrame" style="display:none;"></iframe>
-        <div id="toast-container" style="position: fixed; top: 20px; right: 20px; z-index: 9999;"></div>
     </div>
 </div>
 
