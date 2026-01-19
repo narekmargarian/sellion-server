@@ -12,7 +12,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
-
 @Service
 @RequiredArgsConstructor
 public class FinanceService {
@@ -20,18 +19,19 @@ public class FinanceService {
     private final ClientRepository clientRepository;
 
     @Transactional
-    public void registerOperation(Long clientId, String type, Double amount, Long refId, String comment) {
-        Client client = clientRepository.findById(clientId).orElseThrow();
+    public void registerOperation(Long clientId, String type, BigDecimal amount, Long refId, String comment, String shopName) {
+        // Если ID не передан, ищем по имени магазина
+        Client client = (clientId != null)
+                ? clientRepository.findById(clientId).orElseThrow()
+                : clientRepository.findByName(shopName).orElseThrow(() -> new RuntimeException("Клиент не найден: " + shopName));
 
-        // --- ИСПОЛЬЗУЕМ BIGDECIMAL ДЛЯ ТОЧНЫХ ФИНАНСОВЫХ РАСЧЕТОВ ---
-        BigDecimal currentDebt = BigDecimal.valueOf(client.getDebt());
-        BigDecimal opAmount = BigDecimal.valueOf(amount);
+        BigDecimal currentDebt = client.getDebt() != null ? client.getDebt() : BigDecimal.ZERO;
 
-        BigDecimal delta = type.equals("ORDER") ? opAmount : opAmount.negate();
-        // Округляем до двух знаков после запятой
+        // Тип ORDER увеличивает долг, остальные (PAYMENT, RETURN) — уменьшают
+        BigDecimal delta = type.equals("ORDER") ? amount : amount.negate();
         BigDecimal newDebt = currentDebt.add(delta).setScale(2, RoundingMode.HALF_UP);
 
-        client.setDebt(newDebt.doubleValue());
+        client.setDebt(newDebt);
         clientRepository.save(client);
 
         Transaction tx = Transaction.builder()
@@ -39,7 +39,7 @@ public class FinanceService {
                 .clientName(client.getName())
                 .type(type)
                 .referenceId(refId)
-                .amount(amount)
+                .amount(amount.doubleValue()) // Для совместимости с БД, если там double
                 .balanceAfter(newDebt.doubleValue())
                 .comment(comment)
                 .timestamp(LocalDateTime.now())

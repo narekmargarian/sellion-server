@@ -16,13 +16,13 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Map;
 
 @RestController
 @RequestMapping("/api/payments")
 @RequiredArgsConstructor
-//@PreAuthorize("hasAnyRole('ADMIN', 'ACCOUNTANT')")
 public class PaymentApiController {
 
     private final PaymentRepository paymentRepository;
@@ -37,37 +37,48 @@ public class PaymentApiController {
         Invoice invoice = invoiceRepository.findById(payment.getInvoiceId())
                 .orElseThrow(() -> new RuntimeException("Счет не найден: " + payment.getInvoiceId()));
 
-        // 2. Находим клиента по имени из инвойса (обязательно для FinanceService)
+        // 2. Находим клиента
         Client clientObj = clientRepository.findByName(invoice.getShopName())
                 .orElseThrow(() -> new RuntimeException("Клиент не найден: " + invoice.getShopName()));
 
-        // 3. Сохраняем информацию о платеже
+        // 3. Подготовка суммы платежа (конвертируем из Double платежа в BigDecimal для расчетов)
+        BigDecimal paymentAmount = BigDecimal.valueOf(payment.getAmount());
+
+        // 4. Сохраняем информацию о платеже
         payment.setPaymentDate(LocalDateTime.now());
         paymentRepository.save(payment);
 
-        // 4. Обновляем статус оплаты в инвойсе
-        double currentPaid = (invoice.getPaidAmount() != null) ? invoice.getPaidAmount() : 0.0;
-        invoice.setPaidAmount(currentPaid + payment.getAmount());
+        // 5. Обновляем статус оплаты в инвойсе через BigDecimal
+        BigDecimal currentPaid = (invoice.getPaidAmount() != null) ? invoice.getPaidAmount() : BigDecimal.ZERO;
+        BigDecimal newPaidAmount = currentPaid.add(paymentAmount);
+        invoice.setPaidAmount(newPaidAmount);
 
-        // Проверяем, что разница между суммой счета и оплатой меньше 0.01
-        if (Math.abs(invoice.getTotalAmount() - invoice.getPaidAmount()) < 0.01) {
+        // Сравнение BigDecimal через compareTo:
+        // a.compareTo(b) >= 0 означает a >= b
+        // a.subtract(b).abs().doubleValue() < 0.01 — аналог Math.abs для точности
+
+        BigDecimal total = invoice.getTotalAmount();
+
+        if (newPaidAmount.compareTo(total) >= 0) {
+            // Если оплачено больше или равно сумме счета
             invoice.setStatus("PAID");
-        } else if (invoice.getPaidAmount() >= invoice.getTotalAmount()) {
-            invoice.setStatus("PAID"); // На случай переплаты
-        } else {
+        } else if (newPaidAmount.compareTo(BigDecimal.ZERO) > 0) {
             invoice.setStatus("PARTIAL");
+        } else {
+            invoice.setStatus("UNPAID");
         }
 
         invoiceRepository.save(invoice);
 
-        // 5. ВЫЗЫВАЕМ ФИНАНСОВЫЙ СЕРВИС (Вместо старого блока ifPresent)
-        // Он сам обновит client.debt и создаст запись в Transaction
+        // 6. ВЫЗЫВАЕМ ФИНАНСОВЫЙ СЕРВИС
+        // Теперь передаем paymentAmount как BigDecimal
         financeService.registerOperation(
                 clientObj.getId(),
                 "PAYMENT",
-                payment.getAmount(),
+                paymentAmount,
                 payment.getId(),
-                "Оплата по счету " + invoice.getInvoiceNumber()
+                "Оплата по счету " + invoice.getInvoiceNumber(),
+                invoice.getShopName()
         );
 
         return ResponseEntity.ok(Map.of(
@@ -75,6 +86,4 @@ public class PaymentApiController {
                 "newInvoiceStatus", invoice.getStatus()
         ));
     }
-
 }
-

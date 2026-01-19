@@ -8,8 +8,10 @@ import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.stream.Collectors;
+
 
 @Controller
 @RequestMapping("/admin/reports")
@@ -20,16 +22,19 @@ public class ReportWebController {
 
     @GetMapping("/debts")
     public String debtReport(Model model) {
+        // 1. Фильтруем клиентов с долгом через compareTo (debt > 0)
         List<Client> clientsWithDebt = clientRepository.findAll().stream()
-                .filter(c -> c.getDebt() > 0)
+                .filter(c -> c.getDebt() != null && c.getDebt().compareTo(BigDecimal.ZERO) > 0)
                 .collect(Collectors.toList());
 
-        double totalDebtSum = clientsWithDebt.stream()
-                .mapToDouble(Client::getDebt)
-                .sum();
+        // 2. Суммируем долги через reduce (так как mapToDouble больше не подходит)
+        BigDecimal totalDebtSum = clientsWithDebt.stream()
+                .map(Client::getDebt)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         model.addAttribute("clients", clientsWithDebt);
         model.addAttribute("totalDebtSum", totalDebtSum);
+
         return "debt-report";
     }
 }

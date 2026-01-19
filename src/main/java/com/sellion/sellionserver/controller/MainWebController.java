@@ -9,12 +9,13 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-
 
 
 @Controller
@@ -53,32 +54,32 @@ public class MainWebController {
                 ? allOrders.stream().filter(o -> orderManagerId.equals(o.getManagerId())).toList()
                 : allOrders;
 
-        double totalOrdersSum = filteredOrders.stream()
-                .mapToDouble(o -> o.getTotalAmount() != null ? o.getTotalAmount() : 0.0)
-                .sum();
+        // ИСПРАВЛЕНО: Суммирование BigDecimal
+        BigDecimal totalOrdersSum = filteredOrders.stream()
+                .map(o -> o.getTotalAmount() != null ? o.getTotalAmount() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
 
 
-        // 1. Выручка
-        double rawSales = filteredOrders.stream()
+        // 1. Выручка (ИСПРАВЛЕНО: BigDecimal)
+        BigDecimal rawSales = filteredOrders.stream()
                 .filter(o -> o.getStatus() != OrderStatus.CANCELLED)
-                .mapToDouble(o -> o.getTotalAmount() != null ? o.getTotalAmount() : 0.0)
-                .sum();
+                .map(o -> o.getTotalAmount() != null ? o.getTotalAmount() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-// 2. Себестоимость
-        double rawPurchaseCost = filteredOrders.stream()
+        // 2. Себестоимость (ИСПРАВЛЕНО: BigDecimal)
+        BigDecimal rawPurchaseCost = filteredOrders.stream()
                 .filter(o -> o.getStatus() != OrderStatus.CANCELLED)
-                .mapToDouble(o -> o.getTotalPurchaseCost() != null ? o.getTotalPurchaseCost() : 0.0)
-                .sum();
+                .map(o -> o.getTotalPurchaseCost() != null ? o.getTotalPurchaseCost() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-// 3. Чистая прибыль - округляем до ближайшего целого числа
-        long netProfit = Math.round(rawSales - rawPurchaseCost);
+        // 3. Чистая прибыль - округляем до ближайшего целого числа
+        BigDecimal netProfitBD = rawSales.subtract(rawPurchaseCost).setScale(0, RoundingMode.HALF_UP);
+        long netProfit = netProfitBD.longValue();
 
-        model.addAttribute("totalSales", Math.round(rawSales));
-        model.addAttribute("totalPurchaseCost", Math.round(rawPurchaseCost));
+        model.addAttribute("totalOrdersSum", totalOrdersSum); // Добавьте это в модель
+        model.addAttribute("totalSales", rawSales.longValue());
+        model.addAttribute("totalPurchaseCost", rawPurchaseCost.longValue());
         model.addAttribute("netProfit", netProfit);
-
-
-
         // 2. ЛОГИКА ДЛЯ ВОЗВРАТОВ
         String rStart = (returnStartDate != null && !returnStartDate.isEmpty()) ? returnStartDate : today;
         String rEnd = (returnEndDate != null && !returnEndDate.isEmpty()) ? returnEndDate : rStart;
@@ -90,27 +91,37 @@ public class MainWebController {
                 ? allReturns.stream().filter(r -> returnManagerId.equals(r.getManagerId())).toList()
                 : allReturns;
 
-        double totalReturnsSum = filteredReturns.stream()
-                .mapToDouble(r -> r.getTotalAmount() != null ? r.getTotalAmount() : 0.0)
-                .sum();
+        // ИСПРАВЛЕНО: Суммирование BigDecimal
+        BigDecimal totalReturnsSum = filteredReturns.stream()
+                .map(r -> r.getTotalAmount() != null ? r.getTotalAmount() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         // 3. ОБЩАЯ СТАТИСТИКА И СЧЕТА
         List<Invoice> invoices = invoiceRepository.findAll();
         if (invoices == null) invoices = new ArrayList<>();
 
-        double totalInvoiceDebt = invoices.stream()
-                .mapToDouble(i -> (i.getTotalAmount() != null ? i.getTotalAmount() : 0)
-                        - (i.getPaidAmount() != null ? i.getPaidAmount() : 0))
-                .sum();
+        // ИСПРАВЛЕНО: Суммирование BigDecimal (Долг)
+        BigDecimal totalInvoiceDebt = invoices.stream()
+                .map(i -> {
+                    BigDecimal total = (i.getTotalAmount() != null ? i.getTotalAmount() : BigDecimal.ZERO);
+                    BigDecimal paid = (i.getPaidAmount() != null ? i.getPaidAmount() : BigDecimal.ZERO);
+                    return total.subtract(paid);
+                })
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        double totalPaidSum = invoices.stream()
-                .mapToDouble(i -> i.getPaidAmount() != null ? i.getPaidAmount() : 0.0)
-                .sum();
+        // ИСПРАВЛЕНО: Суммирование BigDecimal (Оплачено)
+        BigDecimal totalPaidSum = invoices.stream()
+                .map(i -> i.getPaidAmount() != null ? i.getPaidAmount() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        double totalAllOrdersSum = allOrders.stream()
-                .mapToDouble(o -> o.getTotalAmount() != null ? o.getTotalAmount() : 0.0)
-                .sum();
-        double avgCheck = allOrders.isEmpty() ? 0.0 : totalAllOrdersSum / allOrders.size();
+        // ИСПРАВЛЕНО: Суммирование BigDecimal (Общая сумма заказов)
+        BigDecimal totalAllOrdersSum = allOrders.stream()
+                .map(o -> o.getTotalAmount() != null ? o.getTotalAmount() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        // ИСПРАВЛЕНО: Расчет среднего чека через BigDecimal
+        BigDecimal avgCheck = allOrders.isEmpty() ? BigDecimal.ZERO :
+                totalAllOrdersSum.divide(BigDecimal.valueOf(allOrders.size()), 2, RoundingMode.HALF_UP);
 
         // Получаем последние логи для таблицы импорта
         List<AuditLog> auditLogs = auditLogRepository.findAllByOrderByTimestampDesc();
@@ -119,11 +130,14 @@ public class MainWebController {
         List<AuditLog> limitedLogs = auditLogs.stream().limit(15).toList();
 
         model.addAttribute("auditLogs", limitedLogs);
-
-
+        model.addAttribute("totalReturnsSum", totalReturnsSum);
+        model.addAttribute("totalInvoiceDebt", totalInvoiceDebt);
+        model.addAttribute("totalPaidSum", totalPaidSum);
+        model.addAttribute("avgCheck", avgCheck);
         // 4. ПЕРЕДАЧА ДАННЫХ В МОДЕЛЬ
         model.addAttribute("orders", filteredOrders);
         model.addAttribute("totalOrdersCount", filteredOrders.size());
+        // Значения totalOrdersSum, rawSales и т.д. уже рассчитаны в Части 1 как BigDecimal
         model.addAttribute("totalOrdersSum", totalOrdersSum);
         model.addAttribute("orderStartDate", oStart);
         model.addAttribute("orderEndDate", oEnd);
@@ -131,7 +145,7 @@ public class MainWebController {
 
         model.addAttribute("returns", filteredReturns);
         model.addAttribute("totalReturnsCount", filteredReturns.size());
-        model.addAttribute("totalReturnsSum", totalReturnsSum);
+        model.addAttribute("totalReturnsSum", totalReturnsSum); // Рассчитано в Части 2 как BigDecimal
         model.addAttribute("returnStartDate", rStart);
         model.addAttribute("returnEndDate", rEnd);
         model.addAttribute("selectedReturnManager", returnManagerId);
@@ -140,42 +154,44 @@ public class MainWebController {
         model.addAttribute("avgCheck", avgCheck);
         model.addAttribute("invoices", invoices);
         model.addAttribute("totalInvoiceDebt", totalInvoiceDebt);
-        // Группировка с сортировкой ключей (TreeMap) для красивого порядка
+
+        // Группировка товаров по категориям (Сортировка А-Я)
         Map<String, List<Product>> groupedProducts = productRepository.findAllActive().stream()
                 .collect(Collectors.groupingBy(
                         p -> (p.getCategory() == null || p.getCategory().isBlank()) ? "Без категории" : p.getCategory(),
-                        TreeMap::new, // Это автоматически отсортирует категории А-Я
+                        TreeMap::new,
                         Collectors.toList()
                 ));
 
         model.addAttribute("groupedProducts", groupedProducts);
-
-        // Оставляем обычный список для поиска (если он используется в JS)
         model.addAttribute("products", productRepository.findAllActive());
 
         model.addAttribute("clients", clientRepository.findAllActive() != null ? clientRepository.findAllActive() : new ArrayList<>());
         model.addAttribute("users", userRepository.findAll() != null ? userRepository.findAll() : new ArrayList<>());
 
+        // Список менеджеров для фильтров
         List<String> managers = Stream.concat(allOrders.stream().map(Order::getManagerId),
                         allReturns.stream().map(ReturnOrder::getManagerId))
-                .filter(Objects::nonNull)
+                .filter(java.util.Objects::nonNull)
                 .distinct()
                 .sorted()
                 .toList();
         model.addAttribute("managers", managers);
 
-        LocalDateTime oneMonthAgo = LocalDateTime.now().minusMonths(1);
-        Set<String> overdueClients = invoices.stream()
+        // Клиенты с просрочкой более месяца
+        java.time.LocalDateTime oneMonthAgo = java.time.LocalDateTime.now().minusMonths(1);
+        java.util.Set<String> overdueClients = invoices.stream()
                 .filter(inv -> !"PAID".equals(inv.getStatus()))
                 .filter(inv -> inv.getCreatedAt() != null && inv.getCreatedAt().isBefore(oneMonthAgo))
                 .map(Invoice::getShopName)
                 .collect(Collectors.toSet());
         model.addAttribute("overdueClients", overdueClients);
 
-        Map<String, Double> clientDebts = clientRepository.findAll().stream()
+        // Карта долгов клиентов (ИСПРАВЛЕНО: использование BigDecimal)
+        Map<String, BigDecimal> clientDebts = clientRepository.findAll().stream()
                 .collect(Collectors.toMap(
                         Client::getName,
-                        c -> c.getDebt() != null ? c.getDebt() : 0.0,
+                        c -> c.getDebt() != null ? c.getDebt() : BigDecimal.ZERO,
                         (v1, v2) -> v1
                 ));
         model.addAttribute("clientDebts", clientDebts);
@@ -187,4 +203,3 @@ public class MainWebController {
         return "dashboard";
     }
 }
-//return "dashboard"

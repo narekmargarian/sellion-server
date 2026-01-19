@@ -6,6 +6,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
@@ -26,9 +27,12 @@ public class Invoice {
     @JoinColumn(name = "order_id")
     private Order order; // Связь с заказом из твоего Order.java
 
-    private Double totalAmount; // Итоговая сумма (может отличаться от заказа после корректировки)
 
-    private Double paidAmount = 0.0; // Сколько уже оплачено
+    private BigDecimal totalAmount = BigDecimal.ZERO;
+
+
+    private BigDecimal paidAmount = BigDecimal.ZERO;
+
 
     private String status = "UNPAID"; // UNPAID, PARTIAL, PAID
 

@@ -6,6 +6,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.math.BigDecimal;
 import java.util.Map;
 
 @Entity
@@ -29,7 +30,7 @@ public class Client {
     private String phone;   // Номер телефона для связи
 
     private String routeDay; // День маршрута (Понедельник, Вторник и т.д.)
-    private Double debt = 0.0; // Новое поле
+    private BigDecimal debt = BigDecimal.ZERO;
     private String managerId;
     private boolean isDeleted = false; // Флаг мягкого удаления
     private String bankAccount;

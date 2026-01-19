@@ -85,8 +85,13 @@
 
                     <button type="submit" class="btn-primary">&#10227</button>
                     <button type="button" class="btn-primary" onclick="printOrderList()">&#9113</button>
+
+
                 </form>
                 <button class="btn-primary" onclick="openCreateOrderModal()">+</button>
+
+                <button type="button" class="btn-primary" onclick="showToast('new button')">new</button>
+                <button type="button" class="btn-primary" onclick="showToast('new button')">new</button>
 
             </div>
 
@@ -249,6 +254,8 @@
                 </form>
 
                 <button class="btn-primary" onclick="openCreateReturnModal()">+</button>
+                <button type="button" class="btn-primary" onclick="showToast('new button')">new</button>
+                <button type="button" class="btn-primary" onclick="showToast('new button')">new</button>
             </div>
 
             <div class="table-container">
@@ -322,6 +329,7 @@
                 <input type="text" id="search-products" onkeyup="filterTable('search-products', 'products-table-body')"
                        placeholder="Поиск по складу..." class="form-control w-25">
                 <button class="btn-primary" onclick="openModal('modal-product-create-new')">+ Новый товар</button>
+                <button class="btn-primary" onclick="showToast('new category')">+ Новая категория</button>
             </div>
 
             <div class="table-container">
@@ -506,15 +514,6 @@
                 <button class="btn-primary mt-4" style="width: 100%;" onclick="saveAllSettings()">Сохранить изменения</button>
             </div>
         </div>
-
-
-
-
-        <!-- Убедитесь, что у вас есть контейнер для toast-уведомлений -->
-
-
-
-
 
 
 

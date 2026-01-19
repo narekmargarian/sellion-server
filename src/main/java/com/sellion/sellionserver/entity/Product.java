@@ -6,6 +6,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.math.BigDecimal;
 import java.util.Map;
 
 @Entity
@@ -17,11 +18,13 @@ public class Product {
     private Long id;
 
     private String name;
-    private Double price;
+
+    private BigDecimal price = BigDecimal.ZERO;
     private Integer itemsPerBox;
     private String barcode;
     private String category;
-    private Double purchasePrice;
+
+    private BigDecimal purchasePrice = BigDecimal.ZERO;
     private Integer stockQuantity;
     private boolean isDeleted = false; // Флаг мягкого удаления
     private String unit;

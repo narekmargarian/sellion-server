@@ -7,16 +7,16 @@ import com.sellion.sellionserver.entity.ReturnOrder;
 import com.sellion.sellionserver.repository.ClientRepository;
 import com.sellion.sellionserver.repository.ProductRepository;
 import lombok.RequiredArgsConstructor;
-import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.streaming.SXSSFWorkbook;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -30,8 +30,7 @@ public class InvoiceExcelService {
     private final CompanySettings companySettings;
     private static final Logger log = LoggerFactory.getLogger(InvoiceExcelService.class);
 
-
-    // Метод для одного заказа (решает ошибку "Provided: Order")
+    // Метод для одного заказа
     public Workbook generateExcel(Order order) {
         return generateExcel(List.of(order), null, "Հաշիվ №" + order.getId());
     }
@@ -50,7 +49,6 @@ public class InvoiceExcelService {
         return workbook;
     }
 
-    // Этот метод генерирует ОДИН ЛИСТ НА ОДИН ЗАКАЗ/КЛИЕНТА
     private void fillSheetData(Workbook workbook, String sheetBaseName, List<Order> orders, List<ReturnOrder> returns, Map<String, String> seller) {
         Map<String, Client> clients = clientRepository.findAll().stream()
                 .collect(Collectors.toMap(Client::getName, Function.identity(), (existing, replacement) -> existing));
@@ -60,117 +58,103 @@ public class InvoiceExcelService {
         if (orders != null) {
             for (Order o : orders) {
                 Client c = clients.getOrDefault(o.getShopName(), new Client());
-                Sheet sheet = workbook.createSheet(sheetBaseName + " " + c.getName());
+                Sheet sheet = workbook.createSheet(sheetBaseName + " " + (c.getName() != null ? c.getName() : o.getId()));
                 int rowIdx = 0;
 
-                // === БЛОК ПРОДАВЦА (Многострочный, как на фото) ===
-                addRow(sheet, rowIdx++, "ՎԱՃԱՌՈՂԻ ՏՎՅԱԼՆԵՐ", ""); // Заголовок
-                addRow(sheet, rowIdx++, "Անվանում:", seller.get("name"));
-                addRow(sheet, rowIdx++, "ՀՎՀՀ:", seller.get("inn"));
-                addRow(sheet, rowIdx++, "Իրավաբանական հասցե:", seller.get("address"));
-                addRow(sheet, rowIdx++, "Բանկի անվանում:", seller.get("bank"));
-                addRow(sheet, rowIdx++, "Հաշվեհամար (IBAN):", seller.get("iban"));
-                addRow(sheet, rowIdx++, "ԱԱՀ վճարող է:", seller.get("isVatPayer"));
-                rowIdx++; // Пустая строка
+                // === БЛОК ПРОДАВЦА ===
+                rowIdx = addSellerHeader(sheet, rowIdx, seller);
 
-                // === БЛОК ПОКУПАТЕЛЯ (Многострочный, как на фото) ===
+                // === БЛОК ПОКУПАТЕЛЯ ===
                 addRow(sheet, rowIdx++, "ԳՆՈՐԴԻ ՏՎՅԱԼՆԵՐ", "");
                 addRow(sheet, rowIdx++, "Անվանում:", c.getName());
                 addRow(sheet, rowIdx++, "ՀՎՀՀ:", c.getInn());
                 addRow(sheet, rowIdx++, "Հաշվեհամար (բանկ):", c.getBankAccount());
-                addRow(sheet, rowIdx++, "Մենեջեր:", o.getManagerId() != null ? o.getManagerId().toString() : "");
+                addRow(sheet, rowIdx++, "Մենեջեր:", o.getManagerId() != null ? o.getManagerId() : "");
                 rowIdx++;
 
-                // === ТАБЛИЦА ТОВАРОВ ===
-                Row header = sheet.createRow(rowIdx++);
-                String[] cols = {"Ապրանք", "Կոդ (ԱՏԳ)", "Միավոր", "Քանակ", "Գին (առանց ԱԱՀ)", "ԱԱՀ գումար", "Ընդհանուր գումար"};
-                for (int i = 0; i < cols.length; i++) header.createCell(i).setCellValue(cols[i]);
-
-                double orderTotalAmount = 0.0;
-                for (Map.Entry<String, Integer> item : o.getItems().entrySet()) {
-                    Product p = products.get(item.getKey());
-                    if (p == null) continue;
-                    orderTotalAmount += p.getPrice() * item.getValue();
-                    writeProductRow(sheet.createRow(rowIdx++), p, item.getValue());
-                }
-
-                // === ИТОГОВАЯ СУММА ===
-                rowIdx++;
-                Row totalRow = sheet.createRow(rowIdx++);
-                totalRow.createCell(5).setCellValue("Ընդհանուր վճարվող գումար:");
-                totalRow.createCell(6).setCellValue(round(orderTotalAmount));
+                // === ТԱԲԼԻՑԱ ТОВАРОВ ===
+                rowIdx = fillItemsTable(sheet, rowIdx, o.getItems(), products);
             }
         }
 
-        // Логика для возвратов
         if (returns != null) {
             for (ReturnOrder r : returns) {
                 Client c = clients.getOrDefault(r.getShopName(), new Client());
-                Sheet sheet = workbook.createSheet(sheetBaseName + " " + c.getName());
+                Sheet sheet = workbook.createSheet(sheetBaseName + " " + (c.getName() != null ? c.getName() : r.getId()));
                 int rowIdx = 0;
 
-                // === БЛОК ПРОДАВЦА (Полная информация, многострочно) ===
-                addRow(sheet, rowIdx++, "ՎԱՃԱՌՈՂԻ ՏՎՅԱԼՆԵՐ", "");
-                addRow(sheet, rowIdx++, "Անվանում:", seller.get("name"));
-                addRow(sheet, rowIdx++, "ՀՎՀՀ:", seller.get("inn"));
-                addRow(sheet, rowIdx++, "Իրավաբանական հասցե:", seller.get("address"));
-                addRow(sheet, rowIdx++, "Բանկի անվանում:", seller.get("bank"));
-                addRow(sheet, rowIdx++, "Հաշվեհամար (IBAN):", seller.get("iban"));
-                addRow(sheet, rowIdx++, "ԱԱՀ վճարող է:", seller.get("isVatPayer"));
-                rowIdx++; // Пустая строка
+                rowIdx = addSellerHeader(sheet, rowIdx, seller);
 
-                // === БЛОК ПОКУПАТЕЛЯ (Полная информация, многострочно) ===
                 addRow(sheet, rowIdx++, "ԳՆՈՐԴԻ ՏՎՅԱԼՆԵՐ", "");
                 addRow(sheet, rowIdx++, "Անվանում:", c.getName());
                 addRow(sheet, rowIdx++, "ՀՎՀՀ:", c.getInn());
                 addRow(sheet, rowIdx++, "Հաշվեհամար (բանկ):", c.getBankAccount());
-                addRow(sheet, rowIdx++, "Մենեջեր:", r.getManagerId() != null ? r.getManagerId().toString() : "");
+                addRow(sheet, rowIdx++, "Մենեջեր:", r.getManagerId() != null ? r.getManagerId() : "");
                 rowIdx++;
 
-                // ... (логика таблицы и итогов для возврата)
-                Row header = sheet.createRow(rowIdx++);
-                String[] cols = {"Ապրանք", "Կոդ (ԱՏԳ)", "Միավոր", "Քանակ", "Գին (առանց ԱԱՀ)", "ԱԱՀ գումար", "Ընդհանուր գումար"};
-                for (int i = 0; i < cols.length; i++) header.createCell(i).setCellValue(cols[i]);
-
-                double returnTotalAmount = 0.0;
-                for (Map.Entry<String, Integer> item : r.getItems().entrySet()) {
-                    Product p = products.get(item.getKey());
-                    if (p == null) continue;
-                    returnTotalAmount += p.getPrice() * item.getValue();
-                    writeProductRow(sheet.createRow(rowIdx++), p, item.getValue());
-                }
-
-                rowIdx++;
-                Row totalRow = sheet.createRow(rowIdx++);
-                totalRow.createCell(5).setCellValue("Ընդհանուր վճարվող գումար:");
-                totalRow.createCell(6).setCellValue(round(returnTotalAmount));
+                rowIdx = fillItemsTable(sheet, rowIdx, r.getItems(), products);
             }
         }
     }
 
+    private int addSellerHeader(Sheet sheet, int rowIdx, Map<String, String> seller) {
+        addRow(sheet, rowIdx++, "ՎԱՃԱՌՈՂԻ ՏՎՅԱԼՆԵՐ", "");
+        addRow(sheet, rowIdx++, "Անվանում:", seller.get("name"));
+        addRow(sheet, rowIdx++, "ՀՎՀՀ:", seller.get("inn"));
+        addRow(sheet, rowIdx++, "Իրավաբանական հասցե:", seller.get("address"));
+        addRow(sheet, rowIdx++, "Բանկի անվանում:", seller.get("bank"));
+        addRow(sheet, rowIdx++, "Հաշվեհամար (IBAN):", seller.get("iban"));
+        addRow(sheet, rowIdx++, "ԱԱՀ վճարող է:", seller.get("isVatPayer"));
+        return ++rowIdx;
+    }
+
+    private int fillItemsTable(Sheet sheet, int rowIdx, Map<String, Integer> items, Map<String, Product> products) {
+        Row header = sheet.createRow(rowIdx++);
+        String[] cols = {"Ապրանք", "Կոդ (ԱՏԳ)", "Միավոր", "Քանակ", "Գին (առանց ԱԱՀ)", "ԱԱՀ գումար", "Ընդհանուր գումար"};
+        for (int i = 0; i < cols.length; i++) header.createCell(i).setCellValue(cols[i]);
+
+        BigDecimal totalAmount = BigDecimal.ZERO;
+        for (Map.Entry<String, Integer> item : items.entrySet()) {
+            Product p = products.get(item.getKey());
+            if (p == null) continue;
+
+            BigDecimal qty = BigDecimal.valueOf(item.getValue());
+            BigDecimal itemTotal = p.getPrice().multiply(qty);
+            totalAmount = totalAmount.add(itemTotal);
+
+            writeProductRow(sheet.createRow(rowIdx++), p, item.getValue());
+        }
+
+        rowIdx++;
+        Row totalRow = sheet.createRow(rowIdx++);
+        totalRow.createCell(5).setCellValue("Ընդհանուր վճարվող գումար:");
+        totalRow.createCell(6).setCellValue(totalAmount.setScale(2, RoundingMode.HALF_UP).doubleValue());
+        return rowIdx;
+    }
+
     private void writeProductRow(Row row, Product p, int qty) {
-        double priceWithVat = p.getPrice();
-        double priceNoVat = priceWithVat / 1.2;
-        double vatAmount = (priceWithVat - priceNoVat) * qty;
-        double total = priceWithVat * qty;
+        // Логика расчета налогов (НДС 20% для Армении 2026)
+        BigDecimal priceWithVat = p.getPrice();
+        BigDecimal vatRate = new BigDecimal("1.2");
+        BigDecimal priceNoVat = priceWithVat.divide(vatRate, 2, RoundingMode.HALF_UP);
+        BigDecimal vatAmountPerUnit = priceWithVat.subtract(priceNoVat);
+
+        BigDecimal totalLine = priceWithVat.multiply(BigDecimal.valueOf(qty));
+        BigDecimal totalVatLine = vatAmountPerUnit.multiply(BigDecimal.valueOf(qty));
 
         int cellIdx = 0;
         row.createCell(cellIdx++).setCellValue(p.getName());
-        row.createCell(cellIdx++).setCellValue(p.getHsnCode());
+        row.createCell(cellIdx++).setCellValue(p.getHsnCode() != null ? p.getHsnCode() : "");
         row.createCell(cellIdx++).setCellValue(p.getUnit() != null ? p.getUnit() : "հատ");
         row.createCell(cellIdx++).setCellValue(qty);
-        row.createCell(cellIdx++).setCellValue(round(priceNoVat));
-        row.createCell(cellIdx++).setCellValue(round(vatAmount));
-        row.createCell(cellIdx++).setCellValue(round(total));
+        row.createCell(cellIdx++).setCellValue(priceNoVat.doubleValue());
+        row.createCell(cellIdx++).setCellValue(totalVatLine.doubleValue());
+        row.createCell(cellIdx++).setCellValue(totalLine.doubleValue());
     }
 
     private void addRow(Sheet sheet, int rowIdx, String label, String value) {
         Row row = sheet.createRow(rowIdx);
         row.createCell(0).setCellValue(label);
-        row.createCell(1).setCellValue(value);
-    }
-
-    private double round(double val) {
-        return Math.round(val * 100.0) / 100.0;
+        row.createCell(1).setCellValue(value != null ? value : "");
     }
 }

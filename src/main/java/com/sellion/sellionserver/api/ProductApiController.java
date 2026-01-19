@@ -17,11 +17,13 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+
 
 @RestController
 @RequestMapping("/api/products")
@@ -60,7 +62,7 @@ public class ProductApiController {
                 if (nameCell == null || qtyCell == null) continue;
 
                 String name = dataFormatter.formatCellValue(nameCell);
-                if (name.trim().isEmpty()) continue; // Пропуск пустых строк по названию
+                if (name.trim().isEmpty()) continue;
 
                 int rawQty = 0;
                 try {
@@ -74,31 +76,31 @@ public class ProductApiController {
                     int currentStock = (product.getStockQuantity() != null) ? product.getStockQuantity() : 0;
                     product.setStockQuantity(currentStock + incomingQty);
 
-                    // 2. Обновляем цену закупки (себестоимость)
+                    // 2. ИСПРАВЛЕНО: Обновляем цену закупки (себестоимость) через BigDecimal
                     if (purchaseCell != null) {
                         try {
                             String pPriceStr = dataFormatter.formatCellValue(purchaseCell).replace(",", ".");
-                            double pPrice = Double.parseDouble(pPriceStr);
+                            // Используем new BigDecimal(String) - это самый точный способ
+                            BigDecimal pPrice = new BigDecimal(pPriceStr);
                             product.setPurchasePrice(pPrice);
                         } catch (Exception ignored) {}
                     }
 
                     productRepository.save(product);
 
-                    // 3. Логируем движение товара для карточки товара (Stock History)
+                    // 3. Логируем движение
                     stockService.logMovement(name, incomingQty, "INCOMING", "Импорт через Excel", "ADMIN");
                 });
                 updatedCount++;
             }
 
-            // СОЗДАНИЕ ЛОГА АУДИТА ДЛЯ ГЛАВНОЙ СТРАНИЦЫ (Dashboard)
+            // СОЗДАНИЕ ЛОГА АУДИТА
             AuditLog log = new AuditLog();
             log.setUsername("ADMIN");
             log.setAction("Импорт поступления");
             log.setDetails("Обновлено товаров: " + updatedCount + ". Проставлена себестоимость.");
-            log.setTimestamp(LocalDateTime.now()); // Явно задаем время для 2026 года
+            log.setTimestamp(LocalDateTime.now());
 
-            // Используем saveAndFlush, чтобы запись попала в БД до выхода из метода
             auditLogRepository.saveAndFlush(log);
 
             return ResponseEntity.ok(Map.of("message", "Импортировано " + updatedCount));
@@ -119,22 +121,19 @@ public class ProductApiController {
         productRepository.softDeleteById(id);
         return ResponseEntity.ok(Map.of("message", "Товар скрыт (мягко удален)"));
     }
-//TODO AY ES HASCEIN BDI DIME ANDROID@ KATALGI HAMAR
-@GetMapping("/catalog")
-public List<CategoryGroupDto> getAndroidCatalog() {
-    // Используем findAllActive(), чтобы удаленные товары не попали в каталог
-    List<Product> allProducts = productRepository.findAllActive();
 
-    Map<String, List<Product>> grouped = allProducts.stream()
-            .collect(Collectors.groupingBy(p ->
-                    (p.getCategory() == null || p.getCategory().isBlank()) ? "Прочее" : p.getCategory()
-            ));
+    @GetMapping("/catalog")
+    public List<CategoryGroupDto> getAndroidCatalog() {
+        List<Product> allProducts = productRepository.findAllActive();
 
-    return grouped.entrySet().stream()
-            .map(entry -> new CategoryGroupDto(entry.getKey(), entry.getValue()))
-            .sorted(Comparator.comparing(CategoryGroupDto::getCategoryName))
-            .collect(Collectors.toList());
-}
+        Map<String, List<Product>> grouped = allProducts.stream()
+                .collect(Collectors.groupingBy(p ->
+                        (p.getCategory() == null || p.getCategory().isBlank()) ? "Прочее" : p.getCategory()
+                ));
 
-
+        return grouped.entrySet().stream()
+                .map(entry -> new CategoryGroupDto(entry.getKey(), entry.getValue()))
+                .sorted(Comparator.comparing(CategoryGroupDto::getCategoryName))
+                .collect(Collectors.toList());
+    }
 }

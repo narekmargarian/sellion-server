@@ -8,6 +8,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -47,7 +48,7 @@ public class ReturnOrder {
     private String managerId;
 
     @JsonProperty("totalAmount")
-    private Double totalAmount;
+    private BigDecimal totalAmount = BigDecimal.ZERO;
 
     private String createdAt;
 

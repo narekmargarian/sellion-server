@@ -10,13 +10,13 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-
 
 @Controller
 @RequestMapping("/admin")
@@ -26,20 +26,17 @@ public class PrintController {
     private final OrderRepository orderRepository;
     private final ReturnOrderRepository returnOrderRepository;
     private final ProductRepository productRepository;
-    private final ClientRepository clientRepository; // Добавьте в final поля
+    private final ClientRepository clientRepository;
     private final TransactionRepository transactionRepository;
 
-    // Вспомогательный класс для шаблона печати (DTO)
+    // Вспомогательный класс обновлен на BigDecimal для точности
     public static class PrintItemDto {
         public String name;
         public Integer quantity;
-        public Double price;
-        public Double total;
+        public BigDecimal price;
+        public BigDecimal total;
     }
 
-    /**
-     * Печать одиночного заказа
-     */
     @GetMapping("/orders/print/{id}")
     public String printOrder(@PathVariable Long id, Model model) {
         Order order = orderRepository.findById(id)
@@ -52,9 +49,6 @@ public class PrintController {
         return "print_template";
     }
 
-    /**
-     * Печать одиночного возврата
-     */
     @GetMapping("/returns/print/{id}")
     public String printReturn(@PathVariable Long id, Model model) {
         ReturnOrder ret = returnOrderRepository.findById(id)
@@ -67,9 +61,6 @@ public class PrintController {
         return "print_template";
     }
 
-    /**
-     * Печать реестра всех заказов за период
-     */
     @GetMapping("/orders/print-all")
     public String printAllOrders(
             @RequestParam(value = "orderManagerId", required = false) String orderManagerId,
@@ -81,14 +72,13 @@ public class PrintController {
         String e = (end == null || end.isEmpty()) ? s : end;
 
         List<Order> orders = orderRepository.findOrdersBetweenDates(s + "T00:00:00", e + "T23:59:59");
-
         List<Order> filtered = (orderManagerId == null || orderManagerId.isEmpty()) ? orders :
                 orders.stream().filter(o -> orderManagerId.equals(o.getManagerId())).toList();
 
-        // Безопасный расчет суммы (защита от null)
-        double total = filtered.stream()
-                .mapToDouble(o -> o.getTotalAmount() != null ? o.getTotalAmount() : 0.0)
-                .sum();
+        // ИСПРАВЛЕНО: Суммирование BigDecimal
+        BigDecimal total = filtered.stream()
+                .map(o -> o.getTotalAmount() != null ? o.getTotalAmount() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         model.addAttribute("operations", filtered);
         model.addAttribute("finalTotal", total);
@@ -98,9 +88,6 @@ public class PrintController {
         return "print_list_template";
     }
 
-    /**
-     * Печать реестра всех возвратов за период
-     */
     @GetMapping("/returns/print-all")
     public String printAllReturns(
             @RequestParam(value = "returnManagerId", required = false) String returnManagerId,
@@ -108,19 +95,17 @@ public class PrintController {
             @RequestParam(value = "returnEndDate", required = false) String end,
             Model model) {
 
-        // Защита от пустых дат
         String s = (start == null || start.isEmpty()) ? LocalDate.now().toString() : start;
         String e = (end == null || end.isEmpty()) ? s : end;
 
         List<ReturnOrder> returns = returnOrderRepository.findReturnsBetweenDates(s + "T00:00:00", e + "T23:59:59");
-
         List<ReturnOrder> filtered = (returnManagerId == null || returnManagerId.isEmpty()) ? returns :
                 returns.stream().filter(r -> returnManagerId.equals(r.getManagerId())).toList();
 
-        // Безопасный расчет суммы (защита от null)
-        double total = filtered.stream()
-                .mapToDouble(r -> r.getTotalAmount() != null ? r.getTotalAmount() : 0.0)
-                .sum();
+        // ИСПРАВЛЕНО: Суммирование BigDecimal
+        BigDecimal total = filtered.stream()
+                .map(r -> r.getTotalAmount() != null ? r.getTotalAmount() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         model.addAttribute("operations", filtered);
         model.addAttribute("finalTotal", total);
@@ -130,9 +115,6 @@ public class PrintController {
         return "print_list_template";
     }
 
-    /**
-     * Вспомогательный метод для получения актуальных цен из склада для печатной формы
-     */
     private List<PrintItemDto> preparePrintItems(Map<String, Integer> items) {
         List<PrintItemDto> list = new ArrayList<>();
         if (items == null) return list;
@@ -142,21 +124,22 @@ public class PrintController {
             dto.name = entry.getKey();
             dto.quantity = entry.getValue();
 
-            // Получаем цену товара из БД, чтобы в накладной была актуальная цена
             productRepository.findByName(entry.getKey()).ifPresentOrElse(
                     p -> {
                         dto.price = p.getPrice();
-                        dto.total = p.getPrice() * entry.getValue();
+                        // ИСПРАВЛЕНО: Умножение BigDecimal
+                        dto.total = p.getPrice().multiply(BigDecimal.valueOf(entry.getValue()));
                     },
                     () -> {
-                        dto.price = 0.0;
-                        dto.total = 0.0;
+                        dto.price = BigDecimal.ZERO;
+                        dto.total = BigDecimal.ZERO;
                     }
             );
             list.add(dto);
         }
         return list;
     }
+
     @GetMapping("/logistic/route-list")
     public String printRouteList(
             @RequestParam String managerId,
@@ -166,14 +149,16 @@ public class PrintController {
         LocalDate deliveryDate = LocalDate.parse(date);
         List<Order> orders = orderRepository.findDailyRouteOrders(managerId, deliveryDate);
 
-        double routeTotal = orders.stream().mapToDouble(o -> o.getTotalAmount() != null ? o.getTotalAmount() : 0.0).sum();
+        // ИСПРАВЛЕНО: Суммирование BigDecimal
+        BigDecimal routeTotal = orders.stream()
+                .map(o -> o.getTotalAmount() != null ? o.getTotalAmount() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         model.addAttribute("orders", orders);
         model.addAttribute("managerId", managerId);
         model.addAttribute("date", date);
         model.addAttribute("routeTotal", routeTotal);
         model.addAttribute("title", "МАРШРУТНЫЙ ЛИСТ: " + managerId);
-        // Добавляем репозиторий в модель, чтобы вызвать его из HTML для адресов
         model.addAttribute("clientRepo", clientRepository);
 
         return "print_route_template";
@@ -204,7 +189,4 @@ public class PrintController {
 
         return "print_statement_template";
     }
-
-
 }
-

@@ -60,13 +60,12 @@ function formatOrderDate(dateVal) {
 }
 
 // Запуск форматирования при загрузке страницы
-document.addEventListener("DOMContentLoaded", function() {
-    document.querySelectorAll('.js-date-format').forEach(function(cell) {
+document.addEventListener("DOMContentLoaded", function () {
+    document.querySelectorAll('.js-date-format').forEach(function (cell) {
         const result = formatOrderDate(cell.innerText);
         if (result) cell.innerText = result;
     });
 });
-
 
 
 // Утилита для перевода методов оплаты
@@ -96,13 +95,13 @@ function translateReason(r) {
 function translateReturnStatus(status) {
     switch (status) {
         case 'CONFIRMED':
-            return { text: 'Проведено', class: 'bg-success text-white' };
+            return {text: 'Проведено', class: 'bg-success text-white'};
         case 'SENT':
-            return { text: 'Новый', class: 'bg-info text-white' };
+            return {text: 'Новый', class: 'bg-info text-white'};
         case 'DRAFT':
-            return { text: 'Черновик', class: 'bg-warning text-dark' };
+            return {text: 'Черновик', class: 'bg-warning text-dark'};
         default:
-            return { text: status, class: 'bg-secondary text-white' };
+            return {text: status, class: 'bg-secondary text-white'};
     }
 }
 
@@ -149,20 +148,6 @@ function updateRowInTable(order) {
         row.cells[5].innerHTML = `<span class="badge ${badgeClass}">${status}</span>`;
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 // --- 2. Логика состава (общая) ---
 function applySingleQty(encodedName) {
@@ -542,6 +527,8 @@ function enableReturnEdit(id) {
 async function saveNewManualOperation(type) {
     // 1. Получаем чистую дату из инпута (она всегда в формате yyyy-MM-dd)
     const baseDate = document.getElementById('new-op-date').value;
+    const btn = event.target; // Получаем кнопку
+    if (btn.disabled) return; // Если уже нажата — выходим
 
     if (Object.keys(tempItems).length === 0) {
         showToast("Добавьте хотя бы один товар!");
@@ -600,9 +587,11 @@ async function saveNewManualOperation(type) {
     } catch (e) {
         console.error(e);
         showToast("Ошибка сети или сервера", "error");
+    }finally {
+        btn.disabled = false; // Разблокируем только после ответа
+        btn.innerText = (type === 'order') ? "Создать заказ" : "Создать возврат";
     }
 }
-
 
 
 function cancelReturnEdit(id) {
@@ -637,7 +626,6 @@ async function saveReturnChanges(id) {
         showStatus("❌ Ошибка сети", true);
     }
 }
-
 
 
 // Обновление строки ВОЗВРАТА
@@ -1139,6 +1127,9 @@ async function openCreateOrderModal() {
     await loadManagerIds();
     tempItems = {};
     document.getElementById('modal-title').innerText = "Создание нового заказа";
+    const now = new Date();
+    const todayISO = now.toISOString().split('T')[0]; // "2026-01-20"
+    document.getElementById('new-op-date').value = todayISO;
 
     let clientOptions = clientsData.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
     // ИСПРАВЛЕНО: Теперь переменная определена
@@ -1181,6 +1172,11 @@ async function openCreateReturnModal() {
     await loadManagerIds();
     tempItems = {};
     document.getElementById('modal-title').innerText = "Оформление нового возврата";
+    // Добавь это в начало openCreateOrderModal и openCreateReturnModal
+    const now = new Date();
+    const todayISO = now.toISOString().split('T')[0]; // "2026-01-20"
+    document.getElementById('new-op-date').value = todayISO;
+
 
     let clientOptions = clientsData.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
     let reasonOptions = returnReasons.map(r => `<option value="${r.name || r}">${translateReason(r)}</option>`).join('');
@@ -1416,21 +1412,6 @@ function triggerImport() {
     input.click();
 }
 
-// //todo Toast//
-// function showToast(text, type = 'info') {
-//     const container = document.getElementById('toast-container');
-//     const toast = document.createElement('div');
-//     toast.className = `toast-msg toast-${type}`;
-//     const icon = type === 'success' ? '✅' : (type === 'error' ? '❌' : 'ℹ️');
-//     toast.innerHTML = `<span>${icon}</span> <span>${text}</span>`;
-//     container.appendChild(toast);
-//     setTimeout(() => {
-//         toast.style.opacity = '0';
-//         setTimeout(() => toast.remove(), 500);
-//     }, 4000);
-// }
-
-
 
 
 function showToast(text, type = 'info') {
@@ -1456,10 +1437,6 @@ function showToast(text, type = 'info') {
         setTimeout(() => toast.remove(), 500);
     }, 4000);
 }
-
-
-
-
 
 
 function openUserDetailsModal(id) {
@@ -1735,7 +1712,6 @@ function toggleCategory(categoryClass) {
 }
 
 
-
 // Отправляет данные с модалки на сервер
 async function submitInventoryAdjustment() {
     const id = document.getElementById('inv-product-id').value;
@@ -1765,8 +1741,6 @@ async function submitInventoryAdjustment() {
         showToast("Ошибка сети", "error");
     }
 }
-
-
 
 
 // Функция для скачивания отдельного типа отчета
@@ -1860,8 +1834,7 @@ function sendToEmail() {
         });
 }
 
-// Убедитесь, что эта функция showToast() у вас определена
-// function showToast(text, type = 'info') { ... }
+
 
 
 async function saveAllSettings() {
@@ -1910,8 +1883,10 @@ function convertDateToISO(dateVal) {
     // Если это русская строка типа "20 января 2026", пытаемся распарсить
     if (typeof dateVal === 'string' && dateVal.includes('января')) {
         const parts = dateVal.split(' ');
-        const monthMap = {'января': '01', 'февраля': '02', 'марта': '03', 'апреля': '04', 'мая': '05', 'июня': '06',
-            'июля': '07', 'августа': '08', 'сентября': '09', 'октября': '10', 'ноября': '11', 'декабря': '12'};
+        const monthMap = {
+            'января': '01', 'февраля': '02', 'марта': '03', 'апреля': '04', 'мая': '05', 'июня': '06',
+            'июля': '07', 'августа': '08', 'сентября': '09', 'октября': '10', 'ноября': '11', 'декабря': '12'
+        };
         const month = monthMap[parts[1]];
         return `${parts[2]}-${month}-${String(parts[0]).padStart(2, '0')}`;
     }
@@ -1927,6 +1902,7 @@ function convertDateToISO(dateVal) {
         return '';
     }
 }
+
 /**
  * Устанавливает минимальную дату для поля ввода <input type="date">,
  * предотвращая выбор прошедших дней.
@@ -1945,9 +1921,6 @@ function setMinDateToday(inputId) {
         dateInput.min = todayISO;
     }
 }
-
-
-
 
 
 // Функции для печати всего списка заказов/возвратов (для доставщиков)
@@ -1993,7 +1966,6 @@ function validateDate(dateStr) {
 }
 
 
-
 // ИСПРАВЛЕНО: Единая точка входа
 document.addEventListener("DOMContentLoaded", async () => {
     console.log("Sellion ERP 2026 initialized");
@@ -2006,7 +1978,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // --- 1. ФОРМАТИРОВАНИЕ ДАТ ПРИ ЗАГРУЗКЕ ---
     // Предполагается, что функция formatOrderDate определена в script.js
-    document.querySelectorAll('.js-date-format').forEach(function(cell) {
+    document.querySelectorAll('.js-date-format').forEach(function (cell) {
         const rawDate = cell.innerText;
         // Проверяем, что дата еще не отформатирована (нет точек), чтобы не форматировать дважды
         if (rawDate && rawDate !== '---' && !rawDate.includes('.')) {
@@ -2016,7 +1988,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // --- 2. ПЕРЕВОД ПРИЧИН ВОЗВРАТОВ ПРИ ЗАГРУЗКЕ ---
     // Предполагается, что функция translateReason определена в script.js
-    document.querySelectorAll('.js-reason-translate').forEach(function(cell) {
+    document.querySelectorAll('.js-reason-translate').forEach(function (cell) {
         const englishReason = cell.innerText;
         if (englishReason && englishReason !== '---') {
             cell.innerText = translateReason(englishReason);
@@ -2025,7 +1997,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // --- 3. ПЕРЕВОД СТАТУСОВ ВОЗВРАТОВ ПРИ ЗАГРУЗКЕ ---
     // Предполагается, что функция translateReturnStatus определена в script.js
-    document.querySelectorAll('.js-status-translate').forEach(function(cell) {
+    document.querySelectorAll('.js-status-translate').forEach(function (cell) {
         const englishStatus = cell.innerText;
         const statusInfo = translateReturnStatus(englishStatus);
 
@@ -2035,7 +2007,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 
     // --- 4. ЛОГИКА СВОРАЧИВАНИЯ КАТЕГОРИЙ (Ваш существующий код) ---
-    document.body.addEventListener('click', function(e) {
+    document.body.addEventListener('click', function (e) {
         const header = e.target.closest('.js-category-toggle');
         if (!header) return;
 

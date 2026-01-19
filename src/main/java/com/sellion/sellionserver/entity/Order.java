@@ -8,6 +8,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -52,8 +53,8 @@ public class Order {
     private String managerId;
 
     @JsonProperty("totalAmount")
-    private Double totalAmount;
-    private Double totalPurchaseCost;
+    private BigDecimal totalAmount = BigDecimal.ZERO;
+    private BigDecimal totalPurchaseCost = BigDecimal.ZERO;
 
     // НОВОЕ ПОЛЕ: Ссылка на инвойс (счёт), если он создан
     private Long invoiceId;
