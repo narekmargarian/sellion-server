@@ -17,6 +17,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
@@ -38,88 +39,126 @@ public class InvoiceExcelService {
         Map<String, String> seller = companySettings.getSellerData();
 
         if (orders != null && !orders.isEmpty()) {
-            fillSheetData(workbook.createSheet("Վաճառք"), orders, null, seller);
+            fillSheetData(workbook, "Վաճառք", orders, null, seller);
         }
         if (returns != null && !returns.isEmpty()) {
-            fillSheetData(workbook.createSheet("Վերադարձ"), null, returns, seller);
+            fillSheetData(workbook, "Վերադարձ", null, returns, seller);
         }
         return workbook;
     }
 
-    private void fillSheetData(Sheet sheet, List<Order> orders, List<ReturnOrder> returns, Map<String, String> seller) {
-        int rowIdx = 0;
-
-        // 1. ՎԱՃԱՌՈՂԻ ՏՎՅԱԼՆԵՐ
-        addRow(sheet, rowIdx++, "ՎԱՃԱՌՈՂԻ ՏՎՅԱԼՆԵՐ", "");
-        addRow(sheet, rowIdx++, "Անվանում:", seller.get("name"));
-        addRow(sheet, rowIdx++, "ՀՎՀՀ:", seller.get("inn"));
-        addRow(sheet, rowIdx++, "Իրավաբանական հասցե:", seller.get("address"));
-        addRow(sheet, rowIdx++, "Բանկի անվանում:", seller.get("bank"));
-        addRow(sheet, rowIdx++, "Հաշվեհամար (IBAN):", seller.get("iban"));
-        addRow(sheet, rowIdx++, "ԱԱՀ վճարող է:", seller.get("isVatPayer"));
-        rowIdx++;
-
-        // 2. ԱՂՅՈՒՍԱԿԻ ԳԼԽԱՄԱՍ (Заголовки таблицы)
-        Row header = sheet.createRow(rowIdx++);
-        String[] cols = {
-                "Առաքման ամսաթիվ", "Գնորդի անվանում", "Գնորդի ՀՎՀՀ", "Մենեջեր",
-                "Ապրանքի անվանում", "Կոդ (SKU)", "Միավոր", "Քանակ",
-                "Գին (առանց ԱԱՀ)", "ԱԱՀ գումար", "Ընդհանուր գումար"
-        };
-        for (int i = 0; i < cols.length; i++) {
-            header.createCell(i).setCellValue(cols[i]);
-        }
-
-        // Оптимизация: кэш клиентов и продуктов
+    // Этот метод генерирует ОДИН ЛИСТ НА ОДИН ЗАКАЗ/КЛИЕНТА
+    private void fillSheetData(Workbook workbook, String sheetBaseName, List<Order> orders, List<ReturnOrder> returns, Map<String, String> seller) {
         Map<String, Client> clients = clientRepository.findAll().stream()
-                .collect(Collectors.toMap(Client::getName, c -> c, (a, b) -> a));
+                .collect(Collectors.toMap(Client::getName, Function.identity(), (existing, replacement) -> existing));
         Map<String, Product> products = productRepository.findAll().stream()
-                .collect(Collectors.toMap(Product::getName, p -> p, (a, b) -> a));
+                .collect(Collectors.toMap(Product::getName, Function.identity(), (existing, replacement) -> existing));
 
-        // Заполнение данными и добавление итогов по каждому заказу
         if (orders != null) {
             for (Order o : orders) {
                 Client c = clients.getOrDefault(o.getShopName(), new Client());
-                double orderTotalAmount = 0.0;
+                Sheet sheet = workbook.createSheet(sheetBaseName + " " + c.getName());
+                int rowIdx = 0;
 
+                // === БЛОК ПРОДАВЦА (Многострочный, как на фото) ===
+                addRow(sheet, rowIdx++, "ՎԱՃԱՌՈՂԻ ՏՎՅԱԼՆԵՐ", ""); // Заголовок
+                addRow(sheet, rowIdx++, "Անվանում:", seller.get("name"));
+                addRow(sheet, rowIdx++, "ՀՎՀՀ:", seller.get("inn"));
+                addRow(sheet, rowIdx++, "Իրավաբանական հասցե:", seller.get("address"));
+                addRow(sheet, rowIdx++, "Բանկի անվանում:", seller.get("bank"));
+                addRow(sheet, rowIdx++, "Հաշվեհամար (IBAN):", seller.get("iban"));
+                addRow(sheet, rowIdx++, "ԱԱՀ վճարող է:", seller.get("isVatPayer"));
+                rowIdx++; // Пустая строка
+
+                // === БЛОК ПОКУПАТЕЛЯ (Многострочный, как на фото) ===
+                addRow(sheet, rowIdx++, "ԳՆՈՐԴԻ ՏՎՅԱԼՆԵՐ", "");
+                addRow(sheet, rowIdx++, "Անվանում:", c.getName());
+                addRow(sheet, rowIdx++, "ՀՎՀՀ:", c.getInn());
+                addRow(sheet, rowIdx++, "Հաշվեհամար (բանկ):", c.getBankAccount());
+                addRow(sheet, rowIdx++, "Մենեջեր:", o.getManagerId() != null ? o.getManagerId().toString() : "");
+                rowIdx++;
+
+                // === ТАБЛИЦА ТОВАРОВ ===
+                Row header = sheet.createRow(rowIdx++);
+                String[] cols = {"Ապրանք", "Կոդ (SKU)", "Միավոր", "Քանակ", "Գին (առանց ԱԱՀ)", "ԱԱՀ գումար", "Ընդհանուր գումար"};
+                for (int i = 0; i < cols.length; i++) header.createCell(i).setCellValue(cols[i]);
+
+                double orderTotalAmount = 0.0;
                 for (Map.Entry<String, Integer> item : o.getItems().entrySet()) {
                     Product p = products.get(item.getKey());
                     if (p == null) continue;
                     orderTotalAmount += p.getPrice() * item.getValue();
-                    writeProductRow(sheet.createRow(rowIdx++), o, c, p, item.getValue());
+                    writeProductRow(sheet.createRow(rowIdx++), p, item.getValue());
                 }
 
-                // *** ИТОГОВЫЙ БЛОК ДЛЯ ТЕКУЩЕГО ЗАКАЗА ***
+                // === ИТОГОВАЯ СУММА ===
+                rowIdx++;
                 Row totalRow = sheet.createRow(rowIdx++);
-                totalRow.createCell(9).setCellValue("Ընդհանուր պատվերի համար:"); // Подпись
-                totalRow.createCell(10).setCellValue(round(orderTotalAmount)); // Сумма
+                totalRow.createCell(5).setCellValue("Ընդհանուր վճարվող գումար:");
+                totalRow.createCell(6).setCellValue(round(orderTotalAmount));
+            }
+        }
 
-                rowIdx++; // Пустая строка между заказами
+        // Логика для возвратов
+        if (returns != null) {
+            for (ReturnOrder r : returns) {
+                Client c = clients.getOrDefault(r.getShopName(), new Client());
+                Sheet sheet = workbook.createSheet(sheetBaseName + " " + c.getName());
+                int rowIdx = 0;
+
+                // === БЛОК ПРОДАВЦА (Полная информация, многострочно) ===
+                addRow(sheet, rowIdx++, "ՎԱՃԱՌՈՂԻ ՏՎՅԱԼՆԵՐ", "");
+                addRow(sheet, rowIdx++, "Անվանում:", seller.get("name"));
+                addRow(sheet, rowIdx++, "ՀՎՀՀ:", seller.get("inn"));
+                addRow(sheet, rowIdx++, "Իրավաբանական հասցե:", seller.get("address"));
+                addRow(sheet, rowIdx++, "Բանկի անվանում:", seller.get("bank"));
+                addRow(sheet, rowIdx++, "Հաշվեհամար (IBAN):", seller.get("iban"));
+                addRow(sheet, rowIdx++, "ԱԱՀ վճարող է:", seller.get("isVatPayer"));
+                rowIdx++; // Пустая строка
+
+                // === БЛОК ПОКУПАТЕЛЯ (Полная информация, многострочно) ===
+                addRow(sheet, rowIdx++, "ԳՆՈՐԴԻ ՏՎՅԱԼՆԵՐ", "");
+                addRow(sheet, rowIdx++, "Անվանում:", c.getName());
+                addRow(sheet, rowIdx++, "ՀՎՀՀ:", c.getInn());
+                addRow(sheet, rowIdx++, "Հաշվեհամար (բանկ):", c.getBankAccount());
+                addRow(sheet, rowIdx++, "Մենեջեր:", r.getManagerId() != null ? r.getManagerId().toString() : "");
+                rowIdx++;
+
+                // ... (логика таблицы и итогов для возврата)
+                Row header = sheet.createRow(rowIdx++);
+                String[] cols = {"Ապրանք", "Կոդ (SKU)", "Միավոր", "Քանակ", "Գին (առանց ԱԱՀ)", "ԱԱՀ գումար", "Ընդհանուր գումար"};
+                for (int i = 0; i < cols.length; i++) header.createCell(i).setCellValue(cols[i]);
+
+                double returnTotalAmount = 0.0;
+                for (Map.Entry<String, Integer> item : r.getItems().entrySet()) {
+                    Product p = products.get(item.getKey());
+                    if (p == null) continue;
+                    returnTotalAmount += p.getPrice() * item.getValue();
+                    writeProductRow(sheet.createRow(rowIdx++), p, item.getValue());
+                }
+
+                rowIdx++;
+                Row totalRow = sheet.createRow(rowIdx++);
+                totalRow.createCell(5).setCellValue("Ընդհանուր վճարվող գումար:");
+                totalRow.createCell(6).setCellValue(round(returnTotalAmount));
             }
         }
     }
 
-    private void writeProductRow(Row row, Order o, Client c, Product p, int qty) {
+    private void writeProductRow(Row row, Product p, int qty) {
         double priceWithVat = p.getPrice();
         double priceNoVat = priceWithVat / 1.2;
         double vatAmount = (priceWithVat - priceNoVat) * qty;
         double total = priceWithVat * qty;
 
-        // *** ИСПРАВЛЕНИЕ ОШИБКИ ЗДЕСЬ ***
-        // Мы берем только первую часть строки даты до символа 'T'
-        String dateString = o.getCreatedAt() != null && o.getCreatedAt().contains("T") ? o.getCreatedAt().split("T")[0] : o.getCreatedAt();
-
-        row.createCell(0).setCellValue(dateString);
-        row.createCell(1).setCellValue(o.getShopName());
-        row.createCell(2).setCellValue(c.getInn() != null ? c.getInn() : "---");
-        row.createCell(3).setCellValue(o.getManagerId() != null ? o.getManagerId().toString() : "");
-        row.createCell(4).setCellValue(p.getName());
-        row.createCell(5).setCellValue(p.getHsnCode());
-        row.createCell(6).setCellValue(p.getUnit() != null ? p.getUnit() : "հատ");
-        row.createCell(7).setCellValue(qty);
-        row.createCell(8).setCellValue(round(priceNoVat));
-        row.createCell(9).setCellValue(round(vatAmount));
-        row.createCell(10).setCellValue(round(total));
+        int cellIdx = 0;
+        row.createCell(cellIdx++).setCellValue(p.getName());
+        row.createCell(cellIdx++).setCellValue(p.getHsnCode());
+        row.createCell(cellIdx++).setCellValue(p.getUnit() != null ? p.getUnit() : "հատ");
+        row.createCell(cellIdx++).setCellValue(qty);
+        row.createCell(cellIdx++).setCellValue(round(priceNoVat));
+        row.createCell(cellIdx++).setCellValue(round(vatAmount));
+        row.createCell(cellIdx++).setCellValue(round(total));
     }
 
     private void addRow(Sheet sheet, int rowIdx, String label, String value) {

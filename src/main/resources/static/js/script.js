@@ -1657,7 +1657,6 @@ async function submitInventoryAdjustment() {
 
 
 
-
 function downloadExcel(type) {
     const start = document.getElementById('report-start').value;
     const end = document.getElementById('report-end').value;
@@ -1667,13 +1666,41 @@ function downloadExcel(type) {
         return;
     }
 
-    // Изменяем URL для заказов на новый детальный эндпоинт
+    // URL для запросов с использованием fetch
     const url = type === 'orders' ?
         `/api/reports/excel/orders-detailed?start=${start}&end=${end}` :
-        `/api/reports/excel/returns?start=${start}&end=${end}`;
+        `/api/reports/excel/returns-detailed?start=${start}&end=${end}`; // Используем detailed эндпоинт
 
-    window.location.href = url;
+    // Используем fetch для контроля над ответами и показа toast
+    fetch(url)
+        .then(response => {
+            if (response.ok) {
+                // Если статус 200 OK, пришел файл. Обрабатываем скачивание:
+                return response.blob().then(blob => {
+                    const downloadUrl = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.style.display = 'none';
+                    a.href = downloadUrl;
+                    a.download = `${type}_report_${start}.xlsx`;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(downloadUrl);
+                    showToast('Отчет успешно скачан!', 'success');
+                });
+            } else {
+                // Если ошибка (например, 404), пришел JSON с сообщением
+                return response.json().then(data => {
+                    showToast(data.message || 'Ошибка сервера', 'error');
+                });
+            }
+        })
+        .catch(error => {
+            showToast('Ошибка сети при скачивании отчета.', 'error');
+        });
 }
+
+// Убедитесь, что у вас есть функция showToast в вашем проекте:
+// function showToast(message, type) { ... }
 
 
 async function sendToEmail() {
