@@ -313,6 +313,7 @@ function enableOrderEdit(id) {
         <div class="modal-info-row">
             <div><label>Магазин</label><select id="edit-shop">${clientOptions}</select></div>
             <div><label>Доставка</label><input type="text" id="edit-delivery" value="${formattedDeliveryDate}"></div>
+            <div><label>Номер автомобиля</label><input type="text" id="edit-car-number" value="${order.carNumber || ''}"></div>
             <div><label>Оплата</label><select id="edit-payment">${paymentOptions}</select></div>
             <div><label>Отд. Фактура</label>
                 <select id="edit-invoice-type">
@@ -340,6 +341,7 @@ async function saveFullChanges(id) {
         deliveryDate: document.getElementById('edit-delivery').value,
         paymentMethod: document.getElementById('edit-payment').value,
         needsSeparateInvoice: document.getElementById('edit-invoice-type').value === "true",
+        carNumber: document.getElementById('edit-car-number').value,
         items: tempItems
     };
 
@@ -715,6 +717,7 @@ function enableClientEdit() {
     info.innerHTML = `
         <div class="modal-info-row">
             <div><label>Магазин</label><input type="text" id="edit-client-name" value="${client.name}"></div>
+            <div><label>Расчетный счет (IBAN)</label><input type="text" id="edit-client-bank" value="${client.bankAccount || ''}"></div>
             <div><label>Владелец</label><input type="text" id="edit-client-owner" value="${client.ownerName || ''}"></div>
             <div><label>ИНН</label><input type="text" id="edit-client-inn" value="${client.inn || ''}"></div>
         </div>
@@ -737,7 +740,8 @@ async function saveClientChanges(id) {
         inn: document.getElementById('edit-client-inn').value,
         phone: document.getElementById('edit-client-phone').value,
         address: document.getElementById('edit-client-address').value,
-        debt: parseFloat(document.getElementById('edit-client-debt').value) || 0
+        debt: parseFloat(document.getElementById('edit-client-debt').value) || 0,
+        bankAccount: document.getElementById('edit-client-bank').value
     };
 
     try {
@@ -867,11 +871,15 @@ function enableProductEdit() {
             <div><label>Название</label><input type="text" id="edit-product-name" value="${product.name}"></div>
             <div><label>Цена</label><input type="number" id="edit-product-price" value="${product.price}"></div>
             <div><label>Категория</label><input type="text" id="edit-product-category" value="${product.category || ''}"></div>
+            <div><label>Код SKU (для 1С)</label><input type="text" id="edit-product-hsn" value="${product.hsnCode || ''}"></div>
+
         </div>
         <div class="modal-info-row">
             <div><label>Остаток</label><input type="number" id="edit-product-qty" value="${product.stockQuantity || 0}"></div>
             <div><label>Штрих-код</label><input type="text" id="edit-product-barcode" value="${product.barcode || ''}"></div>
             <div><label>Упаковка</label><input type="number" id="edit-product-perbox" value="${product.itemsPerBox || 0}"></div>
+            <div><label>Ед. измерения (шт/кг/кор)</label><input type="text" id="edit-product-unit" value="${product.unit || 'шт'}"></div>
+
         </div>
     `;
 
@@ -888,7 +896,9 @@ async function saveProductChanges(id) {
         stockQuantity: parseInt(document.getElementById('edit-product-qty').value) || 0,
         barcode: document.getElementById('edit-product-barcode').value,
         itemsPerBox: parseInt(document.getElementById('edit-product-perbox').value) || 0,
-        category: document.getElementById('edit-product-category').value
+        category: document.getElementById('edit-product-category').value,
+        hsnCode: document.getElementById('edit-product-hsn').value,
+        unit: document.getElementById('edit-product-unit').value
     };
 
     try {
@@ -1641,6 +1651,38 @@ async function submitInventoryAdjustment() {
         showToast("Ошибка сети", "error");
     }
 }
+
+
+
+
+
+
+
+function downloadExcel(type) {
+    const start = document.getElementById('report-start').value;
+    const end = document.getElementById('report-end').value;
+
+    if (!start || !end) {
+        showToast("Выберите период!", "error");
+        return;
+    }
+
+    // Изменяем URL для заказов на новый детальный эндпоинт
+    const url = type === 'orders' ?
+        `/api/reports/excel/orders-detailed?start=${start}&end=${end}` :
+        `/api/reports/excel/returns?start=${start}&end=${end}`;
+
+    window.location.href = url;
+}
+
+
+async function sendToEmail() {
+    // В 2026 году для отправки почты нужен отдельный сервис,
+    // пока сделаем уведомление, что функция готова к интеграции
+    showToast("Подготовка архива и отправка на email бухгалтера...", "info");
+    // Здесь будет вызов fetch('/api/reports/send-email?period=...')
+}
+
 
 
 // Функции для печати всего списка заказов/возвратов (для доставщиков)

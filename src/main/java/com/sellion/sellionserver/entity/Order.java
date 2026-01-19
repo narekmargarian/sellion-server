@@ -66,6 +66,7 @@ public class Order {
 
     @Column(unique = true) // База данных сама не даст создать дубликат
     private String androidId;
+    private String carNumber;
 
 
     @PrePersist

@@ -416,6 +416,55 @@
             </div>
         </div>
 
+        <!-- ВКЛАДКА ОТЧЕТЫ -->
+        <div id="tab-reports" class="tab-pane">
+            <div class="glass-card" style="padding: 30px; margin: 20px;">
+                <h3 style="margin-bottom: 25px; font-weight: 800; color: #1e293b;">📊 Центр отчетности и экспорта</h3>
+
+                <div class="filter-bar" style="background: #f8fafc; padding: 25px; border-radius: 16px; display: flex; gap: 20px; align-items: flex-end; border: 1px solid #e2e8f0;">
+                    <div style="flex-grow: 1;">
+                        <label style="font-size: 11px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">Период выгрузки данных</label>
+                        <div style="display: flex; gap: 12px; margin-top: 8px;">
+                            <div style="flex: 1;">
+                                <small style="color: #94a3b8;">Начало:</small>
+                                <input type="date" id="report-start" class="form-control" th:value="${#temporals.format(#temporals.createNow(), 'yyyy-MM-dd')}">
+                            </div>
+                            <div style="flex: 1;">
+                                <small style="color: #94a3b8;">Конец:</small>
+                                <input type="date" id="report-end" class="form-control" th:value="${#temporals.format(#temporals.createNow(), 'yyyy-MM-dd')}">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn-primary" style="background: #10b981; height: 45px; padding: 0 20px; font-weight: 700; border: none; border-radius: 10px;" onclick="downloadExcel('orders')">
+                            📥 Заказы (.xlsx)
+                        </button>
+                        <button class="btn-primary" style="background: #ef4444; height: 45px; padding: 0 20px; font-weight: 700; border: none; border-radius: 10px;" onclick="downloadExcel('returns')">
+                            📥 Возвраты (.xlsx)
+                        </button>
+                        <button class="btn-primary" style="background: #6366f1; height: 45px; padding: 0 20px; font-weight: 700; border: none; border-radius: 10px;" onclick="sendToEmail()">
+                            ✉️ Почта бухгалтеру
+                        </button>
+                    </div>
+                </div>
+
+                <div style="margin-top: 40px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <div style="padding: 20px; background: #f0fdf4; border-radius: 12px; border: 1px solid #bbf7d0;">
+                        <h5 style="color: #166534; font-weight: 700;">✅ Проверка документов</h5>
+                        <p style="font-size: 13px; color: #15803d; margin: 0;">Перед выгрузкой убедитесь, что все заказы за 2026 год проверены оператором и имеют актуальные статусы.</p>
+                    </div>
+                    <div style="padding: 20px; background: #eff6ff; border-radius: 12px; border: 1px solid #bfdbfe;">
+                        <h5 style="color: #1e40af; font-weight: 700;">📄 Фактуры</h5>
+                        <p style="font-size: 13px; color: #1d4ed8; margin: 0;">Кнопка "Заказы" выгружает детализированный отчет со всеми позициями товаров для импорта в 1С или иную бухгалтерию.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+
+
+
 
         <!--        ---------------------->
 

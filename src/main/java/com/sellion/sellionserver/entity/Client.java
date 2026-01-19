@@ -32,5 +32,5 @@ public class Client {
     private Double debt = 0.0; // Новое поле
     private String managerId;
     private boolean isDeleted = false; // Флаг мягкого удаления
-
+    private String bankAccount;
 }

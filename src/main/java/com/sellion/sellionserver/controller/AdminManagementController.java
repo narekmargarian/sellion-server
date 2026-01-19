@@ -83,6 +83,7 @@ public class AdminManagementController {
         double newTotal = totals.get("totalSale");
         double newPurchaseCost = totals.get("totalCost");
 
+        order.setCarNumber((String) payload.get("carNumber"));
         order.setItems(newItems);
         order.setTotalAmount(newTotal);
         order.setTotalPurchaseCost(newPurchaseCost); // Теперь и при правке пишется себестоимость
@@ -144,6 +145,8 @@ public class AdminManagementController {
             p.setBarcode((String) payload.get("barcode"));
             p.setItemsPerBox(((Number) payload.get("itemsPerBox")).intValue());
             p.setCategory((String) payload.get("category"));
+            p.setHsnCode((String) payload.get("hsnCode"));
+            p.setUnit((String) payload.get("unit"));
             productRepository.save(p);
 
             AuditLog log = new AuditLog();
@@ -208,6 +211,7 @@ public class AdminManagementController {
             c.setOwnerName((String) payload.get("ownerName"));
             c.setInn((String) payload.get("inn"));
             c.setPhone((String) payload.get("phone"));
+            c.setBankAccount((String) payload.get("bankAccount"));
             clientRepository.save(c);
 
             AuditLog log = new AuditLog();

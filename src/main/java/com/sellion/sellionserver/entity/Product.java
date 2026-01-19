@@ -22,18 +22,10 @@ public class Product {
     private String barcode;
     private String category;
     private Double purchasePrice;
-    // НОВОЕ ПОЛЕ: Остаток на складе
     private Integer stockQuantity;
     private boolean isDeleted = false; // Флаг мягкого удаления
+    private String unit;
+    private String hsnCode;
 
-    public Product(Long id, String name, Double price, Integer itemsPerBox, String barcode, String category, Double purchasePrice, Integer stockQuantity) {
-        this.id = id;
-        this.name = name;
-        this.price = price;
-        this.itemsPerBox = itemsPerBox;
-        this.barcode = barcode;
-        this.category = category;
-        this.purchasePrice = purchasePrice;
-        this.stockQuantity = stockQuantity;
-    }
+
 }
