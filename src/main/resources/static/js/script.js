@@ -66,6 +66,11 @@ function formatOrderDate(dateVal) {
     return dateVal;
 }
 
+function fmt(dateVal) {
+    if (!dateVal) return '---';
+    // Используем уже готовую у вас функцию форматирования
+    return formatOrderDate(dateVal);
+}
 
 // Утилита для перевода методов оплаты
 function translatePayment(m) {
@@ -358,46 +363,92 @@ function openOrderDetails(id) {
     openModal('modal-order-view');
 }
 
+function openOrderDetails(id) {
+    // 1. Безопасный поиск заказа
+    const order = (ordersData || []).find(o => o.id == id);
+    if (!order) return console.error(`Заказ с ID ${id} не найден.`);
+
+    // 2. Очистка мусора: Используем универсальную функцию синхронизации
+    // Это заменяет старый длинный цикл и гарантирует формат {ID: Qty}
+    tempItems = syncTempItems(order.items);
+
+    // 3. Обновление заголовка модального окна
+    document.getElementById('modal-title').innerHTML = `Детали операции <span class="badge" style="margin-left:10px;">ЗАКАЗ №${order.id}</span>`;
+
+    // 4. Обновление основной информации (чистый вывод данных)
+    const info = document.getElementById('order-info');
+    info.innerHTML = `
+        <div class="modal-info-row">
+            <div><small>Магазин:</small><br><b>${order.shopName}</b></div>
+            <div><small>Дата заказа:</small><br><b>${formatOrderDate(order.createdAt)}</b></div>
+            <div><small>Менеджер:</small><br><b>${order.managerId}</b></div>
+        </div>
+        <div class="modal-info-row">
+            <div><small>Доставка:</small><br><b>${formatOrderDate(order.deliveryDate)}</b></div>
+            <div><small>Оплата:</small><br><b>${translatePayment(order.paymentMethod)}</b></div>
+            <div><small>Фактура:</small><br><b>${order.needsSeparateInvoice ? 'ДА' : 'НЕТ'}</b></div>
+        </div>
+    `;
+
+    // 5. Рендеринг таблицы товаров (false - режим просмотра)
+    renderItemsTable(tempItems, false);
+
+    // 6. Обновление итоговой суммы
+    const totalPriceElement = document.getElementById('order-total-price');
+    if (totalPriceElement) {
+        totalPriceElement.innerText = "Итого: " + (order.totalAmount || 0).toLocaleString() + " ֏";
+    }
+
+    // 7. Оптимизированная логика кнопок футера
+    const footer = document.getElementById('order-footer-actions');
+    const commonButtons = `
+        <button class="btn-primary" style="background:#6366f1" onclick="showOrderHistory(${order.id})">📜 История</button>
+        <button class="btn-primary" style="background:#475569" onclick="printOrder(${order.id})">🖨 Печать</button>
+    `;
+
+    if (order.invoiceId) {
+        // Режим: Счет уже выставлен (редактирование запрещено)
+        footer.innerHTML = `
+            ${commonButtons}
+            <div style="color:#991b1b; font-weight:700; background:#fee2e2; padding:10px; border-radius:8px; flex:1; text-align:center;">СЧЕТ ВЫСТАВЛЕН</div>
+            <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-order-view')">Закрыть</button>
+        `;
+    } else {
+        // Режим: Новый заказ (можно менять или отменять)
+        footer.innerHTML = `
+            ${commonButtons}
+            <button class="btn-primary" onclick="enableOrderEdit(${order.id})">Изменить</button>
+            <button class="btn-primary" style="background:#ef4444" onclick="cancelOrder(${order.id})">Отменить заказ</button>
+            <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-order-view')">Закрыть</button>
+        `;
+    }
+
+    openModal('modal-order-view');
+}
+
+
 
 function openReturnDetails(id) {
-    // 1. Безопасный поиск данных (защита от undefined)
+    // 1. Безопасный поиск возврата
     const ret = (returnsData || []).find(r => r.id == id);
     if (!ret) return console.error(`Возврат с ID ${id} не найден.`);
 
-    // 2. ИСПРАВЛЕНИЕ: Трансформируем items в карту {ID: Количество}
-    // Это критично для исправления ошибки десериализации на бэкенде
-    tempItems = {};
-    if (ret.items) {
-        Object.entries(ret.items).forEach(([key, qty]) => {
-            // Если ключ — это строка (название), ищем соответствующий ID в продуктах
-            if (isNaN(key)) {
-                const product = (productsData || []).find(p => p.name === key);
-                if (product) {
-                    tempItems[product.id] = qty;
-                } else {
-                    console.warn(`Товар "${key}" не найден в справочнике товаров.`);
-                }
-            } else {
-                // Если ключ уже является числовым ID
-                tempItems[key] = qty;
-            }
-        });
-    }
+    // 2. Очистка мусора: Используем универсальную функцию синхронизации {ID: Qty}
+    tempItems = syncTempItems(ret.items);
 
-    const statusText = ret.status === 'CONFIRMED' ? 'Проведено' : (ret.status === 'DRAFT' ? 'Черновик' : ret.status);
-    const statusClass = ret.status === 'CONFIRMED' ? 'bg-success' : 'bg-warning';
-    const footer = document.getElementById('order-footer-actions');
-    const printBtnHtml = `<button class="btn-primary" style="background:#475569" onclick="printReturn(${ret.id})">🖨 Печать</button>`;
+    // 3. Подготовка статуса и оформления
+    const isConfirmed = ret.status === 'CONFIRMED';
+    const statusText = isConfirmed ? 'Проведено' : (ret.status === 'DRAFT' ? 'Черновик' : ret.status);
+    const statusClass = isConfirmed ? 'bg-success' : 'bg-warning';
     const displayReason = translateReason(ret.returnReason);
 
-    // 3. Обновляем заголовок
+    // 4. Обновляем заголовок и инфо-блок
     document.getElementById('modal-title').innerHTML = `
         Детали операции 
         <span class="badge ${statusClass}" style="margin-left:10px;">${statusText}</span>
         <span class="badge" style="margin-left:5px;">ВОЗВРАТ №${ret.id}</span>
     `;
 
-    // 4. Обновляем инфо-блок
     document.getElementById('order-info').innerHTML = `
         <div class="modal-info-row" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; background: #fff1f2; padding: 15px; border-radius: 10px; margin-top: 20px;">
             <div><small>Магазин:</small><br><b>${ret.shopName}</b></div>
@@ -406,20 +457,23 @@ function openReturnDetails(id) {
         </div>
     `;
 
-    // 5. Рендерим таблицу (теперь она работает через ID)
+    // 5. Рендерим таблицу товаров
     renderItemsTable(tempItems, false);
 
-    // 6. Обновляем итоговую сумму
+    // 6. Обновляем сумму
     const totalPriceElement = document.getElementById('order-total-price');
     if (totalPriceElement) {
         totalPriceElement.innerText = "Сумма возврата: " + (ret.totalAmount || 0).toLocaleString() + " ֏";
     }
 
-    // 7. Управление кнопками футера
+    // 7. Оптимизированное управление кнопками футера
+    const footer = document.getElementById('order-footer-actions');
+    const printBtn = `<button class="btn-primary" style="background:#475569" onclick="printReturn(${ret.id})">🖨 Печать</button>`;
+
     if (ret.status === 'DRAFT') {
         footer.innerHTML = `
             <button class="btn-primary" style="background:#10b981" onclick="confirmReturn(${ret.id})">✅ Подтвердить</button>
-            ${printBtnHtml}
+            ${printBtn}
             <button class="btn-primary" onclick="enableReturnEdit(${ret.id})">Изменить</button>
             <button class="btn-primary" style="background:#ef4444" onclick="deleteReturnOrder(${ret.id})">❌ Удалить</button>
             <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-order-view')">Закрыть</button>
@@ -429,13 +483,14 @@ function openReturnDetails(id) {
             <div style="flex: 1; display: flex; align-items: center; justify-content: center; color: #64748b; font-weight: bold;">
                 <span>✓ Операция проведена</span>
             </div>
-            ${printBtnHtml}
+            ${printBtn}
             <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-order-view')">Закрыть</button>
         `;
     }
 
     openModal('modal-order-view');
 }
+
 
 
 function addItemToEdit() {
@@ -482,11 +537,7 @@ function getManagerOptionsHTML() {
 }
 
 
-function fmt(dateVal) {
-    if (!dateVal) return '---';
-    // Используем уже готовую у вас функцию форматирования
-    return formatOrderDate(dateVal);
-}
+
 
 async function saveNewManualOperation(type) {
     // 1. ПРИНУДИТЕЛЬНЫЙ СБОР ДАННЫХ:
@@ -572,6 +623,22 @@ async function saveNewManualOperation(type) {
         console.error("Критическая ошибка при сохранении:", e);
         showToast("Ошибка сети: сервер недоступен", "error");
     }
+}
+
+// Чистая функция для подготовки товаров (всегда возвращает {ID: Qty})
+function syncTempItems(items) {
+    let synced = {};
+    if (!items) return synced;
+
+    Object.entries(items).forEach(([key, qty]) => {
+        // Если ключ — название (не число), ищем ID. Если ID — оставляем как есть.
+        const productId = isNaN(key)
+            ? (productsData || []).find(p => p.name === key)?.id
+            : key;
+
+        if (productId) synced[productId] = qty;
+    });
+    return synced;
 }
 
 
@@ -2085,45 +2152,84 @@ function validateDate(dateStr) {
     return true;
 }
 
+
 document.addEventListener("DOMContentLoaded", async () => {
-    console.log("Sellion ERP 2026 initialized");
+    console.log("Sellion ERP 2026: Инициализация системы...");
 
-    // 1. WebSocket подключаем один раз
-    if (typeof connectWebSocket === 'function') connectWebSocket();
+    // --- 1. СИСТЕМНЫЕ СЛУЖБЫ ---
+    // WebSocket подключаем сразу для получения уведомлений в реальном времени
+    if (typeof connectWebSocket === 'function') {
+        connectWebSocket();
+    }
 
-    // 2. Менеджеров грузим сразу при старте, чтобы модалки открывались мгновенно
+    // --- 2. ЗАГРУЗКА ДАННЫХ ---
+    // Загружаем список менеджеров. Используем await, чтобы данные были готовы
+    // до того, как пользователь успеет открыть модальное окно.
     if (typeof loadManagerIds === 'function') {
         try {
             await loadManagerIds();
         } catch (e) {
-            console.error("Ошибка загрузки менеджеров");
+            console.error("Ошибка при предзагрузке списка менеджеров:", e);
         }
     }
 
-    // 3. Восстановление вкладки
+    // --- 3. НАВИГАЦИЯ ---
+    // Восстанавливаем последнюю открытую вкладку (Заказы, Склад или Клиенты)
     const lastTab = localStorage.getItem('sellion_tab') || 'tab-main';
-    if (typeof showTab === 'function') showTab(lastTab);
+    if (typeof showTab === 'function') {
+        showTab(lastTab);
+    }
 
-    // 4. Форматирование всех дат и статусов в таблицах (делегирование)
-    const formatInitialData = () => {
-        document.querySelectorAll('.js-date-format').forEach(cell => {
-            const raw = cell.innerText;
-            if (raw && raw !== '---' && !raw.includes('.')) {
-                cell.innerText = formatOrderDate(raw);
+    // --- 4. ФОРМАТИРОВАНИЕ ДАННЫХ (Очистка таблиц) ---
+    // Группируем все правила форматирования, чтобы не плодить циклы по всему коду.
+    const runFormatting = () => {
+        // Форматируем даты (только если они еще не отформатированы)
+        document.querySelectorAll('.js-date-format').forEach(el => {
+            const val = el.innerText.trim();
+            if (val && val !== '---' && !val.includes('.')) {
+                el.innerText = formatOrderDate(val);
             }
         });
 
-        document.querySelectorAll('.js-reason-translate').forEach(cell => {
-            cell.innerText = translateReason(cell.innerText);
+        // Переводим причины возвратов
+        document.querySelectorAll('.js-reason-translate').forEach(el => {
+            if (el.innerText.trim()) {
+                el.innerText = translateReason(el.innerText);
+            }
         });
 
-        document.querySelectorAll('.js-status-translate').forEach(cell => {
-            const statusInfo = translateReturnStatus(cell.innerText);
-            cell.innerHTML = `<span class="badge ${statusInfo.class}">${statusInfo.text}</span>`;
+        // Превращаем текстовые статусы в красивые баджи (badges)
+        document.querySelectorAll('.js-status-translate').forEach(el => {
+            const rawStatus = el.innerText.trim();
+            if (rawStatus) {
+                const statusInfo = translateReturnStatus(rawStatus);
+                el.innerHTML = `<span class="badge ${statusInfo.class}">${statusInfo.text}</span>`;
+            }
         });
     };
 
-    formatInitialData();
-});
+    // Запускаем форматирование для данных, которые пришли в HTML при загрузке
+    runFormatting();
 
+    // --- 5. ГЛОБАЛЬНЫЕ СОБЫТИЯ (Делегирование) ---
+    // Логика сворачивания категорий (чтобы работало даже на новых элементах)
+    document.body.addEventListener('click', function(e) {
+        const header = e.target.closest('.js-category-toggle');
+        if (!header) return;
+
+        const targetClass = header.getAttribute('data-target');
+        const rows = document.getElementsByClassName(targetClass);
+        const icon = header.querySelector('.toggle-icon');
+
+        if (rows.length > 0) {
+            const isHidden = rows[0].style.display === "none";
+            for (let i = 0; i < rows.length; i++) {
+                rows[i].style.display = isHidden ? "table-row" : "none";
+            }
+            if (icon) icon.innerText = isHidden ? "▼" : "▶";
+        }
+    });
+
+    console.log("Sellion ERP 2026: Система готова.");
+});
 
