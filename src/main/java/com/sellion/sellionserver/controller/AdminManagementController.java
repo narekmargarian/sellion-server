@@ -4,14 +4,16 @@ import com.sellion.sellionserver.entity.*;
 import com.sellion.sellionserver.repository.*;
 import com.sellion.sellionserver.services.FinanceService;
 import com.sellion.sellionserver.services.StockService;
-import jakarta.transaction.Transactional;
+
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeParseException;
@@ -34,62 +36,68 @@ public class AdminManagementController {
     private static final Logger log = LoggerFactory.getLogger(AdminManagementController.class);
 
     @PutMapping("/orders/{id}/full-edit")
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public ResponseEntity<?> fullEditOrder(@PathVariable Long id, @RequestBody Map<String, Object> payload) {
         Order order = orderRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Заказ не найден: " + id));
 
-        // 1. Проверка на наличие счета
         if (order.getInvoiceId() != null) {
             return ResponseEntity.badRequest().body(Map.of("error", "Заказ со счетом нельзя менять!"));
         }
 
-        // 2. Возвращаем старые товары на склад (с логированием)
-        stockService.returnItemsToStock(order.getItems(), "Корректировка состава заказа #" + id);
+        // 1. Возврат старых товаров (теперь order.getItems() возвращает Map<Long, Integer>)
+        stockService.returnItemsToStock(order.getItems(), "Корректировка состава заказа #" + id, "ADMIN");
 
-        // 3. Обновляем данные заказа
+        // 2. Обновление основных полей
         order.setShopName((String) payload.get("shopName"));
         String deliveryDateString = (String) payload.get("deliveryDate");
         if (deliveryDateString != null && !deliveryDateString.isEmpty()) {
             try {
                 order.setDeliveryDate(LocalDate.parse(deliveryDateString));
             } catch (DateTimeParseException e) {
-                return ResponseEntity.badRequest().body(Map.of("error", "Неверный формат даты: " + deliveryDateString));
+                throw new RuntimeException("Неверный формат даты: " + deliveryDateString);
             }
         }
 
-        order.setNeedsSeparateInvoice((Boolean) payload.get("needsSeparateInvoice"));
+        order.setNeedsSeparateInvoice(Boolean.TRUE.equals(payload.get("needsSeparateInvoice")));
         order.setPaymentMethod(PaymentMethod.fromString((String) payload.get("paymentMethod")));
         order.setCarNumber((String) payload.get("carNumber"));
 
-        // 4. Резервируем новые товары
-        Map<String, Integer> newItems = (Map<String, Integer>) payload.get("items");
-        try {
-            stockService.reserveItemsFromStock(newItems, "Обновление состава заказа #" + id);
-        } catch (RuntimeException e) {
-            // Откат: если новых товаров нет, возвращаем старые
-            stockService.deductItemsFromStock(order.getItems(), "Откат к старому составу заказа #" + id);
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        // 3. Конвертация полученных данных в Map<Long, Integer>
+        // Входящий JSON приходит как Map<String, Integer>, нам нужно сменить тип ключа
+        Map<Long, Integer> newItems = new HashMap<>();
+        Object itemsObj = payload.get("items");
+        if (itemsObj instanceof Map) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> rawItems = (Map<String, Object>) itemsObj;
+            rawItems.forEach((key, value) -> {
+                newItems.put(Long.valueOf(key), ((Number) value).intValue());
+            });
         }
 
-        // 5. Пересчет суммы через BigDecimal
-        Map<String, BigDecimal> totals = calculateTotalSaleAndCost(newItems);
-        BigDecimal newTotal = totals.get("totalSale");
-        BigDecimal newPurchaseCost = totals.get("totalCost");
+        // 4. Резерв новых товаров (теперь передаем корректный Map<Long, Integer>)
+        stockService.reserveItemsFromStock(newItems, "Обновление состава заказа #" + id);
 
-        order.setItems(newItems);
-        order.setTotalAmount(newTotal);
-        order.setTotalPurchaseCost(newPurchaseCost);
+        // 5. Расчет сумм (метод calculateTotalSaleAndCost также должен принимать Map<Long, Integer>)
+        Map<String, BigDecimal> totals = calculateTotalSaleAndCost(newItems);
+
+        order.setItems(newItems); // Теперь типы совпадают (Map<Long, Integer>)
+        order.setTotalAmount(totals.get("totalSale"));
+        order.setTotalPurchaseCost(totals.get("totalCost"));
+
         orderRepository.save(order);
 
-        // 6. Аудит
-        recordAudit(id, "ORDER", "РЕДАКТИРОВАНИЕ ЗАКАЗА", "Заказ изменен. Новая сумма: " + newTotal + " ֏");
+        recordAudit(id, "ORDER", "РЕДАКТИРОВАНИЕ ЗАКАЗА", "Заказ изменен. Новая сумма: " + order.getTotalAmount() + " ֏");
 
-        return ResponseEntity.ok(Map.of("finalSum", newTotal, "message", "Заказ успешно обновлен"));
+        return ResponseEntity.ok(Map.of(
+                "finalSum", order.getTotalAmount(),
+                "message", "Заказ успешно обновлен"
+        ));
     }
 
+
     @PostMapping("/orders/{id}/cancel")
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public ResponseEntity<?> cancelOrder(@PathVariable Long id) {
         Order order = orderRepository.findById(id).orElseThrow();
 
@@ -100,7 +108,7 @@ public class AdminManagementController {
             return ResponseEntity.badRequest().body(Map.of("error", "Нельзя отменить заказ с выставленным счетом!"));
         }
 
-        stockService.returnItemsToStock(order.getItems(), "Отмена заказа #" + id);
+        stockService.returnItemsToStock(order.getItems(), "Отмена заказа #" + id, "ADMIN");
         order.setStatus(OrderStatus.CANCELLED);
         order.setTotalAmount(BigDecimal.ZERO);
         order.setTotalPurchaseCost(BigDecimal.ZERO);
@@ -111,12 +119,15 @@ public class AdminManagementController {
     }
 
     @PutMapping("/products/{id}/edit")
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public ResponseEntity<?> editProduct(@PathVariable Long id, @RequestBody Map<String, Object> payload) {
         return productRepository.findById(id).map(p -> {
             String oldInfo = "Остаток: " + p.getStockQuantity() + ", Цена: " + p.getPrice();
             p.setName((String) payload.get("name"));
-            p.setPrice(new BigDecimal(payload.get("price").toString()));
+
+            Object priceVal = payload.get("price");
+            p.setPrice(priceVal != null ? new BigDecimal(priceVal.toString()) : BigDecimal.ZERO);
+
             p.setStockQuantity(((Number) payload.get("stockQuantity")).intValue());
             p.setBarcode((String) payload.get("barcode"));
             p.setItemsPerBox(((Number) payload.get("itemsPerBox")).intValue());
@@ -125,42 +136,67 @@ public class AdminManagementController {
             p.setUnit((String) payload.get("unit"));
             productRepository.save(p);
 
-            String newInfo = "Остаток: " + p.getStockQuantity() + ", Цена: " + p.getPrice();
-            recordAudit(id, "PRODUCT", "ИЗМЕНЕНИЕ ТОВАРА", "Было [" + oldInfo + "]. Стало [" + newInfo + "]");
+            recordAudit(id, "PRODUCT", "ИЗМЕНЕНИЕ ТОВАРА", "Было [" + oldInfo + "]. Стало [Остаток: " + p.getStockQuantity() + ", Цена: " + p.getPrice() + "]");
             return ResponseEntity.ok(Map.of("message", "Данные товара обновлены"));
         }).orElse(ResponseEntity.notFound().build());
     }
 
     @PutMapping("/returns/{id}/edit")
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public ResponseEntity<?> editReturn(@PathVariable Long id, @RequestBody Map<String, Object> payload) {
         ReturnOrder ret = returnOrderRepository.findById(id).orElseThrow();
-        ret.setShopName((String) payload.get("shopName"));
 
+        if (ret.getStatus() == ReturnStatus.CONFIRMED) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Нельзя менять подтвержденный возврат"));
+        }
+
+        ret.setShopName((String) payload.get("shopName"));
         if (payload.get("returnDate") != null) {
             ret.setReturnDate(LocalDate.parse((String) payload.get("returnDate")));
         }
         ret.setReturnReason(ReasonsReturn.fromString((String) payload.get("returnReason")));
 
-        Map<String, Integer> newItems = (Map<String, Integer>) payload.get("items");
-        Map<String, BigDecimal> totals = calculateTotalSaleAndCost(newItems);
-        BigDecimal newTotal = totals.get("totalSale");
+        // 1. ИСПРАВЛЕНО: Конвертация Map<String, Object> -> Map<Long, Integer>
+        Map<Long, Integer> newItems = new HashMap<>();
+        Object itemsObj = payload.get("items");
 
+        if (itemsObj instanceof Map) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> rawItems = (Map<String, Object>) itemsObj;
+            rawItems.forEach((key, value) -> {
+                // Преобразуем строковый ключ ID из JSON в Long
+                newItems.put(Long.valueOf(key), ((Number) value).intValue());
+            });
+        }
+
+        // 2. ИСПРАВЛЕНО: Теперь передаем Map<Long, Integer>
+        Map<String, BigDecimal> totals = calculateTotalSaleAndCost(newItems);
+
+        // 3. ИСПРАВЛЕНО: Устанавливаем обновленный список (типы теперь совпадают)
         ret.setItems(newItems);
-        ret.setTotalAmount(newTotal);
+        ret.setTotalAmount(totals.get("totalSale"));
+
         returnOrderRepository.save(ret);
 
-        recordAudit(id, "RETURN", "ИЗМЕНЕНИЕ ВОЗВРАТА", "Обновлен состав. Сумма: " + newTotal + " ֏");
-        return ResponseEntity.ok(Map.of("newTotal", newTotal, "message", "Возврат изменен"));
+        recordAudit(id, "RETURN", "ИЗМЕНЕНИЕ ВОЗВРАТА", "Обновлен состав. Сумма: " + ret.getTotalAmount() + " ֏");
+
+        return ResponseEntity.ok(Map.of(
+                "newTotal", ret.getTotalAmount(),
+                "message", "Возврат изменен"
+        ));
     }
 
+
     @PutMapping("/clients/{id}/edit")
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public ResponseEntity<?> editClient(@PathVariable Long id, @RequestBody Map<String, Object> payload) {
         return clientRepository.findById(id).map(c -> {
             c.setName((String) payload.get("name"));
             c.setAddress((String) payload.get("address"));
-            c.setDebt(new BigDecimal(payload.get("debt").toString()));
+
+            Object debtVal = payload.get("debt");
+            c.setDebt(debtVal != null ? new BigDecimal(debtVal.toString()) : BigDecimal.ZERO);
+
             c.setOwnerName((String) payload.get("ownerName"));
             c.setInn((String) payload.get("inn"));
             c.setPhone((String) payload.get("phone"));
@@ -173,10 +209,10 @@ public class AdminManagementController {
     }
 
     @PostMapping("/orders/create-manual")
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public ResponseEntity<?> createOrderManual(@RequestBody Order order) {
         order.setStatus(OrderStatus.RESERVED);
-        order.setCreatedAt(LocalDateTime.now().toString());
+        order.setCreatedAt(LocalDateTime.now().format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME));
 
         Map<String, BigDecimal> totals = calculateTotalSaleAndCost(order.getItems());
         order.setTotalAmount(totals.get("totalSale"));
@@ -190,7 +226,7 @@ public class AdminManagementController {
     }
 
     @PostMapping("/returns/{id}/confirm")
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public ResponseEntity<?> confirmReturn(@PathVariable Long id) {
         ReturnOrder ret = returnOrderRepository.findById(id).orElseThrow();
         if (ret.getStatus() != ReturnStatus.CONFIRMED) {
@@ -203,7 +239,7 @@ public class AdminManagementController {
     }
 
     @PostMapping("/products/{id}/inventory")
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public ResponseEntity<?> updateStockManual(@PathVariable Long id, @RequestBody Map<String, Object> payload) {
         Product p = productRepository.findById(id).orElseThrow();
         int newQty = ((Number) payload.get("newQty")).intValue();
@@ -212,23 +248,44 @@ public class AdminManagementController {
         productRepository.save(p);
 
         stockService.logMovement(p.getName(), diff, "ADJUSTMENT", "Инвентаризация: " + payload.get("reason"), "ADMIN");
+        recordAudit(id, "PRODUCT", "ИНВЕНТАРИЗАЦИЯ", "Остаток изменен на " + newQty);
         return ResponseEntity.ok(Map.of("message", "Склад обновлен"));
     }
 
-    private Map<String, BigDecimal> calculateTotalSaleAndCost(Map<String, Integer> items) {
+    // ИСПРАВЛЕНО: Теперь метод принимает Map<Long, Integer>
+    private Map<String, BigDecimal> calculateTotalSaleAndCost(Map<Long, Integer> items) {
         BigDecimal totalSale = BigDecimal.ZERO;
         BigDecimal totalCost = BigDecimal.ZERO;
-        for (Map.Entry<String, Integer> entry : items.entrySet()) {
-            Product p = productRepository.findByNameWithLock(entry.getKey()).orElseThrow();
-            BigDecimal qty = BigDecimal.valueOf(entry.getValue());
-            totalSale = totalSale.add(p.getPrice().multiply(qty));
-            totalCost = totalCost.add(p.getPurchasePrice().multiply(qty));
+
+        if (items != null) {
+            for (Map.Entry<Long, Integer> entry : items.entrySet()) {
+                // Ключ уже является типом Long (ID товара)
+                Long productId = entry.getKey();
+
+                // Поиск по ID (рекомендуется findByIdWithLock, если вы его добавили в репозиторий)
+                Product p = productRepository.findById(productId)
+                        .orElseThrow(() -> new RuntimeException("Товар с ID " + productId + " не найден"));
+
+                BigDecimal qty = BigDecimal.valueOf(entry.getValue());
+
+                // Расчет стоимости продажи
+                if (p.getPrice() != null) {
+                    totalSale = totalSale.add(p.getPrice().multiply(qty));
+                }
+
+                // Расчет себестоимости (используем purchasePrice из вашей модели)
+                BigDecimal purchasePrice = (p.getPurchasePrice() != null) ? p.getPurchasePrice() : BigDecimal.ZERO;
+                totalCost = totalCost.add(purchasePrice.multiply(qty));
+            }
         }
+
         Map<String, BigDecimal> result = new HashMap<>();
-        result.put("totalSale", totalSale);
-        result.put("totalCost", totalCost);
+        // Округляем до 2 знаков (стандарт для ֏ AMD в 2026 году)
+        result.put("totalSale", totalSale.setScale(2, RoundingMode.HALF_UP));
+        result.put("totalCost", totalCost.setScale(2, RoundingMode.HALF_UP));
         return result;
     }
+
 
     private void recordAudit(Long entityId, String type, String action, String details) {
         AuditLog auditLog = new AuditLog();

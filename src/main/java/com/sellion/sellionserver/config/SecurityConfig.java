@@ -6,6 +6,7 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.NoOpPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
@@ -24,31 +25,27 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 .csrf(AbstractHttpConfigurer::disable)
-                // --- ДОБАВЛЕНО ДЛЯ ПЕЧАТИ ЧЕРЕЗ IFRAME ---
                 .headers(headers -> headers
-                        .frameOptions(frame -> frame.sameOrigin())
+                        .frameOptions(frame -> frame.sameOrigin()) // Разрешено для печати в iframe
                 )
-                // -----------------------------------------
                 .authorizeHttpRequests(auth -> auth
-                        // Игнорируем запросы от Chrome DevTools
-                        .requestMatchers("/.well-known/**").permitAll()
-                        .requestMatchers("/ws-sellion/**", "/login", "/css/**", "/js/**").permitAll()
-                        .requestMatchers("/api/**", "/admin/**").permitAll()
-                        // Все остальные запросы тоже разрешены
-                        .anyRequest().permitAll()
+                        // Открытые ресурсы
+                        .requestMatchers("/login", "/css/**", "/js/**", "/ws-sellion/**").permitAll()
+                        // API для Android должны быть защищены (обычно через Basic Auth или Token)
+                        // Но пока оставим доступ для разработки, но ограничим админку:
+                        .requestMatchers("/admin/**").hasAnyRole("ADMIN", "OPERATOR", "ACCOUNTANT")
+                        .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                        // Все остальные запросы требуют логина
+                        .anyRequest().authenticated()
                 )
-
-                // 5. Настройка логина
                 .formLogin(form -> form
-                        .loginPage("/login")         // Указываем вашу страницу
-                        .defaultSuccessUrl("/admin") // Куда идти после логина
+                        .loginPage("/login")
+                        .defaultSuccessUrl("/admin", true)
                         .permitAll()
                 )
-
-                // 6. Настройка выхода
                 .logout(logout -> logout
                         .logoutUrl("/logout")
-                        .logoutSuccessUrl("/login")
+                        .logoutSuccessUrl("/login?logout")
                         .permitAll()
                 );
 
@@ -58,13 +55,11 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        // В 2026 году для allowCredentials(true) нельзя использовать "*",
-        // нужно использовать setAllowedOriginPatterns
+        // В 2026 году лучше указывать конкретные домены, но для гибкости:
         configuration.setAllowedOriginPatterns(List.of("*"));
-        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true);
-        configuration.setExposedHeaders(List.of("Authorization")); // Полезно для API
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
@@ -73,7 +68,7 @@ public class SecurityConfig {
 
     @Bean
     public PasswordEncoder passwordEncoder() {
-        // Оставляем NoOp только если это учебный проект/тесты
-        return NoOpPasswordEncoder.getInstance();
+        // BCrypt - золотой стандарт 2026 года
+        return new BCryptPasswordEncoder();
     }
 }

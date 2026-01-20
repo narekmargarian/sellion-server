@@ -16,19 +16,24 @@ public enum ReasonsReturn {
         this.displayName = displayName;
     }
 
+    // @JsonValue заставляет Jackson отправлять на фронтенд "Просрочка"
     @JsonValue
     public String getDisplayName() {
         return displayName;
     }
 
+    // @JsonCreator говорит Jackson использовать этот метод при получении данных
     @JsonCreator
     public static ReasonsReturn fromString(String value) {
-        if (value == null) return OTHER;
+        if (value == null || value.trim().isEmpty()) return OTHER;
+
         for (ReasonsReturn r : ReasonsReturn.values()) {
-            if (r.name().equalsIgnoreCase(value) || r.displayName.equalsIgnoreCase(value)) {
+            // Проверка по системному имени (EXPIRED) или по русскому (Просрочка)
+            if (r.name().equalsIgnoreCase(value.trim()) ||
+                    r.displayName.equalsIgnoreCase(value.trim())) {
                 return r;
             }
         }
-        return OTHER;
+        return OTHER; // Защита от падения: если прислали бред, вернет "Другое"
     }
 }

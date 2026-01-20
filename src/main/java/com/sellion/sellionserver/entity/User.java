@@ -24,4 +24,5 @@ public class User {
 
     @Enumerated(EnumType.STRING)
     private Role role; // Роль: OPERATOR, ACCOUNTANT, ADMIN
+    private boolean enabled = true;
 }

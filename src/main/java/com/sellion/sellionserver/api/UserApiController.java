@@ -8,49 +8,45 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 
-@RestController // Важно: RestController возвращает JSON
-@RequestMapping("/api/admin/users") // Все API-пути для админки начинаются здесь
+@RestController
+@RequestMapping("/api/admin/users")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('ADMIN')") // Все методы здесь требуют роль ADMIN
+@PreAuthorize("hasRole('ADMIN')")
 public class UserApiController {
 
     private final UserService userService;
 
-    // Этот метод не используется JS, но может пригодиться для отладки
     @GetMapping
     public List<User> getAllUsers() {
         return userService.findAllUsers();
     }
 
-    // Обрабатывает запрос из JS submitCreateUser()
     @PostMapping("/create")
     public ResponseEntity<?> createUser(@RequestBody User newUser) {
         userService.saveUser(newUser);
-        return ResponseEntity.ok().build();
+        return ResponseEntity.ok(Map.of("message", "Пользователь создан"));
     }
 
-    // Обрабатывает запрос из JS resetPassword()
     @PostMapping("/reset-password/{id}")
     public ResponseEntity<?> resetPassword(@PathVariable Long id) {
-        // Мы передаем "qwerty" как стандартный пароль
+        // Вызываем метод с паролем по умолчанию
         userService.resetPassword(id, "qwerty");
-        return ResponseEntity.ok().build();
+        return ResponseEntity.ok(Map.of("message", "Пароль сброшен на qwerty"));
     }
 
-    // Если вам нужен метод для редактирования (мы его обсуждали):
-    @PutMapping("/edit/{id}")
-    public ResponseEntity<?> editUser(@PathVariable Long id, @RequestBody User updatedUser) {
-        // Здесь будет логика обновления данных пользователя без смены пароля
-        // ...
-        return ResponseEntity.ok().build();
-    }
-
-    // Обрабатывает запрос из JS toggleUserStatus() (если решите добавить в UI)
     @PostMapping("/toggle-status/{id}")
     public ResponseEntity<?> toggleUserStatus(@PathVariable Long id) {
         userService.toggleUserStatus(id);
-        return ResponseEntity.ok().build();
+        return ResponseEntity.ok(Map.of("message", "Статус пользователя изменен"));
+    }
+
+    @PutMapping("/edit/{id}")
+    public ResponseEntity<?> editUser(@PathVariable Long id, @RequestBody User updatedUser) {
+        // Логика простого обновления данных без смены пароля
+        userService.saveUser(updatedUser);
+        return ResponseEntity.ok(Map.of("message", "Данные обновлены"));
     }
 }

@@ -30,12 +30,10 @@ public class InvoiceExcelService {
     private final CompanySettings companySettings;
     private static final Logger log = LoggerFactory.getLogger(InvoiceExcelService.class);
 
-    // Метод для одного заказа
     public Workbook generateExcel(Order order) {
         return generateExcel(List.of(order), null, "Հաշիվ №" + order.getId());
     }
 
-    // Главный метод для списков заказов и возвратов
     public Workbook generateExcel(List<Order> orders, List<ReturnOrder> returns, String title) {
         SXSSFWorkbook workbook = new SXSSFWorkbook(100);
         Map<String, String> seller = companySettings.getSellerData();
@@ -52,8 +50,10 @@ public class InvoiceExcelService {
     private void fillSheetData(Workbook workbook, String sheetBaseName, List<Order> orders, List<ReturnOrder> returns, Map<String, String> seller) {
         Map<String, Client> clients = clientRepository.findAll().stream()
                 .collect(Collectors.toMap(Client::getName, Function.identity(), (existing, replacement) -> existing));
-        Map<String, Product> products = productRepository.findAll().stream()
-                .collect(Collectors.toMap(Product::getName, Function.identity(), (existing, replacement) -> existing));
+
+        // ՓՈՓՈԽՈՒԹՅՈՒՆ 1: Ապրանքները քարտեզագրում ենք ըստ ID-ի
+        Map<Long, Product> products = productRepository.findAll().stream()
+                .collect(Collectors.toMap(Product::getId, Function.identity(), (existing, replacement) -> existing));
 
         if (orders != null) {
             for (Order o : orders) {
@@ -61,10 +61,8 @@ public class InvoiceExcelService {
                 Sheet sheet = workbook.createSheet(sheetBaseName + " " + (c.getName() != null ? c.getName() : o.getId()));
                 int rowIdx = 0;
 
-                // === БЛОК ПРОДАВЦА ===
                 rowIdx = addSellerHeader(sheet, rowIdx, seller);
 
-                // === БЛОК ПОКУПАТЕЛЯ ===
                 addRow(sheet, rowIdx++, "ԳՆՈՐԴԻ ՏՎՅԱԼՆԵՐ", "");
                 addRow(sheet, rowIdx++, "Անվանում:", c.getName());
                 addRow(sheet, rowIdx++, "ՀՎՀՀ:", c.getInn());
@@ -72,7 +70,7 @@ public class InvoiceExcelService {
                 addRow(sheet, rowIdx++, "Մենեջեր:", o.getManagerId() != null ? o.getManagerId() : "");
                 rowIdx++;
 
-                // === ТԱԲԼԻՑԱ ТОВАРОВ ===
+                // Կանչում ենք թարմացված մեթոդը
                 rowIdx = fillItemsTable(sheet, rowIdx, o.getItems(), products);
             }
         }
@@ -108,21 +106,27 @@ public class InvoiceExcelService {
         return ++rowIdx;
     }
 
-    private int fillItemsTable(Sheet sheet, int rowIdx, Map<String, Integer> items, Map<String, Product> products) {
+    // ՓՈՓՈԽՈՒԹՅՈՒՆ 2: Մեթոդն այժմ ընդունում է Map<Long, Integer> items և Map<Long, Product> products
+    private int fillItemsTable(Sheet sheet, int rowIdx, Map<Long, Integer> items, Map<Long, Product> products) {
         Row header = sheet.createRow(rowIdx++);
         String[] cols = {"Ապրանք", "Կոդ (ԱՏԳ)", "Միավոր", "Քանակ", "Գին (առանց ԱԱՀ)", "ԱԱՀ գումար", "Ընդհանուր գումար"};
         for (int i = 0; i < cols.length; i++) header.createCell(i).setCellValue(cols[i]);
 
         BigDecimal totalAmount = BigDecimal.ZERO;
-        for (Map.Entry<String, Integer> item : items.entrySet()) {
-            Product p = products.get(item.getKey());
-            if (p == null) continue;
+        if (items != null) {
+            for (Map.Entry<Long, Integer> item : items.entrySet()) {
+                Product p = products.get(item.getKey());
+                if (p == null) {
+                    log.warn("Ապրանքը ID-ով {} չի գտնվել բազայում Excel-ի համար", item.getKey());
+                    continue;
+                }
 
-            BigDecimal qty = BigDecimal.valueOf(item.getValue());
-            BigDecimal itemTotal = p.getPrice().multiply(qty);
-            totalAmount = totalAmount.add(itemTotal);
+                BigDecimal qty = BigDecimal.valueOf(item.getValue());
+                BigDecimal itemTotal = (p.getPrice() != null ? p.getPrice() : BigDecimal.ZERO).multiply(qty);
+                totalAmount = totalAmount.add(itemTotal);
 
-            writeProductRow(sheet.createRow(rowIdx++), p, item.getValue());
+                writeProductRow(sheet.createRow(rowIdx++), p, item.getValue());
+            }
         }
 
         rowIdx++;
@@ -133,14 +137,12 @@ public class InvoiceExcelService {
     }
 
     private void writeProductRow(Row row, Product p, int qty) {
-        // Логика расчета налогов (НДС 20% для Армении 2026)
-        BigDecimal priceWithVat = p.getPrice();
-        BigDecimal vatRate = new BigDecimal("1.2");
-        BigDecimal priceNoVat = priceWithVat.divide(vatRate, 2, RoundingMode.HALF_UP);
-        BigDecimal vatAmountPerUnit = priceWithVat.subtract(priceNoVat);
+        BigDecimal priceWithVat = (p.getPrice() != null) ? p.getPrice() : BigDecimal.ZERO;
+        BigDecimal divisor = new BigDecimal("1.2");
 
+        BigDecimal priceNoVat = priceWithVat.divide(divisor, 2, RoundingMode.HALF_UP);
         BigDecimal totalLine = priceWithVat.multiply(BigDecimal.valueOf(qty));
-        BigDecimal totalVatLine = vatAmountPerUnit.multiply(BigDecimal.valueOf(qty));
+        BigDecimal totalVatLine = totalLine.subtract(priceNoVat.multiply(BigDecimal.valueOf(qty)));
 
         int cellIdx = 0;
         row.createCell(cellIdx++).setCellValue(p.getName());
@@ -158,3 +160,4 @@ public class InvoiceExcelService {
         row.createCell(1).setCellValue(value != null ? value : "");
     }
 }
+

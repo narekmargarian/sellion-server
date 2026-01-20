@@ -7,6 +7,8 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.RequestMapping;
 
+import java.time.LocalDateTime;
+
 @Controller
 public class CustomErrorController implements ErrorController {
 
@@ -69,6 +71,7 @@ public class CustomErrorController implements ErrorController {
         model.addAttribute("errorCode", errorCode);
         model.addAttribute("errorTitle", errorTitle);
         model.addAttribute("errorMessage", errorMessage);
+        model.addAttribute("timestamp", LocalDateTime.now());
 
         return "error";
     }

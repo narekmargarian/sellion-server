@@ -27,4 +27,8 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     List<Order> findDailyRouteOrders(@Param("managerId") String managerId, @Param("date") LocalDate date);
 
     boolean existsByAndroidId(String androidId);
+
+
+
+
 }

@@ -19,6 +19,7 @@ public class EmailService {
 
     public void sendReportWithAttachment(String to, String subject, String text, byte[] content, String fileName) throws Exception {
         MimeMessage message = mailSender.createMimeMessage();
+
         MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
 
         helper.setFrom(senderEmail);

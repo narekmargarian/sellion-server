@@ -12,6 +12,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
 import java.util.Map;
 
 @Entity
@@ -28,18 +29,20 @@ public class ReturnOrder {
     @JsonProperty("shopName")
     private String shopName;
 
+    // ИСПРАВЛЕНО: Переход на ID товаров (Long) вместо имен (String)
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "return_items", joinColumns = @JoinColumn(name = "return_id"))
-    @MapKeyColumn(name = "product_name")
+    @MapKeyColumn(name = "product_id") // В БД колонка теперь будет хранить ID
     @Column(name = "quantity")
-    private Map<String, Integer> items;
+    private Map<Long, Integer> items = new HashMap<>(); // Инициализация обязательна
 
+    @Enumerated(EnumType.STRING) // Это ОБЯЗАТЕЛЬНО, чтобы в БД хранилось "EXPIRED", а не число 0
+    @Column(name = "return_reason")
     private ReasonsReturn returnReason;
 
     @JsonProperty("returnDate")
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd")
     private LocalDate returnDate;
-
 
     @Enumerated(EnumType.STRING)
     private ReturnStatus status = ReturnStatus.DRAFT;
@@ -52,18 +55,16 @@ public class ReturnOrder {
 
     private String createdAt;
 
-
     @PrePersist
     public void formatAndSetReturnDate() {
-        // Форматтер для createdAt (с полным временем)
+        // Форматтер для 2026 года в формате ISO
         DateTimeFormatter fullFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
         LocalDateTime now = LocalDateTime.now();
 
-        // Логика форматирования остается только для createdAt, с полным временем
-        if (this.createdAt == null || this.createdAt.isEmpty() || this.createdAt.length() > 19) {
+        if (this.createdAt == null || this.createdAt.isEmpty()) {
             this.createdAt = now.format(fullFormatter);
+        } else if (this.createdAt.length() > 19) {
+            this.createdAt = this.createdAt.substring(0, 19);
         }
-
     }
-
 }

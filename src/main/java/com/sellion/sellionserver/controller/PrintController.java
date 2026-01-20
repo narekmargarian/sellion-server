@@ -44,6 +44,7 @@ public class PrintController {
 
         model.addAttribute("op", order);
         model.addAttribute("title", "НАКЛАДНАЯ (ЗАКАЗ) №" + id);
+        // Теперь передаем Map<Long, Integer>
         model.addAttribute("printItems", preparePrintItems(order.getItems()));
 
         return "print_template";
@@ -56,6 +57,7 @@ public class PrintController {
 
         model.addAttribute("op", ret);
         model.addAttribute("title", "АКТ ВОЗВРАТА №" + id);
+        // Теперь передаем Map<Long, Integer>
         model.addAttribute("printItems", preparePrintItems(ret.getItems()));
 
         return "print_template";
@@ -115,29 +117,31 @@ public class PrintController {
         return "print_list_template";
     }
 
-    private List<PrintItemDto> preparePrintItems(Map<String, Integer> items) {
-        List<PrintItemDto> list = new ArrayList<>();
-        if (items == null) return list;
+    private List<PrintItemDto> preparePrintItems(Map<Long, Integer> items) {
+        List<PrintItemDto> dtoList = new ArrayList<>();
+        if (items == null) return dtoList;
 
-        for (Map.Entry<String, Integer> entry : items.entrySet()) {
+        for (Map.Entry<Long, Integer> entry : items.entrySet()) {
+            // Ищем товар по ID для получения актуального имени и цены
+            Product product = productRepository.findById(entry.getKey())
+                    .orElse(null);
+
             PrintItemDto dto = new PrintItemDto();
-            dto.name = entry.getKey();
-            dto.quantity = entry.getValue();
+            if (product != null) {
+                dto.name = product.getName();
+                dto.price = product.getPrice();
+            } else {
+                dto.name = "Товар (ID: " + entry.getKey() + ") удален";
+                dto.price = BigDecimal.ZERO;
+            }
 
-            productRepository.findByName(entry.getKey()).ifPresentOrElse(
-                    p -> {
-                        dto.price = p.getPrice();
-                        // ИСПРАВЛЕНО: Умножение BigDecimal
-                        dto.total = p.getPrice().multiply(BigDecimal.valueOf(entry.getValue()));
-                    },
-                    () -> {
-                        dto.price = BigDecimal.ZERO;
-                        dto.total = BigDecimal.ZERO;
-                    }
-            );
-            list.add(dto);
+            dto.quantity = entry.getValue();
+            // Расчет суммы строки: цена * кол-во
+            dto.total = dto.price.multiply(BigDecimal.valueOf(dto.quantity));
+
+            dtoList.add(dto);
         }
-        return list;
+        return dtoList;
     }
 
     @GetMapping("/logistic/route-list")

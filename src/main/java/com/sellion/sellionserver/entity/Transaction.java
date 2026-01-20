@@ -3,6 +3,7 @@ package com.sellion.sellionserver.entity;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
@@ -25,8 +26,12 @@ public class Transaction {
 
     private Long referenceId; // ID заказа, платежа или возврата
 
-    private Double amount;    // Сумма операции
-    private Double balanceAfter; // Остаток долга после этой операции (как в банковской выписке)
+    // ИСПРАВЛЕНО: BigDecimal вместо Double
+    @Column(precision = 19, scale = 2)
+    private BigDecimal amount;
+
+    @Column(precision = 19, scale = 2)
+    private BigDecimal balanceAfter;
 
     private String comment;
     private LocalDateTime timestamp;

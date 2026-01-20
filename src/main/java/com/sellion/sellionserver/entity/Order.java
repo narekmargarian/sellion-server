@@ -12,6 +12,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
 import java.util.Map;
 
 
@@ -32,43 +33,39 @@ public class Order {
 
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "order_items", joinColumns = @JoinColumn(name = "order_id"))
-    @MapKeyColumn(name = "product_name")
+    @MapKeyColumn(name = "product_id") // ИСПРАВЛЕНО: теперь храним ID
     @Column(name = "quantity")
-    private Map<String, Integer> items;
+    private Map<Long, Integer> items = new HashMap<>(); // ИСПРАВЛЕНО: тип ключа Long
 
-    @JsonProperty("deliveryDate")
+
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd")
     private LocalDate deliveryDate;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "payment_method", nullable = false) // База будет знать, что это String
+    private PaymentMethod paymentMethod = PaymentMethod.CASH;
 
-    private PaymentMethod paymentMethod;
-
-    @JsonProperty("needsSeparateInvoice")
     private boolean needsSeparateInvoice;
 
     @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false)
     private OrderStatus status = OrderStatus.NEW;
 
-    @JsonProperty("managerId")
     private String managerId;
 
-    @JsonProperty("totalAmount")
+    @Column(name = "total_amount", nullable = false, precision = 19, scale = 2)
     private BigDecimal totalAmount = BigDecimal.ZERO;
+
+    @Column(name = "total_purchase_cost", nullable = false, precision = 19, scale = 2)
     private BigDecimal totalPurchaseCost = BigDecimal.ZERO;
 
-    // НОВОЕ ПОЛЕ: Ссылка на инвойс (счёт), если он создан
     private Long invoiceId;
-
-    // НОВОЕ ПОЛЕ: Дата создания заказа (нужно для фильтров оператора)
-
     private String createdAt;
-
     private String comment;
 
-    @Column(unique = true) // База данных сама не даст создать дубликат
+    @Column(unique = true, name = "android_id") // ИСПРАВЛЕНО: Индекс на уровне БД
     private String androidId;
     private String carNumber;
-
 
     @PrePersist
     public void formatAndSetDate() {

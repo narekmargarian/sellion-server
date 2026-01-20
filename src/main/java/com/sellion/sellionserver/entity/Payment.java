@@ -23,4 +23,6 @@ public class Payment {
     private Double amount;
     private LocalDateTime paymentDate = LocalDateTime.now();
     private String comment; // Например, "Наличными" или "Перевод"
+
+
 }

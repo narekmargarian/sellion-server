@@ -43,65 +43,58 @@ public class MainWebController {
 
         String today = LocalDate.now().toString();
 
-        // 1. ЛОГИКА ДЛЯ ЗАКАЗОВ
+        // --- 1. ЛОГИКА ДЛЯ ЗАКАЗОВ ---
         String oStart = (orderStartDate != null && !orderStartDate.isEmpty()) ? orderStartDate : today;
         String oEnd = (orderEndDate != null && !orderEndDate.isEmpty()) ? orderEndDate : oStart;
 
-        List<Order> allOrders = orderRepository.findOrdersBetweenDates(oStart + "T00:00:00", oEnd + "T23:59:59");
-        if (allOrders == null) allOrders = new ArrayList<>();
+        List<Order> allOrders = Optional.ofNullable(orderRepository.findOrdersBetweenDates(oStart + "T00:00:00", oEnd + "T23:59:59"))
+                .orElse(new ArrayList<>());
 
         List<Order> filteredOrders = (orderManagerId != null && !orderManagerId.isEmpty())
-                ? allOrders.stream().filter(o -> orderManagerId.equals(o.getManagerId())).toList()
+                ? allOrders.stream().filter(o -> o != null && orderManagerId.equals(o.getManagerId())).toList()
                 : allOrders;
 
-        // ИСПРАВЛЕНО: Суммирование BigDecimal
         BigDecimal totalOrdersSum = filteredOrders.stream()
+                .filter(Objects::nonNull)
                 .map(o -> o.getTotalAmount() != null ? o.getTotalAmount() : BigDecimal.ZERO)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-
-        // 1. Выручка (ИСПРАВЛЕНО: BigDecimal)
         BigDecimal rawSales = filteredOrders.stream()
-                .filter(o -> o.getStatus() != OrderStatus.CANCELLED)
+                .filter(o -> o != null && o.getStatus() != OrderStatus.CANCELLED)
                 .map(o -> o.getTotalAmount() != null ? o.getTotalAmount() : BigDecimal.ZERO)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        // 2. Себестоимость (ИСПРАВЛЕНО: BigDecimal)
         BigDecimal rawPurchaseCost = filteredOrders.stream()
-                .filter(o -> o.getStatus() != OrderStatus.CANCELLED)
+                .filter(o -> o != null && o.getStatus() != OrderStatus.CANCELLED)
                 .map(o -> o.getTotalPurchaseCost() != null ? o.getTotalPurchaseCost() : BigDecimal.ZERO)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        // 3. Чистая прибыль - округляем до ближайшего целого числа
-        BigDecimal netProfitBD = rawSales.subtract(rawPurchaseCost).setScale(0, RoundingMode.HALF_UP);
-        long netProfit = netProfitBD.longValue();
-
-        model.addAttribute("totalOrdersSum", totalOrdersSum); // Добавьте это в модель
-        model.addAttribute("totalSales", rawSales.longValue());
-        model.addAttribute("totalPurchaseCost", rawPurchaseCost.longValue());
-        model.addAttribute("netProfit", netProfit);
-        // 2. ЛОГИКА ДЛЯ ВОЗВРАТОВ
+        // --- 2. ЛОГИКА ДЛЯ ВОЗВРАТОВ ---
         String rStart = (returnStartDate != null && !returnStartDate.isEmpty()) ? returnStartDate : today;
         String rEnd = (returnEndDate != null && !returnEndDate.isEmpty()) ? returnEndDate : rStart;
 
-        List<ReturnOrder> allReturns = returnOrderRepository.findReturnsBetweenDates(rStart + "T00:00:00", rEnd + "T23:59:59");
-        if (allReturns == null) allReturns = new ArrayList<>();
+        List<ReturnOrder> allReturns = Optional.ofNullable(returnOrderRepository.findReturnsBetweenDates(rStart + "T00:00:00", rEnd + "T23:59:59"))
+                .orElse(new ArrayList<>());
 
         List<ReturnOrder> filteredReturns = (returnManagerId != null && !returnManagerId.isEmpty())
-                ? allReturns.stream().filter(r -> returnManagerId.equals(r.getManagerId())).toList()
+                ? allReturns.stream().filter(r -> r != null && returnManagerId.equals(r.getManagerId())).toList()
                 : allReturns;
 
-        // ИСПРАВЛЕНО: Суммирование BigDecimal
         BigDecimal totalReturnsSum = filteredReturns.stream()
+                .filter(Objects::nonNull)
                 .map(r -> r.getTotalAmount() != null ? r.getTotalAmount() : BigDecimal.ZERO)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        // 3. ОБЩАЯ СТАТИСТИКА И СЧЕТА
-        List<Invoice> invoices = invoiceRepository.findAll();
-        if (invoices == null) invoices = new ArrayList<>();
+        // --- РАСЧЕТ ЧИСТОЙ ПРИБЫЛИ (Исправлено: Выручка - Себестоимость - Возвраты) ---
+        BigDecimal netProfitBD = rawSales.subtract(rawPurchaseCost)
+                .subtract(totalReturnsSum)
+                .setScale(0, RoundingMode.HALF_UP);
 
-        // ИСПРАВЛЕНО: Суммирование BigDecimal (Долг)
+        // --- 3. ОБЩАЯ СТАТИСТИКА И СЧЕТА ---
+        List<Invoice> invoices = Optional.ofNullable(invoiceRepository.findAll()).orElse(new ArrayList<>());
+
         BigDecimal totalInvoiceDebt = invoices.stream()
+                .filter(Objects::nonNull)
                 .map(i -> {
                     BigDecimal total = (i.getTotalAmount() != null ? i.getTotalAmount() : BigDecimal.ZERO);
                     BigDecimal paid = (i.getPaidAmount() != null ? i.getPaidAmount() : BigDecimal.ZERO);
@@ -109,86 +102,90 @@ public class MainWebController {
                 })
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        // ИСПРАВЛЕНО: Суммирование BigDecimal (Оплачено)
         BigDecimal totalPaidSum = invoices.stream()
+                .filter(Objects::nonNull)
                 .map(i -> i.getPaidAmount() != null ? i.getPaidAmount() : BigDecimal.ZERO)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        // ИСПРАВЛЕНО: Суммирование BigDecimal (Общая сумма заказов)
         BigDecimal totalAllOrdersSum = allOrders.stream()
+                .filter(Objects::nonNull)
                 .map(o -> o.getTotalAmount() != null ? o.getTotalAmount() : BigDecimal.ZERO)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        // ИСПРАВЛЕНО: Расчет среднего чека через BigDecimal
-        BigDecimal avgCheck = allOrders.isEmpty() ? BigDecimal.ZERO :
+        // Исправлено: Гарантированная защита от деления на ноль
+        BigDecimal avgCheck = (allOrders.isEmpty()) ? BigDecimal.ZERO :
                 totalAllOrdersSum.divide(BigDecimal.valueOf(allOrders.size()), 2, RoundingMode.HALF_UP);
 
-        // Получаем последние логи для таблицы импорта
-        List<AuditLog> auditLogs = auditLogRepository.findAllByOrderByTimestampDesc();
+        List<AuditLog> limitedLogs = Optional.ofNullable(auditLogRepository.findAllByOrderByTimestampDesc())
+                .orElse(Collections.emptyList()).stream()
+                .filter(Objects::nonNull)
+                .limit(15)
+                .toList();
 
-        // Ограничим список последними 15 записями, чтобы не перегружать страницу
-        List<AuditLog> limitedLogs = auditLogs.stream().limit(15).toList();
 
+        // --- 4. ПЕРЕДАЧА ДАННЫХ В МОДЕЛЬ ---
+
+        // Гарантируем, что в модель не уйдет null даже по ошибке
+        model.addAttribute("totalOrdersSum", totalOrdersSum != null ? totalOrdersSum : BigDecimal.ZERO);
+        model.addAttribute("totalSales", rawSales != null ? rawSales.setScale(0, RoundingMode.HALF_UP) : BigDecimal.ZERO);
+        model.addAttribute("totalPurchaseCost", rawPurchaseCost != null ? rawPurchaseCost.setScale(0, RoundingMode.HALF_UP) : BigDecimal.ZERO);
+        model.addAttribute("netProfit", netProfitBD != null ? netProfitBD : BigDecimal.ZERO);
+        model.addAttribute("avgCheck", avgCheck != null ? avgCheck : BigDecimal.ZERO);
         model.addAttribute("auditLogs", limitedLogs);
-        model.addAttribute("totalReturnsSum", totalReturnsSum);
-        model.addAttribute("totalInvoiceDebt", totalInvoiceDebt);
-        model.addAttribute("totalPaidSum", totalPaidSum);
-        model.addAttribute("avgCheck", avgCheck);
-        // 4. ПЕРЕДАЧА ДАННЫХ В МОДЕЛЬ
+
         model.addAttribute("orders", filteredOrders);
-        model.addAttribute("totalOrdersCount", filteredOrders.size());
-        // Значения totalOrdersSum, rawSales и т.д. уже рассчитаны в Части 1 как BigDecimal
-        model.addAttribute("totalOrdersSum", totalOrdersSum);
+        model.addAttribute("totalOrdersCount", filteredOrders != null ? filteredOrders.size() : 0);
         model.addAttribute("orderStartDate", oStart);
         model.addAttribute("orderEndDate", oEnd);
         model.addAttribute("selectedOrderManager", orderManagerId);
 
         model.addAttribute("returns", filteredReturns);
-        model.addAttribute("totalReturnsCount", filteredReturns.size());
-        model.addAttribute("totalReturnsSum", totalReturnsSum); // Рассчитано в Части 2 как BigDecimal
+        model.addAttribute("totalReturnsCount", filteredReturns != null ? filteredReturns.size() : 0);
+        model.addAttribute("totalReturnsSum", totalReturnsSum != null ? totalReturnsSum : BigDecimal.ZERO);
         model.addAttribute("returnStartDate", rStart);
         model.addAttribute("returnEndDate", rEnd);
         model.addAttribute("selectedReturnManager", returnManagerId);
 
-        model.addAttribute("totalPaidSum", totalPaidSum);
-        model.addAttribute("avgCheck", avgCheck);
-        model.addAttribute("invoices", invoices);
-        model.addAttribute("totalInvoiceDebt", totalInvoiceDebt);
-
-        // Группировка товаров по категориям (Сортировка А-Я)
-        Map<String, List<Product>> groupedProducts = productRepository.findAllActive().stream()
+        // Группировка товаров (Исправлено: добавлена проверка на пустой список)
+        List<Product> activeProducts = Optional.ofNullable(productRepository.findAllActive()).orElse(new ArrayList<>());
+        Map<String, List<Product>> groupedProducts = activeProducts.stream()
+                .filter(Objects::nonNull)
                 .collect(Collectors.groupingBy(
                         p -> (p.getCategory() == null || p.getCategory().isBlank()) ? "Без категории" : p.getCategory(),
                         TreeMap::new,
                         Collectors.toList()
                 ));
-
         model.addAttribute("groupedProducts", groupedProducts);
-        model.addAttribute("products", productRepository.findAllActive());
+        model.addAttribute("products", activeProducts);
 
-        model.addAttribute("clients", clientRepository.findAllActive() != null ? clientRepository.findAllActive() : new ArrayList<>());
-        model.addAttribute("users", userRepository.findAll() != null ? userRepository.findAll() : new ArrayList<>());
+        // Клиенты и пользователи (Безопасно)
+        List<Client> activeClients = Optional.ofNullable(clientRepository.findAllActive()).orElse(new ArrayList<>());
+        model.addAttribute("clients", activeClients);
+        model.addAttribute("users", Optional.ofNullable(userRepository.findAll()).orElse(new ArrayList<>()));
 
-        // Список менеджеров для фильтров
-        List<String> managers = Stream.concat(allOrders.stream().map(Order::getManagerId),
-                        allReturns.stream().map(ReturnOrder::getManagerId))
-                .filter(java.util.Objects::nonNull)
+        // Список менеджеров (Используем Set для скорости, затем в List)
+        List<String> managers = Stream.concat(
+                        allOrders.stream().filter(Objects::nonNull).map(Order::getManagerId),
+                        allReturns.stream().filter(Objects::nonNull).map(ReturnOrder::getManagerId))
+                .filter(m -> m != null && !m.isBlank())
                 .distinct()
                 .sorted()
                 .toList();
         model.addAttribute("managers", managers);
 
-        // Клиенты с просрочкой более месяца
-        java.time.LocalDateTime oneMonthAgo = java.time.LocalDateTime.now().minusMonths(1);
-        java.util.Set<String> overdueClients = invoices.stream()
-                .filter(inv -> !"PAID".equals(inv.getStatus()))
+        // Просрочка (2026: Учитываем текущую дату сервера)
+        LocalDateTime oneMonthAgo = LocalDateTime.now().minusMonths(1);
+        Set<String> overdueClients = invoices.stream()
+                .filter(inv -> inv != null && !"PAID".equals(inv.getStatus()))
                 .filter(inv -> inv.getCreatedAt() != null && inv.getCreatedAt().isBefore(oneMonthAgo))
                 .map(Invoice::getShopName)
+                .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
         model.addAttribute("overdueClients", overdueClients);
 
-        // Карта долгов клиентов (ИСПРАВЛЕНО: использование BigDecimal)
-        Map<String, BigDecimal> clientDebts = clientRepository.findAll().stream()
+        // Долги клиентов (Используем уже загруженный список activeClients для скорости)
+        Map<String, BigDecimal> clientDebts = activeClients.stream()
+                .filter(c -> c != null && c.getName() != null)
                 .collect(Collectors.toMap(
                         Client::getName,
                         c -> c.getDebt() != null ? c.getDebt() : BigDecimal.ZERO,
@@ -201,5 +198,6 @@ public class MainWebController {
         model.addAttribute("activeTab", activeTab);
 
         return "dashboard";
+
     }
 }

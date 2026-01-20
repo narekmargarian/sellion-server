@@ -1,3 +1,10 @@
+// Гарантируем, что если сервер не прислал данные, массивы не будут undefined
+if (typeof productsData === 'undefined') window.productsData = [];
+if (typeof clientsData === 'undefined') window.clientsData = [];
+if (typeof ordersData === 'undefined') window.ordersData = [];
+if (typeof returnsData === 'undefined') window.returnsData = [];
+
+
 let tempItems = {};
 
 // --- 1. Навигация и Утилиты ---
@@ -58,14 +65,6 @@ function formatOrderDate(dateVal) {
 
     return dateVal;
 }
-
-// Запуск форматирования при загрузке страницы
-document.addEventListener("DOMContentLoaded", function () {
-    document.querySelectorAll('.js-date-format').forEach(function (cell) {
-        const result = formatOrderDate(cell.innerText);
-        if (result) cell.innerText = result;
-    });
-});
 
 
 // Утилита для перевода методов оплаты
@@ -133,174 +132,189 @@ function showStatus(text, isError = false) {
     }, 6000);
 }
 
-// Обновление строки ЗАКАЗА
+
+
+// TODO NOR HATVAC 20:55-------------------
+
+
 function updateRowInTable(order) {
+    // Находим строку заказа
     const row = document.querySelector(`tr[onclick*="openOrderDetails(${order.id})"]`);
-    if (row) {
-        row.cells[0].innerText = formatOrderDate(order.createdAt);
-        row.cells[2].innerText = order.shopName;
-        row.cells[3].innerText = (order.totalAmount || 0).toLocaleString() + ' ֏';
-        row.cells[4].innerText = formatOrderDate(order.deliveryDate); // Красивая дата
+    if (!row) return;
 
-        // Красивый статус
+    // Используем поиск по содержимому или смыслу, чтобы не зависеть от порядка колонок
+    const cells = row.cells;
+
+    // Дата создания (обычно первая колонка)
+    cells[0].innerText = formatOrderDate(order.createdAt);
+
+    // Название магазина (ищем по тексту, если нужно, но тут оставим индексы с защитой)
+    if (cells[2]) cells[2].innerText = order.shopName;
+
+    // Сумма
+    if (cells[3]) cells[3].innerText = (order.totalAmount || 0).toLocaleString() + ' ֏';
+
+    // Дата доставки
+    if (cells[4]) cells[4].innerText = formatOrderDate(order.deliveryDate);
+
+    // Статус (создаем красивый бадж)
+    if (cells[5]) {
         const status = order.status || 'NEW';
-        const badgeClass = status === 'RESERVED' ? 'bg-info' : (status === 'CONFIRMED' ? 'bg-success' : 'bg-primary');
-        row.cells[5].innerHTML = `<span class="badge ${badgeClass}">${status}</span>`;
+        let badgeClass = 'bg-primary';
+        if (status === 'CONFIRMED') badgeClass = 'bg-success';
+        if (status === 'RESERVED') badgeClass = 'bg-info';
+        if (status === 'CANCELLED') badgeClass = 'bg-danger';
+
+        cells[5].innerHTML = `<span class="badge ${badgeClass}">${status}</span>`;
     }
 }
 
-// --- 2. Логика состава (общая) ---
-function applySingleQty(encodedName) {
-    const name = decodeURIComponent(encodedName);
-    const input = document.getElementById(`input-qty-${encodedName}`);
-    const modalTitle = document.getElementById('modal-title').innerText.toLowerCase();
-    const isReturn = modalTitle.includes("возврат");
 
-    if (!input) return;
-    let newVal = parseInt(input.value);
-    // 1. Логика удаления при 0 или пустом вводе
-    if (isNaN(newVal) || newVal <= 0) {
-        delete tempItems[name];
-        showStatus(`Товар "${name}" удален`);
-    } else {
-        // 2. Проверка остатка на складе (стандарт 2026)
-        const product = productsData.find(p => p.name === name);
-        if (!isReturn && product && newVal > product.stockQuantity) {
-            showStatus(`Недостаточно товара "${product.name}"! Доступно на складе: ${product.stockQuantity}`, true);
-            input.value = product.stockQuantity;
-            tempItems[name] = product.stockQuantity;
-        } else {
-            tempItems[name] = newVal;
-            showStatus(`Товар "${name}" обновлен ✅`);
-        }
-    }
-    // 3. Перерисовываем таблицу
-    renderItemsTable(tempItems, true);
 
-    // 4. Обновляем сумму (используем вашу функцию расчета)
-    let newTotal = calculateCurrentTempTotal();
-    const totalPriceElement = document.getElementById('order-total-price');
-    if (totalPriceElement) {
-        totalPriceElement.innerText = "Предварительно: " + newTotal.toLocaleString() + " ֏";
-    }
-}
-
-function addItemToEdit() {
-    const selectElement = document.getElementById('add-item-select');
-    const productId = selectElement.value; // Это строка "123"
-    const qty = parseInt(document.getElementById('add-item-qty').value) || 1;
-
-    // ИСПОЛЬЗУЕМ == вместо === чтобы сравнить "123" и 123
-    const product = productsData.find(p => p.id == productId);
-
-    if (product) {
-        const modalTitle = document.getElementById('modal-title').innerText.toLowerCase();
-        const isReturn = modalTitle.includes("возврат");
-
-        // Если это НЕ возврат, проверяем склад
-        if (!isReturn && qty > product.stockQuantity) {
-            showStatus(`Недостаточно товара "${product.name}"! Доступно: ${product.stockQuantity}`, true);
-            return;
-        }
-
-        // Добавляем в список
-        tempItems[product.name] = (tempItems[product.name] || 0) + qty;
-
-        // Перерисовываем таблицу
-        renderItemsTable(tempItems, true);
-        showStatus(`Товар "${product.name}" добавлен`);
-    } else {
-        // Если продукт не найден (например, не выбран в списке)
-        showStatus("Выберите товар из списка", true);
-    }
-}
-
-function removeItemFromEdit(encodedName) {
-    const name = decodeURIComponent(encodedName);
-    delete tempItems[name];
-    renderItemsTable(tempItems, true);
-}
-
+// Исправленный расчет суммы (итерируем по ID)
 function calculateCurrentTempTotal() {
     let total = 0;
-    Object.entries(tempItems).forEach(([pName, pQty]) => {
-        const prod = productsData.find(p => p.name === pName);
+    Object.entries(tempItems).forEach(([pId, pQty]) => {
+        const prod = (productsData || []).find(p => p.id == pId);
         if (prod) total += prod.price * pQty;
     });
-    // Обновляем общую сумму в модалке при каждом расчете
     const totalPriceElement = document.getElementById('order-total-price');
     if (totalPriceElement) {
-        // Замени "Предварительно:" на "Итого:"
         totalPriceElement.innerText = "Итого: " + total.toLocaleString() + " ֏";
     }
     return total;
 }
 
+function applySingleQty(pId) {
+    const input = document.getElementById(`input-qty-${pId}`);
+    if (!input) return;
 
-// --- 3. Рендеринг таблицы состава ---
+    // Если поле пустое, мы ничего не делаем (ждем пока пользователь введет число)
+    if (input.value.trim() === "") return;
+
+    let newVal = parseInt(input.value);
+    const product = (productsData || []).find(p => p.id == pId);
+
+    if (isNaN(newVal) || newVal < 0) {
+        input.value = tempItems[pId] || 1; // Возвращаем как было при ошибке ввода
+        return;
+    }
+
+    if (newVal === 0) {
+        // Если ввели 0 - удаляем
+        delete tempItems[pId];
+        showStatus(`Товар удален`);
+        renderItemsTable(tempItems, true);
+        return;
+    }
+
+    const modalTitle = document.getElementById('modal-title').innerText.toLowerCase();
+    const isReturn = modalTitle.includes("возврат");
+
+    // Проверка склада
+    if (!isReturn && product && newVal > product.stockQuantity) {
+        showStatus(`Недостаточно товара! Доступно: ${product.stockQuantity}`, true);
+        input.value = product.stockQuantity;
+        tempItems[pId] = product.stockQuantity;
+    } else {
+        tempItems[pId] = newVal;
+        showStatus(`Количество обновлено ✅`);
+    }
+
+    // Пересчитываем только итоговую сумму без полной перерисовки таблицы (для плавности)
+    calculateCurrentTempTotal();
+}
+
+
 
 function renderItemsTable(itemsMap, isEdit) {
-    // (Логика рендеринга остается без изменений, она использует calculateCurrentTempTotal внутри)
     const container = document.getElementById('table-scroll-container');
     const scrollPos = container ? container.scrollTop : 0;
     const body = document.getElementById('order-items-body');
-    body.innerHTML = '';
-    Object.entries(itemsMap).forEach(([name, qty]) => {
-        // ... (твоя логика добавления строк)
-        const pInfo = productsData.find(p => p.name === name);
-        const price = pInfo ? pInfo.price : 0;
+    if (!body) return;
+
+    let html = '';
+    Object.entries(itemsMap).forEach(([pId, qty]) => {
+        const pInfo = (productsData || []).find(p => p.id == pId);
+        if (!pInfo) return; // Пропускаем, если товар не найден в базе
+
+        const price = pInfo.price || 0;
         const total = price * qty;
-        const encodedName = encodeURIComponent(name);
 
         let qtyDisplay = isEdit ?
             `<div style="display:flex; align-items:center; gap:5px;">
-                <input type="number" id="input-qty-${encodedName}" class="qty-input-active" 
+                <input type="number" id="input-qty-${pId}" class="qty-input-active" 
                        value="${qty}" min="0" style="width:65px;">
-                <button onclick="applySingleQty('${encodedName}')" style="border:none; background:transparent; cursor:pointer;">✅</button>
+                <button onclick="applySingleQty('${pId}')" class="btn-check-qty">✅</button>
             </div>` : `<b>${qty} шт.</b>`;
-        body.innerHTML += `<tr>
-            <td>${name} ${isEdit ? `<button onclick="removeItemFromEdit('${encodedName}')" style="color:#ef4444; border:none; background:none; cursor:pointer;">&times;</button>` : ''}</td>
+
+        html += `<tr>
+            <td>
+                ${pInfo.name} 
+                ${isEdit ? `<button onclick="removeItemFromEdit('${pId}')" style="color:#ef4444; border:none; background:none; cursor:pointer;">&times;</button>` : ''}
+            </td>
             <td>${qtyDisplay}</td>
             <td>${price.toLocaleString()} ֏</td>
             <td style="font-weight:700;">${total.toLocaleString()} ֏</td>
-            <td><small>${pInfo ? pInfo.category : '---'}</small></td>
+            <td><small>${pInfo.category || '---'}</small></td>
         </tr>`;
     });
 
     if (isEdit) {
-        // Исправлено: добавляем кавычки вокруг value и проверяем наличие данных
-        let options = productsData.map(p => `<option value="${p.id}">${p.name} (${p.price} ֏)</option>`).join('');
-
-        body.innerHTML += `<tr style="background:#f8fafc; position: sticky; bottom: 0;">
-        <td>
-            <select id="add-item-select" style="width:100%">
-                <option value="">-- Выберите товар --</option>
-                ${options}
-            </select>
-        </td>
-        <td><input type="number" id="add-item-qty" value="1" min="1" style="width:65px;"></td>
-        <td colspan="3"><button class="btn-primary" onclick="addItemToEdit()" style="width:100%">+ Добавить</button></td>
-    </tr>`;
+        let options = (productsData || []).map(p => `<option value="${p.id}">${p.name} (${p.price} ֏)</option>`).join('');
+        html += `<tr style="background:#f8fafc; position: sticky; bottom: 0;">
+            <td>
+                <select id="add-item-select" style="width:100%">
+                    <option value="">-- Выберите товар --</option>
+                    ${options}
+                </select>
+            </td>
+            <td><input type="number" id="add-item-qty" value="1" min="1" style="width:65px;"></td>
+            <td colspan="3"><button class="btn-primary" onclick="addItemToEdit()" style="width:100%">+ Добавить</button></td>
+        </tr>`;
     }
+
+    body.innerHTML = html;
 
     if (container) {
         requestAnimationFrame(() => {
             container.scrollTop = scrollPos;
         });
     }
-    // Вызываем расчет общей суммы после рендера таблицы
     calculateCurrentTempTotal();
 }
 
-// --- 4. Основные функции карточки заказа ---
-function openOrderDetails(id) {
-    const order = ordersData.find(o => o.id == id);
-    if (!order) return;
-    tempItems = JSON.parse(JSON.stringify(order.items));
-    document.getElementById('modal-title').innerHTML = `Детали операции <span class="badge" style="margin-left:10px;">ЗАКАЗ №${order.id}</span>`;
-    const info = document.getElementById('order-info');
-    const printBtn = `<button class="btn-primary" style="background:#475569" onclick="printOrder(${order.id})">🖨 Печать Заказа</button>`;
+function removeItemFromEdit(pId) {
+    delete tempItems[pId];
+    renderItemsTable(tempItems, true);
+}
 
+
+function openOrderDetails(id) {
+    // Используем безопасный поиск
+    const order = (ordersData || []).find(o => o.id == id);
+    if (!order) return;
+
+    // ИСПРАВЛЕНИЕ: Трансформируем items из массива/объекта в карту {ID: Количество}
+    // Это решает ошибку "Cannot deserialize Map key of type java.lang.Long from String"
+    tempItems = {};
+    if (order.items) {
+        // Если order.items пришел как Map (объект) от бэкенда
+        Object.entries(order.items).forEach(([key, qty]) => {
+            // Если ключ — это имя товара, ищем его ID в productsData
+            if (isNaN(key)) {
+                const product = (productsData || []).find(p => p.name === key);
+                if (product) tempItems[product.id] = qty;
+            } else {
+                // Если ключ уже ID
+                tempItems[key] = qty;
+            }
+        });
+    }
+
+    document.getElementById('modal-title').innerHTML = `Детали операции <span class="badge" style="margin-left:10px;">ЗАКАЗ №${order.id}</span>`;
+
+    const info = document.getElementById('order-info');
     info.innerHTML = `
         <div class="modal-info-row">
             <div><small>Магазин:</small><br><b>${order.shopName}</b></div>
@@ -308,38 +322,275 @@ function openOrderDetails(id) {
             <div><small>Менеджер:</small><br><b>${order.managerId}</b></div>
         </div>
         <div class="modal-info-row">
-            <!-- ИСПРАВЛЕНО: Используем нашу функцию форматирования для даты доставки -->
             <div><small>Доставка:</small><br><b>${formatOrderDate(order.deliveryDate)}</b></div>
             <div><small>Оплата:</small><br><b>${translatePayment(order.paymentMethod)}</b></div>
-          
-           <div><small>Фактура:</small><br><b>${order.needsSeparateInvoice ? 'ДА' : 'НЕТ'}</b></div>
+            <div><small>Фактура:</small><br><b>${order.needsSeparateInvoice ? 'ДА' : 'НЕТ'}</b></div>
         </div>
     `;
 
+    // Теперь renderItemsTable получит карту с ID и отобразит всё корректно
     renderItemsTable(tempItems, false);
-    document.getElementById('order-total-price').innerText = "Итого: " + (order.totalAmount || 0).toLocaleString() + " ֏";
+
+    const totalPriceElement = document.getElementById('order-total-price');
+    if (totalPriceElement) {
+        totalPriceElement.innerText = "Итого: " + (order.totalAmount || 0).toLocaleString() + " ֏";
+    }
+
     const footer = document.getElementById('order-footer-actions');
-    // Формируем кнопки в зависимости от статуса инвойса
+    // Логика кнопок футера
     if (order.invoiceId) {
         footer.innerHTML = `
-        <button class="btn-primary" style="background:#6366f1" onclick="showOrderHistory(${order.id})">📜 История</button>
-        <button class="btn-primary" style="background:#475569" onclick="printOrder(${order.id})">🖨 Печать</button>
-        <div style="color:#991b1b; font-weight:700; background:#fee2e2; padding:10px; border-radius:8px; flex:1; text-align:center;">СЧЕТ ВЫСТАВЛЕН</div>
-        <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-order-view')">Закрыть</button>
-    `;
+            <button class="btn-primary" style="background:#6366f1" onclick="showOrderHistory(${order.id})">📜 История</button>
+            <button class="btn-primary" style="background:#475569" onclick="printOrder(${order.id})">🖨 Печать</button>
+            <div style="color:#991b1b; font-weight:700; background:#fee2e2; padding:10px; border-radius:8px; flex:1; text-align:center;">СЧЕТ ВЫСТАВЛЕН</div>
+            <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-order-view')">Закрыть</button>
+        `;
     } else {
         footer.innerHTML = `
-        <button class="btn-primary" style="background:#6366f1" onclick="showOrderHistory(${order.id})">📜 История</button>
-        <button class="btn-primary" style="background:#475569" onclick="printOrder(${order.id})">🖨 Печать</button>
-        <button class="btn-primary" onclick="enableOrderEdit(${order.id})">Изменить</button>
-        <button class="btn-primary" style="background:#ef4444" onclick="cancelOrder(${order.id})">Отменить заказ</button>
-        <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-order-view')">Закрыть</button>
-    `;
+            <button class="btn-primary" style="background:#6366f1" onclick="showOrderHistory(${order.id})">📜 История</button>
+            <button class="btn-primary" style="background:#475569" onclick="printOrder(${order.id})">🖨 Печать</button>
+            <button class="btn-primary" onclick="enableOrderEdit(${order.id})">Изменить</button>
+            <button class="btn-primary" style="background:#ef4444" onclick="cancelOrder(${order.id})">Отменить заказ</button>
+            <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-order-view')">Закрыть</button>
+        `;
     }
+
     openModal('modal-order-view');
 }
 
-// В script.js, функция enableOrderEdit(id)
+
+function openReturnDetails(id) {
+    // 1. Безопасный поиск данных (защита от undefined)
+    const ret = (returnsData || []).find(r => r.id == id);
+    if (!ret) return console.error(`Возврат с ID ${id} не найден.`);
+
+    // 2. ИСПРАВЛЕНИЕ: Трансформируем items в карту {ID: Количество}
+    // Это критично для исправления ошибки десериализации на бэкенде
+    tempItems = {};
+    if (ret.items) {
+        Object.entries(ret.items).forEach(([key, qty]) => {
+            // Если ключ — это строка (название), ищем соответствующий ID в продуктах
+            if (isNaN(key)) {
+                const product = (productsData || []).find(p => p.name === key);
+                if (product) {
+                    tempItems[product.id] = qty;
+                } else {
+                    console.warn(`Товар "${key}" не найден в справочнике товаров.`);
+                }
+            } else {
+                // Если ключ уже является числовым ID
+                tempItems[key] = qty;
+            }
+        });
+    }
+
+    const statusText = ret.status === 'CONFIRMED' ? 'Проведено' : (ret.status === 'DRAFT' ? 'Черновик' : ret.status);
+    const statusClass = ret.status === 'CONFIRMED' ? 'bg-success' : 'bg-warning';
+    const footer = document.getElementById('order-footer-actions');
+    const printBtnHtml = `<button class="btn-primary" style="background:#475569" onclick="printReturn(${ret.id})">🖨 Печать</button>`;
+    const displayReason = translateReason(ret.returnReason);
+
+    // 3. Обновляем заголовок
+    document.getElementById('modal-title').innerHTML = `
+        Детали операции 
+        <span class="badge ${statusClass}" style="margin-left:10px;">${statusText}</span>
+        <span class="badge" style="margin-left:5px;">ВОЗВРАТ №${ret.id}</span>
+    `;
+
+    // 4. Обновляем инфо-блок
+    document.getElementById('order-info').innerHTML = `
+        <div class="modal-info-row" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; background: #fff1f2; padding: 15px; border-radius: 10px; margin-top: 20px;">
+            <div><small>Магазин:</small><br><b>${ret.shopName}</b></div>
+            <div><small>Дата возврата:</small><br><b>${formatOrderDate(ret.returnDate)}</b></div>
+            <div><small>Причина:</small><br><b style="color:#ef4444;">${displayReason}</b></div>
+        </div>
+    `;
+
+    // 5. Рендерим таблицу (теперь она работает через ID)
+    renderItemsTable(tempItems, false);
+
+    // 6. Обновляем итоговую сумму
+    const totalPriceElement = document.getElementById('order-total-price');
+    if (totalPriceElement) {
+        totalPriceElement.innerText = "Сумма возврата: " + (ret.totalAmount || 0).toLocaleString() + " ֏";
+    }
+
+    // 7. Управление кнопками футера
+    if (ret.status === 'DRAFT') {
+        footer.innerHTML = `
+            <button class="btn-primary" style="background:#10b981" onclick="confirmReturn(${ret.id})">✅ Подтвердить</button>
+            ${printBtnHtml}
+            <button class="btn-primary" onclick="enableReturnEdit(${ret.id})">Изменить</button>
+            <button class="btn-primary" style="background:#ef4444" onclick="deleteReturnOrder(${ret.id})">❌ Удалить</button>
+            <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-order-view')">Закрыть</button>
+        `;
+    } else {
+        footer.innerHTML = `
+            <div style="flex: 1; display: flex; align-items: center; justify-content: center; color: #64748b; font-weight: bold;">
+                <span>✓ Операция проведена</span>
+            </div>
+            ${printBtnHtml}
+            <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-order-view')">Закрыть</button>
+        `;
+    }
+
+    openModal('modal-order-view');
+}
+
+
+function addItemToEdit() {
+    const selectElement = document.getElementById('add-item-select');
+    const productId = selectElement.value;
+    const qtyInput = document.getElementById('add-item-qty');
+    const qty = parseInt(qtyInput.value) || 1;
+
+    // Безопасный поиск продукта
+    const product = (productsData || []).find(p => p.id == productId);
+
+    if (product) {
+        const modalTitle = document.getElementById('modal-title').innerText.toLowerCase();
+        const isReturn = modalTitle.includes("возврат");
+
+        // Считаем: сколько уже добавлено + сколько добавляем сейчас
+        const alreadyInCart = tempItems[product.id] || 0;
+        const totalRequested = alreadyInCart + qty;
+
+        // Если это НЕ возврат, проверяем общий остаток
+        if (!isReturn && totalRequested > product.stockQuantity) {
+            showStatus(`Ошибка: На складе всего ${product.stockQuantity} шт. У вас уже добавлено ${alreadyInCart} шт.`, true);
+            return;
+        }
+
+        // Добавляем в список по ID
+        tempItems[product.id] = totalRequested;
+
+        renderItemsTable(tempItems, true);
+        showStatus(`Товар "${product.name}" добавлен`);
+        qtyInput.value = 1; // Сброс поля после добавления
+    } else {
+        showStatus("Выберите товар из списка", true);
+    }
+}
+
+
+function getManagerOptionsHTML() {
+    // Если список еще не загружен, добавляем хотя бы текущего пользователя или OFFICE
+    if (!managerIdList || managerIdList.length === 0) {
+        return `<option value="OFFICE">OFFICE (загрузка...)</option>`;
+    }
+    return managerIdList.map(m => `<option value="${m}">${m}</option>`).join('');
+}
+
+
+function fmt(dateVal) {
+    if (!dateVal) return '---';
+    // Используем уже готовую у вас функцию форматирования
+    return formatOrderDate(dateVal);
+}
+
+async function saveNewManualOperation(type) {
+    // 1. ПРИНУДИТЕЛЬНЫЙ СБОР ДАННЫХ:
+    // Проходим по всем активным инпутам количества и обновляем tempItems перед отправкой.
+    // Это гарантирует, что данные, введенные, но не подтвержденные кнопкой, попадут в заказ.
+    document.querySelectorAll('.qty-input-active').forEach(input => {
+        const pId = input.id.replace('input-qty-', '');
+        const val = parseInt(input.value);
+        if (!isNaN(val) && val > 0) {
+            tempItems[pId] = val;
+        } else if (val <= 0) {
+            delete tempItems[pId];
+        }
+    });
+
+    // 2. Получаем дату (с учетом разных возможных ID для заказов и возвратов)
+    const dateInput = document.getElementById('new-op-date') || document.getElementById('edit-ret-date');
+    const baseDate = dateInput ? dateInput.value : null;
+
+    // 3. Валидация перед отправкой
+    if (Object.keys(tempItems).length === 0) {
+        showToast("Ошибка: Состав операции пуст!", "error");
+        return;
+    }
+
+    if (!baseDate) {
+        showToast("Пожалуйста, выберите дату!", "error");
+        return;
+    }
+
+    const url = type === 'order' ? '/api/admin/orders/create-manual' : '/api/returns/sync';
+
+    // Формируем дату создания с текущим временем 2026 года
+    const now = new Date();
+    const currentTime = now.toTimeString().substring(0, 8); // "hh:mm:ss"
+    const formattedDateTime = `${baseDate}T${currentTime}`;
+
+    // 4. Формируем финальный объект данных
+    // Важно: calculateCurrentTempTotal() теперь вызывается после сбора данных из инпутов
+    const data = {
+        shopName: document.getElementById('new-op-shop').value,
+        managerId: document.getElementById('new-op-manager').value,
+        items: tempItems, // Теперь здесь точно актуальные ID и Qty
+        totalAmount: calculateCurrentTempTotal(),
+        createdAt: formattedDateTime,
+        androidId: "MANUAL-" + Date.now()
+    };
+
+    // Специфические поля для Заказа или Возврата
+    if (type === 'order') {
+        data.comment = document.getElementById('new-op-comment')?.value || "";
+        data.deliveryDate = baseDate;
+        data.paymentMethod = document.getElementById('new-op-payment').value;
+        data.needsSeparateInvoice = document.getElementById('new-op-invoice').value === "true";
+    } else {
+        data.returnReason = document.getElementById('new-op-reason').value;
+        data.returnDate = baseDate;
+    }
+
+    try {
+        // Для возвратов бэкенд ожидает массив [data], для заказов — один объект data
+        const bodyData = type === 'order' ? data : [data];
+
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(bodyData)
+        });
+
+        if (response.ok) {
+            showToast("✅ Операция успешно сохранена", "success");
+            // Задержка перед релоадом, чтобы пользователь успел увидеть Toast
+            setTimeout(() => {
+                location.reload();
+            }, 1000);
+        } else {
+            const err = await response.text();
+            // Обработка ошибки склада или валидации от бэкенда
+            showStatus(err || "Ошибка сохранения", true);
+            showToast("Ошибка сервера", "error");
+        }
+    } catch (e) {
+        console.error("Критическая ошибка при сохранении:", e);
+        showToast("Ошибка сети: сервер недоступен", "error");
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// TODO NOR HATVAC 20:55-------------------
+
 
 function enableOrderEdit(id) {
     const order = ordersData.find(o => o.id == id);
@@ -416,62 +667,6 @@ async function saveFullChanges(id) {
     }
 }
 
-// --- 5. Возвраты ---
-// --- 5. Возвраты ---
-function openReturnDetails(id) {
-    // Используем ==, как мы договорились
-    const ret = returnsData.find(r => r.id == id);
-    if (!ret) return;
-
-    const statusText = ret.status === 'CONFIRMED' ? 'Проведено' : (ret.status === 'DRAFT' ? 'Черновик' : ret.status);
-    const statusClass = ret.status === 'CONFIRMED' ? 'bg-success' : 'bg-warning';
-    const footer = document.getElementById('order-footer-actions');
-    // HTML для кнопки печати
-    const printBtnHtml = `<button class="btn-primary" style="background:#475569" onclick="printReturn(${ret.id})">🖨 Печать</button>`;
-    const displayReason = translateReason(ret.returnReason);
-
-    tempItems = JSON.parse(JSON.stringify(ret.items));
-
-    // Обновляем заголовок и информацию
-    document.getElementById('modal-title').innerHTML = `
-        Детали операции 
-        <span class="badge ${statusClass}" style="margin-left:10px;">${statusText}</span>
-        <span class="badge" style="margin-left:5px;">ВОЗВРАТ №${ret.id}</span>
-    `;
-
-    document.getElementById('order-info').innerHTML = `
-    <div class="modal-info-row" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; background: #fff1f2; padding: 15px; border-radius: 10px; margin-top: 20px;">
-        <div><small>Магазин:</small><br><b>${ret.shopName}</b></div>
-        <div><small>Дата возврата:</small><br><b>${formatOrderDate(ret.returnDate)}</b></div>
-        <div><small>Причина:</small><br><b style="color:#ef4444;">${displayReason}</b></div>
-    </div>
-`;
-
-    // Рендерим таблицу товаров
-    renderItemsTable(tempItems, false);
-
-    document.getElementById('order-total-price').innerText = "Сумма возврата: " + (ret.totalAmount || 0).toLocaleString() + " ֏";
-
-    // *** ЕДИНСТВЕННЫЙ И ПРАВИЛЬНЫЙ БЛОК ДЛЯ КНОПОК ФУТЕРА ***
-    if (ret.status === 'DRAFT') {
-        footer.innerHTML = `
-            <button class="btn-primary" style="background:#10b981" onclick="confirmReturn(${ret.id})">✅ Подтвердить</button>
-            ${printBtnHtml}
-            <button class="btn-primary" onclick="enableReturnEdit(${ret.id})">Изменить</button>
-            <button class="btn-primary" style="background:#ef4444" onclick="deleteReturnOrder(${ret.id})">❌ Удалить</button>
-            <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-order-view')">Закрыть</button>
-        `;
-    } else {
-        footer.innerHTML = `
-            <b style="color:gray;">Обработан</b>
-            ${printBtnHtml}
-            <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-order-view')">Закрыть</button>
-        `;
-    }
-
-
-    openModal('modal-order-view');
-}
 
 
 async function confirmReturn(id) {
@@ -524,74 +719,6 @@ function enableReturnEdit(id) {
 }
 
 
-async function saveNewManualOperation(type) {
-    // 1. Получаем чистую дату из инпута (она всегда в формате yyyy-MM-dd)
-    const baseDate = document.getElementById('new-op-date').value;
-    const btn = event.target; // Получаем кнопку
-    if (btn.disabled) return; // Если уже нажата — выходим
-
-    if (Object.keys(tempItems).length === 0) {
-        showToast("Добавьте хотя бы один товар!");
-        return;
-    }
-
-    if (!baseDate) {
-        showToast("Пожалуйста, выберите дату!");
-        return;
-    }
-
-    const url = type === 'order' ? '/api/admin/orders/create-manual' : '/api/returns/sync';
-
-    // Формируем дату создания с текущим временем сервера 2026 года
-    const now = new Date();
-    const currentTime = now.toTimeString().substring(0, 8); // "01:05:30"
-    const formattedDateTime = `${baseDate}T${currentTime}`;
-
-    // Базовый объект данных
-    const data = {
-        shopName: document.getElementById('new-op-shop').value,
-        managerId: document.getElementById('new-op-manager').value,
-        items: tempItems,
-        totalAmount: calculateCurrentTempTotal(),
-        createdAt: formattedDateTime, // ISO формат
-        androidId: "MANUAL-" + Date.now()
-    };
-
-    // 2. ИСПРАВЛЕНО: Отправляем на сервер ТОЛЬКО baseDate (yyyy-MM-dd)
-    if (type === 'order') {
-        data.comment = document.getElementById('new-op-comment').value;
-        data.deliveryDate = baseDate; // ОТПРАВЛЯЕМ "2026-01-20"
-        data.paymentMethod = document.getElementById('new-op-payment').value;
-        data.needsSeparateInvoice = document.getElementById('new-op-invoice').value === "true";
-    } else {
-        data.returnReason = document.getElementById('new-op-reason').value;
-        data.returnDate = baseDate; // ОТПРАВЛЯЕМ "2026-01-20"
-    }
-
-    try {
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(type === 'order' ? data : [data])
-        });
-
-        if (response.ok) {
-            showToast("Успешно сохранено", "success");
-            // В 2026 году лучше обновлять данные без полной перезагрузки,
-            // но если проект так настроен, оставляем reload
-            location.reload();
-        } else {
-            const err = await response.text(); // Используем text(), так как сервер может вернуть не JSON
-            showToast("Ошибка: " + err, "error");
-        }
-    } catch (e) {
-        console.error(e);
-        showToast("Ошибка сети или сервера", "error");
-    }finally {
-        btn.disabled = false; // Разблокируем только после ответа
-        btn.innerText = (type === 'order') ? "Создать заказ" : "Создать возврат";
-    }
-}
 
 
 function cancelReturnEdit(id) {
@@ -1105,31 +1232,15 @@ async function loadManagerIds() {
     }
 }
 
-// ... (остальные ваши функции: openModal, closeModal, formatOrderDate, translatePayment, ...)
-
-// Вспомогательная функция, которая использует загруженный список
-function getManagerOptionsHTML() {
-    // Теперь мы используем managerIdList, который содержит ТОЛЬКО логины из Enum (включая OFFICE)
-    return managerIdList.map(managerName => `<option value="${managerName}">${managerName}</option>`).join('');
-    // Ручное добавление больше не нужно!
-}
-
-// ... (все остальные функции логики) ...
-
-// ОБРАТИТЕ ВНИМАНИЕ НА ЭТОТ БЛОК:
-// Он запускает загрузку данных при старте страницы и активирует табы
-
-// ... (остальная часть вашего script.js) ...
 
 
-// --- НОВЫЙ ЗАКАЗ ---
+
+
+
 async function openCreateOrderModal() {
     await loadManagerIds();
     tempItems = {};
     document.getElementById('modal-title').innerText = "Создание нового заказа";
-    const now = new Date();
-    const todayISO = now.toISOString().split('T')[0]; // "2026-01-20"
-    document.getElementById('new-op-date').value = todayISO;
 
     let clientOptions = clientsData.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
     // ИСПРАВЛЕНО: Теперь переменная определена
@@ -1172,11 +1283,6 @@ async function openCreateReturnModal() {
     await loadManagerIds();
     tempItems = {};
     document.getElementById('modal-title').innerText = "Оформление нового возврата";
-    // Добавь это в начало openCreateOrderModal и openCreateReturnModal
-    const now = new Date();
-    const todayISO = now.toISOString().split('T')[0]; // "2026-01-20"
-    document.getElementById('new-op-date').value = todayISO;
-
 
     let clientOptions = clientsData.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
     let reasonOptions = returnReasons.map(r => `<option value="${r.name || r}">${translateReason(r)}</option>`).join('');
@@ -1412,6 +1518,19 @@ function triggerImport() {
     input.click();
 }
 
+// //todo Toast//
+// function showToast(text, type = 'info') {
+//     const container = document.getElementById('toast-container');
+//     const toast = document.createElement('div');
+//     toast.className = `toast-msg toast-${type}`;
+//     const icon = type === 'success' ? '✅' : (type === 'error' ? '❌' : 'ℹ️');
+//     toast.innerHTML = `<span>${icon}</span> <span>${text}</span>`;
+//     container.appendChild(toast);
+//     setTimeout(() => {
+//         toast.style.opacity = '0';
+//         setTimeout(() => toast.remove(), 500);
+//     }, 4000);
+// }
 
 
 function showToast(text, type = 'info') {
@@ -1834,7 +1953,8 @@ function sendToEmail() {
         });
 }
 
-
+// Убедитесь, что эта функция showToast() у вас определена
+// function showToast(text, type = 'info') { ... }
 
 
 async function saveAllSettings() {
@@ -1965,66 +2085,45 @@ function validateDate(dateStr) {
     return true;
 }
 
-
-// ИСПРАВЛЕНО: Единая точка входа
 document.addEventListener("DOMContentLoaded", async () => {
     console.log("Sellion ERP 2026 initialized");
 
-    // Инициализация ваших функций
+    // 1. WebSocket подключаем один раз
     if (typeof connectWebSocket === 'function') connectWebSocket();
-    if (typeof loadManagerIds === 'function') await loadManagerIds();
-    const lastTab = localStorage.getItem('sellion_tab') || 'tab-orders';
+
+    // 2. Менеджеров грузим сразу при старте, чтобы модалки открывались мгновенно
+    if (typeof loadManagerIds === 'function') {
+        try {
+            await loadManagerIds();
+        } catch (e) {
+            console.error("Ошибка загрузки менеджеров");
+        }
+    }
+
+    // 3. Восстановление вкладки
+    const lastTab = localStorage.getItem('sellion_tab') || 'tab-main';
     if (typeof showTab === 'function') showTab(lastTab);
 
-    // --- 1. ФОРМАТИРОВАНИЕ ДАТ ПРИ ЗАГРУЗКЕ ---
-    // Предполагается, что функция formatOrderDate определена в script.js
-    document.querySelectorAll('.js-date-format').forEach(function (cell) {
-        const rawDate = cell.innerText;
-        // Проверяем, что дата еще не отформатирована (нет точек), чтобы не форматировать дважды
-        if (rawDate && rawDate !== '---' && !rawDate.includes('.')) {
-            cell.innerText = formatOrderDate(rawDate);
-        }
-    });
-
-    // --- 2. ПЕРЕВОД ПРИЧИН ВОЗВРАТОВ ПРИ ЗАГРУЗКЕ ---
-    // Предполагается, что функция translateReason определена в script.js
-    document.querySelectorAll('.js-reason-translate').forEach(function (cell) {
-        const englishReason = cell.innerText;
-        if (englishReason && englishReason !== '---') {
-            cell.innerText = translateReason(englishReason);
-        }
-    });
-
-    // --- 3. ПЕРЕВОД СТАТУСОВ ВОЗВРАТОВ ПРИ ЗАГРУЗКЕ ---
-    // Предполагается, что функция translateReturnStatus определена в script.js
-    document.querySelectorAll('.js-status-translate').forEach(function (cell) {
-        const englishStatus = cell.innerText;
-        const statusInfo = translateReturnStatus(englishStatus);
-
-        // Заменяем сырой текст на красивый бейдж с классом
-        cell.innerHTML = `<span class="badge ${statusInfo.class}">${statusInfo.text}</span>`;
-    });
-
-
-    // --- 4. ЛОГИКА СВОРАЧИВАНИЯ КАТЕГОРИЙ (Ваш существующий код) ---
-    document.body.addEventListener('click', function (e) {
-        const header = e.target.closest('.js-category-toggle');
-        if (!header) return;
-
-        const targetClass = header.getAttribute('data-target');
-        const rows = document.getElementsByClassName(targetClass);
-        const icon = header.querySelector('.toggle-icon');
-
-        if (rows.length > 0) {
-            const isHidden = rows[0].style.display === "none";
-
-            for (let i = 0; i < rows.length; i++) {
-                rows[i].style.display = isHidden ? "table-row" : "none";
+    // 4. Форматирование всех дат и статусов в таблицах (делегирование)
+    const formatInitialData = () => {
+        document.querySelectorAll('.js-date-format').forEach(cell => {
+            const raw = cell.innerText;
+            if (raw && raw !== '---' && !raw.includes('.')) {
+                cell.innerText = formatOrderDate(raw);
             }
+        });
 
-            if (icon) {
-                icon.innerText = isHidden ? "▼" : "▶";
-            }
-        }
-    });
+        document.querySelectorAll('.js-reason-translate').forEach(cell => {
+            cell.innerText = translateReason(cell.innerText);
+        });
+
+        document.querySelectorAll('.js-status-translate').forEach(cell => {
+            const statusInfo = translateReturnStatus(cell.innerText);
+            cell.innerHTML = `<span class="badge ${statusInfo.class}">${statusInfo.text}</span>`;
+        });
+    };
+
+    formatInitialData();
 });
+
+
