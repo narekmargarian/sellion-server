@@ -3,152 +3,245 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Вход в систему Sellion | 2026</title>
-
-    <!-- ИСПРАВЛЕНО: Добавлены протоколы https:// и корректные пути -->
-    <link href="https://cdn.jsdelivr.net" rel="stylesheet">
-    <link href="https://fonts.googleapis.com" rel="stylesheet">
-
-    <!-- ИСПРАВЛЕНО: Заглушка для favicon, чтобы не было ошибки 404 в логах -->
-    <link rel="icon" href="data:;base64,iVBORw0KGgo=">
-
+    <title>SELLION ERP | RIVENTO</title>
     <style>
         :root {
-            --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            --glass-bg: rgba(255, 255, 255, 0.9);
+            --accent: #6366f1;
+            --dark: #0f172a;
+            --text-muted: #64748b;
+            --glass: rgba(255, 255, 255, 0.03);
+            --error: #ef4444;
         }
 
-        body {
+        * { box-sizing: border-box; }
+
+        body, html {
+            margin: 0; padding: 0;
             font-family: 'Inter', sans-serif;
+            background: var(--dark);
+            color: white;
+            overflow: hidden;
+        }
+
+        .main-wrapper {
+            height: 200vh;
+            transition: transform 0.8s cubic-bezier(0.85, 0, 0.15, 1);
+        }
+
+        section {
             height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
-            background: #f4f7f9;
-            /* Исправлен фон для лучшего отображения */
-            background-color: #0f172a;
-            background-image:
-                    radial-gradient(at 0% 0%, hsla(253,16%,7%,1) 0, transparent 50%),
-                    radial-gradient(at 50% 0%, hsla(225,39%,30%,1) 0, transparent 50%),
-                    radial-gradient(at 100% 0%, hsla(339,49%,30%,1) 0, transparent 50%);
-            margin: 0;
+            position: relative;
+        }
+
+        /* МОДАЛЬНОЕ ОКНО */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(15, 23, 42, 0.9);
+            backdrop-filter: blur(10px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            visibility: hidden;
+            transition: 0.4s;
+            z-index: 100;
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            visibility: visible;
         }
 
         .login-card {
-            width: 100%;
-            max-width: 420px;
-            background: var(--glass-bg);
-            backdrop-filter: blur(10px);
-            border-radius: 20px;
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            background: rgba(30, 41, 59, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.1);
             padding: 40px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
+            border-radius: 24px;
+            width: 100%;
+            max-width: 400px;
             text-align: center;
         }
 
-        .brand-logo {
-            font-weight: 700;
-            letter-spacing: -1px;
-            color: #1e293b;
-            margin-bottom: 30px;
-            width: 100%;
-            font-size: 2rem;
-        }
-
-        .form-container {
-            width: 100%;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-
-        .form-label {
-            font-weight: 600;
-            color: #475569;
-            font-size: 0.85rem;
-            text-align: left;
-            width: 100%;
-            margin-bottom: 8px;
-        }
-
-        .form-control {
-            border-radius: 10px;
-            padding: 12px 15px;
-            border: 1px solid #e2e8f0;
-            transition: all 0.3s ease;
-            width: 100%;
+        /* СООБЩЕНИЕ ОБ ОШИБКЕ */
+        .error-msg {
+            color: var(--error);
+            background: rgba(239, 68, 68, 0.1);
+            border-radius: 8px;
+            padding: 10px;
+            font-size: 13px;
             margin-bottom: 20px;
+            border: 1px solid rgba(239, 68, 68, 0.2);
         }
 
-        .form-control:focus {
-            box-shadow: 0 0 0 4px rgba(118, 75, 162, 0.15);
-            border-color: #764ba2;
+        .input-group { margin-bottom: 20px; text-align: left; }
+        .input-group label { display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 8px; }
+        .input-group input {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 12px 16px;
+            border-radius: 12px;
+            color: white;
             outline: none;
         }
+        .input-group input:focus { border-color: var(--accent); }
 
-        .btn-primary {
-            background: var(--primary-gradient);
-            border: none;
-            border-radius: 10px;
-            padding: 12px 40px;
-            font-weight: 700;
-            color: white;
-            transition: all 0.3s ease;
-            cursor: pointer;
-            margin-top: 10px;
-        }
-
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 15px -3px rgba(118, 75, 162, 0.4);
-            opacity: 0.9;
-        }
-
-        .alert {
-            border-radius: 12px;
-            font-size: 0.9rem;
+        .btn-submit {
             width: 100%;
-            margin-bottom: 20px;
+            background: var(--accent);
+            color: white;
+            border: none;
+            padding: 14px;
+            border-radius: 12px;
+            font-weight: 600;
+            cursor: pointer;
         }
+
+        .btn-login-minimal {
+            display: inline-block;
+            padding: 12px 35px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: #cbd5e1;
+            text-decoration: none;
+            border-radius: 12px;
+            cursor: pointer;
+        }
+
+        /* ФУТЕР */
+        .footer-fixed {
+            position: absolute;
+            bottom: 20px;
+            width: 100%;
+            text-align: center;
+            font-size: 12px;
+            color: #334155;
+            z-index: 10;
+        }
+
+        .logo-glow { font-size: 80px; font-weight: 800; background: linear-gradient(135deg, #fff 0%, #6366f1 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .circle { position: absolute; border-radius: 50%; background: var(--accent); filter: blur(100px); opacity: 0.1; z-index: 0; }
+        .card { background: var(--glass); border: 1px solid rgba(255, 255, 255, 0.05); padding: 25px; border-radius: 20px; }
     </style>
 </head>
 <body>
 
-<main class="login-card">
-    <h2 class="brand-logo">Sellion <span style="color: #764ba2;">Office</span></h2>
+<div class="modal-overlay" id="modal">
+    <div class="login-card">
+        <h2>Авторизация</h2>
 
-    <div class="form-container">
-        <!-- Сообщение об ошибке (Thymeleaf) -->
-        <div th:if="${param.error}" class="alert alert-danger" role="alert">
-            Неверный логин или пароль
+        <!-- Блок ошибки Thymeleaf -->
+        <div th:if="${param.error}" class="error-msg">
+            Неверный логин или пароль. Попробуйте снова.
         </div>
 
-        <div th:if="${param.logout}" class="alert alert-success" role="alert">
-            Вы успешно вышли из системы
-        </div>
-
-        <form th:action="@{/login}" method="post" class="w-100">
-            <div class="text-start">
-                <label class="form-label">Логин сотрудника</label>
-                <input type="text" name="username" class="form-control" placeholder="Напр: op1" required autofocus>
+        <form th:action="@{/login}" method="post">
+            <div class="input-group">
+                <label>ЛОГИН</label>
+                <input type="text" name="username" placeholder="Введите логин..." required>
             </div>
-
-            <div class="text-start">
-                <label class="form-label">Пароль</label>
-                <input type="password" name="password" class="form-control" placeholder="••••••••" required>
+            <div class="input-group">
+                <label>ПАРОЛЬ</label>
+                <input type="password" name="password" placeholder="••••••••" required>
             </div>
-
-            <button class="btn-primary" type="submit">Войти в систему</button>
+            <button type="submit" class="btn-submit">ВОЙТИ</button>
         </form>
+        <p style="font-size: 12px; color: var(--text-muted); margin-top: 20px; cursor: pointer;" onclick="toggleModal()">Отмена</p>
     </div>
+</div>
 
-    <footer class="mt-5">
-        <p class="text-muted small">&copy; 2026 Sellion System. Все права защищены.</p>
-    </footer>
-</main>
+<div class="main-wrapper" id="wrapper">
+    <section>
+        <div class="circle" style="width: 500px; height: 500px; top: -150px; left: -150px;"></div>
+        <div style="text-align: center; z-index: 1;">
+            <div class="logo-glow">SELLION</div>
+            <p style="color: var(--text-muted); letter-spacing: 5px; font-size: 11px;">ENTERPRISE SOLUTIONS 2026</p>
+        </div>
+    </section>
+
+    <section>
+        <div class="circle" style="width: 400px; height: 400px; bottom: -100px; right: -50px; background: #4f46e5; opacity: 0.15;"></div>
+        <div style="max-width: 800px; text-align: center; z-index: 1; padding: 0 20px;">
+            <h2 style="font-size: 40px; margin-bottom: 10px;">RIVENTO</h2>
+            <p style="color: var(--accent); letter-spacing: 2px; font-size: 14px; margin-bottom: 40px;">OFFICIAL DISTRIBUTOR</p>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; text-align: left; margin-bottom: 40px;">
+                <div class="card">
+                    <h3 style="font-size: 16px;">RIVENTO Armenia</h3>
+                    <p style="color: #94a3b8; font-size: 13px; line-height: 1.6;">Ведущий импортер качественной продукции на территорию Республики Армения.</p>
+                </div>
+                <div class="card">
+                    <h3 style="font-size: 16px;">Вкусы Мира</h3>
+                    <p style="color: #94a3b8; font-size: 13px; line-height: 1.6;">Официальный представитель бренда «Вкусы Мира» (Трийнбери) в Армении.</p>
+                </div>
+            </div>
+
+            <div class="btn-login-minimal" onclick="toggleModal()">ВОЙТИ В СИСТЕМУ</div>
+        </div>
+    </section>
+</div>
+
+<div class="footer-fixed">
+    &copy; 2026 Sellion System. Все права защищены.
+</div>
+
+<script>
+    function scrollPage(index) {
+        document.getElementById('wrapper').style.transform = `translateY(-${index * 100}vh)`;
+    }
+
+    function toggleModal() {
+        document.getElementById('modal').classList.toggle('active');
+    }
+
+    window.addEventListener('wheel', (e) => {
+        if (document.getElementById('modal').classList.contains('active')) return;
+        if (e.deltaY > 0) scrollPage(1);
+        else scrollPage(0);
+    });
+
+    (function() {
+        // 1. Получаем чистый путь и параметры
+        const path = window.location.pathname.toLowerCase().replace(/\/$/, "");
+        const urlParams = new URLSearchParams(window.location.search);
+
+        const wrapper = document.getElementById('wrapper');
+        const modal = document.getElementById('modal');
+
+        // 2. ПРОВЕРКА: Если путь в точности "/login" ИЛИ есть ошибка входа
+        if (path === "/login" || urlParams.has('error')) {
+            // МГНОВЕННО переходим на 2-й экран
+            wrapper.style.transition = 'none';
+            wrapper.style.transform = 'translateY(-100vh)';
+
+            // МГНОВЕННО открываем окно
+            modal.style.transition = 'none';
+            modal.classList.add('active');
+
+            // Включаем плавность обратно для будущего использования
+            setTimeout(() => {
+                wrapper.style.transition = 'transform 0.8s cubic-bezier(0.85, 0, 0.15, 1)';
+                modal.style.transition = '0.4s';
+            }, 50);
+        } else {
+            // 3. ДЛЯ ВСЕХ ОСТАЛЬНЫХ СЛУЧАЕВ (включая "/")
+            // Показываем только ПЕРВЫЙ экран
+            wrapper.style.transform = 'translateY(0)';
+            modal.classList.remove('active');
+
+            // Если в адресе написано что-то лишнее (напр. /qwerty), чистим адресную строку для красоты
+            if (path !== "" && path !== "/") {
+                window.history.replaceState({}, document.title, "/");
+            }
+        }
+    })();
+
+
+</script>
 
 </body>
 </html>

@@ -6,15 +6,8 @@ import org.springframework.web.bind.annotation.GetMapping;
 @Controller
 public class LoginController {
 
-    @GetMapping("/login")
-    public String login() {
-        return "login"; // Вернет login.html из папки templates
-    }
-
-    @GetMapping("/")
+    @GetMapping({"/", "/login", "/{path:[^\\.]*}"})
     public String index() {
-        // Перенаправляем в админку. Если юзер не залогинен, Security сам кинет на /login
-//        return "redirect:/admin";
-        return "index";
+        return "login";
     }
 }

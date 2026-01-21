@@ -54,7 +54,10 @@ public class ReturnOrder {
     private BigDecimal totalAmount = BigDecimal.ZERO;
 
     private String createdAt;
+
     private String comment;
+    private String carNumber;
+
 
     @PrePersist
     public void formatAndSetReturnDate() {

@@ -10,12 +10,12 @@ import lombok.Setter;
 
 
 @Entity
-@Table(name = "system_settings")
+@Table(name = "company_settings")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class SystemSetting {
+public class CompanySetting {
     @Id
     private String settingKey; // Например, "COMPANY_NAME"
     private String settingValue; // Например, "Սելլիոն ՍՊԸ"
