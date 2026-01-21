@@ -40,4 +40,14 @@ public class ManagerApiKeyService {
     public void deleteKey(String managerId) {
         apiKeyRepository.deleteById(managerId);
     }
+
+
+
+    @Transactional
+    public void saveKeyForManager(String managerId, String rawApiKey) {
+        ManagerApiKey key = new ManagerApiKey();
+        key.setManagerId(managerId);
+        key.setApiKeyHash(rawApiKey); // Сохраняем полученный Android ID
+        apiKeyRepository.save(key);
+    }
 }
