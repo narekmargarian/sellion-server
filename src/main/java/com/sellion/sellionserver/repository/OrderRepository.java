@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -27,6 +28,19 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     List<Order> findDailyRouteOrders(@Param("managerId") String managerId, @Param("date") LocalDate date);
 
     boolean existsByAndroidId(String androidId);
+    List<Order> findByManagerId(String managerId);
+
+
+    @Query("SELECT SUM(o.totalAmount) FROM Order o WHERE o.createdAt BETWEEN :start AND :end AND o.status != 'CANCELLED'")
+    BigDecimal sumTotalSales(@Param("start") String start, @Param("end") String end);
+
+    @Query("SELECT SUM(o.totalPurchaseCost) FROM Order o WHERE o.createdAt BETWEEN :start AND :end AND o.status != 'CANCELLED'")
+    BigDecimal sumTotalPurchaseCost(@Param("start") String start, @Param("end") String end);
+
+    @Query("SELECT COUNT(o) FROM Order o WHERE o.createdAt BETWEEN :start AND :end")
+    long countOrdersBetween(@Param("start") String start, @Param("end") String end);
+    @Query("SELECT o FROM Order o WHERE o.createdAt BETWEEN :start AND :end AND o.invoiceId IS NOT NULL AND o.status != 'CANCELLED'")
+    List<Order> findInvoicedOrdersBetweenDates(@Param("start") String start, @Param("end") String end);
 
 
 

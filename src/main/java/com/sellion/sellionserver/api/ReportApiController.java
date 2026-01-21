@@ -10,13 +10,18 @@ import lombok.RequiredArgsConstructor;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.streaming.SXSSFWorkbook;
 import org.springframework.http.*;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 
 @RestController
@@ -31,7 +36,9 @@ public class ReportApiController {
 
     @GetMapping("/orders-detailed")
     public ResponseEntity<?> exportOrdersDetailed(@RequestParam String start, @RequestParam String end) throws IOException {
-        List<Order> orders = orderRepository.findOrdersBetweenDates(start + "T00:00:00", end + "T23:59:59");
+
+        List<Order> orders = orderRepository.findInvoicedOrdersBetweenDates(start + "T00:00:00", end + "T23:59:59");
+
         if (orders.isEmpty()) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(Map.of("message", "Заказы не найдены за указанный период."));
@@ -119,4 +126,42 @@ public class ReportApiController {
 
         return new ResponseEntity<>(bytes, headers, HttpStatus.OK);
     }
+
+    @PostMapping("/send-selected-corrections")
+    @Transactional(readOnly = true)
+
+    public ResponseEntity<?> sendSelectedCorrections(@RequestBody Map<String, Object> payload) {
+        try {
+            // Получаем список ID и почту
+            List<Long> ids = ((List<?>) payload.get("ids")).stream()
+                    .map(id -> Long.valueOf(id.toString()))
+                    .toList();
+            String email = (String) payload.get("email");
+
+            if (ids.isEmpty()) return ResponseEntity.badRequest().body(Map.of("error", "Ничего не выбрано"));
+
+            // Загружаем именно выбранные возвраты
+            List<ReturnOrder> selected = returnOrderRepository.findAllById(ids);
+
+            // Генерируем Excel
+            try (Workbook workbook = invoiceExcelService.generateExcel(null, selected, "РЕЕСТР КОРРЕКТИРОВОК ДЛЯ ПЕРЕВЫСТАВЛЕНИЯ ФАКТУР")) {
+                ByteArrayOutputStream bos = new ByteArrayOutputStream();
+                workbook.write(bos);
+                byte[] bytes = bos.toByteArray();
+
+                emailService.sendReportWithAttachment(
+                        email,
+                        "Sellion ERP: КОРРЕКТИРОВКИ ФАКТУР (" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")) + ")",
+                        "Добрый день. Прикрепляем список корректировок для изменения фактур в системе.",
+                        bytes,
+                        "Selected_Corrections_" + LocalDate.now() + ".xlsx"
+                );
+            }
+
+            return ResponseEntity.ok(Map.of("success", true, "count", ids.size()));
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(Map.of("error", "Ошибка: " + e.getMessage()));
+        }
+    }
+
 }

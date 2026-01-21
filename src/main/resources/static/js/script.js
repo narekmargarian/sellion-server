@@ -83,18 +83,22 @@ function translatePayment(m) {
     return mapping[val] || val;
 }
 
-// Утилита для перевода причин возврата
 function translateReason(r) {
     if (!r) return '';
+    // Обработка случая, если пришел объект или строка
     const val = (typeof r === 'object') ? (r.name || r) : r;
+
     const mapping = {
         'EXPIRED': 'Просрочка',
         'DAMAGED': 'Поврежденная упаковка',
         'WAREHOUSE': 'На склад',
+        'CORRECTION_ORDER': 'Корректировка заказа',    // Добавлено
+        'CORRECTION_RETURN': 'Корректировка возврата', // Добавлено
         'OTHER': 'Другое'
     };
     return mapping[val] || val;
 }
+
 
 function translateReturnStatus(status) {
     switch (status) {
@@ -1653,17 +1657,37 @@ function openUserDetailsModal(id) {
     `;
 
     // Действия в футере
+    // Находим кнопку удаления в футере (добавьте её к остальным)
     document.getElementById('client-footer-actions').innerHTML = `
-        <button class="btn-warning" onclick="event.stopPropagation(); resetPassword(${user.id})">
-            Сброс пароля (1111)
-        </button>
-        <button class="btn-primary" style="background:#64748b" onclick="closeModal('${modalId}')">
-            Закрыть
-        </button>
-    `;
+    <button class="btn-danger" style="background:#ef4444" onclick="event.stopPropagation(); deleteUser(${user.id})">
+        🗑 Удалить сотрудника
+    </button>
+    <button class="btn-warning" onclick="event.stopPropagation(); resetPassword(${user.id})">
+        🔑 Сброс пароля
+    </button>
+    <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-client-view')">
+        Закрыть
+    </button>
+`;
 
     // Открываем модальное окно
     openModal(modalId);
+}
+
+async function deleteUser(id) {
+    showConfirmModal("Удалить сотрудника?", "Доступ в систему будет полностью заблокирован.", async () => {
+        try {
+            const response = await fetch(`/api/admin/users/${id}`, { method: 'DELETE' });
+            if (response.ok) {
+                showToast("Сотрудник удален", "success");
+                location.reload();
+            } else {
+                showToast("Ошибка при удалении", "error");
+            }
+        } catch (e) {
+            showToast("Ошибка сети", "error");
+        }
+    });
 }
 
 
@@ -1978,50 +2002,89 @@ function sendToEmail() {
     const email = document.getElementById('report-email').value;
 
     if (!start || !end || !email) {
-        showToast("Выберите период и введите email!", "error");
+        showToast("⚠️ Выберите период и введите email!", "error");
         return;
     }
 
-    // Собираем выбранные типы отчетов из чекбоксов
     const types = [];
-    if (document.getElementById('check-orders').checked) {
-        types.push('orders');
-    }
-    if (document.getElementById('check-returns').checked) {
-        types.push('returns');
-    }
+    if (document.getElementById('check-orders').checked) types.push('orders');
+    if (document.getElementById('check-returns').checked) types.push('returns');
 
     if (types.length === 0) {
-        showToast("Выберите хотя бы один тип отчета (заказы или возвраты)!", "error");
+        showToast("⚠️ Выберите хотя бы один тип отчета (заказы или возвраты)!", "error");
         return;
     }
 
-    // Формируем тело запроса для POST (URLSearchParams удобен для form-data)
+    // 1. Показываем уведомление о начале процесса (2026 UX стандарт)
+    showToast("⏳ Подготовка и отправка отчета...", "info");
+
     const params = new URLSearchParams();
     params.append('start', start);
     params.append('end', end);
     params.append('email', email);
-    types.forEach(type => params.append('types', type)); // Добавляем каждый тип как отдельный параметр
+    types.forEach(type => params.append('types', type));
 
     fetch('/api/reports/excel/send-to-accountant', {
         method: 'POST',
+        headers: {
+            // Явно указываем тип контента для сервера
+            'Content-Type': 'application/x-www-form-urlencoded'
+        },
         body: params
     })
-        .then(response => response.json())
+        .then(response => {
+            // Проверяем статус ответа
+            return response.json().then(data => {
+                if (!response.ok) {
+                    throw new Error(data.error || data.message || 'Ошибка при отправке');
+                }
+                return data;
+            });
+        })
         .then(data => {
+            // 2. Успешное завершение
             if (data.message) {
-                showToast(data.message, 'success');
-            } else if (data.error) {
-                showToast(data.error, 'error');
+                showToast("✅ " + data.message, 'success');
             }
         })
         .catch(error => {
-            showToast('Ошибка сети при отправке отчета.', 'error');
+            // 3. Обработка ошибок (например, если нет данных за период)
+            console.error('Report Error:', error);
+            showToast('❌ ' + error.message, 'error');
         });
 }
 
-// Убедитесь, что эта функция showToast() у вас определена
-// function showToast(text, type = 'info') { ... }
+
+
+// Переход к счетам менеджера
+function showManagerInvoices(managerName) {
+    // 1. Переключаем вкладку на Счета
+    showTab('tab-invoices');
+
+    // 2. Устанавливаем фильтр в поиске (у нас там поиск по магазину/номеру,
+    // но если вы добавите колонку менеджера, поиск сработает)
+    const searchInput = document.getElementById('search-invoices');
+    if (searchInput) {
+        searchInput.value = managerName;
+        filterTable('search-invoices', 'invoices-table-body');
+    }
+}
+
+// Генерация быстрого отчета (печать)
+function showManagerReport(managerName) {
+    const start = document.querySelector('input[name="kpiStart"]').value;
+    const end = document.querySelector('input[name="kpiEnd"]').value;
+
+    if (!start || !end) {
+        showToast("Выберите период для отчета", "error");
+        return;
+    }
+
+    // Открываем печатную форму отчета по конкретному менеджеру
+    const url = `/admin/reports/manager-summary?managerId=${managerName}&start=${start}&end=${end}`;
+    printAction(url);
+}
+
 
 
 async function saveAllSettings() {
@@ -2044,6 +2107,51 @@ async function saveAllSettings() {
         }
     } catch (e) {
         showToast("Ошибка при сохранении", "error");
+    }
+}
+
+function openSetTargetModal(managerId) {
+    document.getElementById('target-manager-name').innerText = managerId;
+    document.getElementById('target-amount-input').value = 0;
+    // Здесь нужно получить текущую цель с бэкенда асинхронно и вставить её в input
+    openModal('modal-set-target');
+}
+
+
+// Функция сохранения цели продаж
+async function saveTargetSales() {
+    const managerId = document.getElementById('target-manager-name').innerText;
+    const amount = parseFloat(document.getElementById('target-amount-input').value) || 0;
+
+    if (!managerId || amount <= 0) {
+        showToast("Введите корректную сумму цели", "error");
+        return;
+    }
+
+    const data = {
+        managerId: managerId,
+        targetAmount: amount
+        // В реальном приложении 2026 года здесь также нужно передавать Месяц и Год
+    };
+
+    try {
+        const response = await fetch('/api/admin/targets/save', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data)
+        });
+
+        if (response.ok) {
+            showToast("✅ Цель успешно сохранена", "success");
+            closeModal('modal-set-target');
+            // Перезагружаем страницу, чтобы обновить KPI на карточках
+            location.reload();
+        } else {
+            const error = await response.json();
+            showToast(error.message || "Ошибка сохранения цели", "error");
+        }
+    } catch (e) {
+        showToast("Ошибка сети или сервера", "error");
     }
 }
 
@@ -2153,7 +2261,105 @@ function validateDate(dateStr) {
 }
 
 
-document.addEventListener("DOMContentLoaded", async () => {
+
+
+// === ЛОГИКА ВЫБОРА КОРРЕКТИРОВОК ДЛЯ ОТЧЕТОВ ===
+
+// 1. Слушатель для динамического подсчета выбранных чекбоксов
+document.addEventListener('change', function(e) {
+    if (e.target.classList.contains('correction-checkbox') || e.target.id === 'select-all-corrections') {
+        const checked = document.querySelectorAll('.correction-checkbox:checked').length;
+        const counter = document.getElementById('selected-count');
+        if (counter) {
+            counter.innerText = checked;
+        }
+    }
+});
+
+// 2. Функция выбора всех чекбоксов
+function toggleAllCorrections(source) {
+    const checkboxes = document.querySelectorAll('.correction-checkbox');
+    checkboxes.forEach(cb => {
+        cb.checked = source.checked;
+    });
+    // Обновляем цифру счетчика
+    const checked = document.querySelectorAll('.correction-checkbox:checked').length;
+    document.getElementById('selected-count').innerText = checked;
+}
+
+// 3. Функция отправки выбранных ID на сервер
+function sendSelectedCorrections() {
+    const selectedIds = Array.from(document.querySelectorAll('.correction-checkbox:checked')).map(cb => cb.value);
+    const emailInput = document.getElementById('report-email');
+    const email = emailInput ? emailInput.value : 'accountant@company.am';
+
+    if (selectedIds.length === 0) {
+        showToast("⚠️ Выберите хотя бы одну корректировку", "warning");
+        return;
+    }
+
+    // ИСПОЛЬЗУЕМ ВАШ МОДАЛ ВМЕСТО CONFIRM
+    showConfirmModal(
+        "Подтверждение отправки",
+        `Отправить реестр из ${selectedIds.length} корректировок на почту ${email}?`,
+        () => {
+            // Эта часть выполнится только после нажатия "Да" в модальном окне
+            executeSendingCorrections(selectedIds, email);
+        }
+    );
+}
+
+// Вспомогательная функция для самой отправки
+function executeSendingCorrections(selectedIds, email) {
+    showToast("⏳ Подготовка и отправка реестра...");
+
+    fetch('/api/reports/excel/send-selected-corrections', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            ids: selectedIds,
+            email: email
+        })
+    })
+        .then(res => {
+            if (!res.ok) throw new Error("Ошибка сервера");
+            return res.json();
+        })
+        .then(data => {
+            if (data.success) {
+                showToast("✅ Реестр успешно отправлен бухгалтеру", "success");
+                // Очистка интерфейса
+                document.querySelectorAll('.correction-checkbox').forEach(cb => cb.checked = false);
+                const selectAll = document.getElementById('select-all-corrections');
+                if (selectAll) selectAll.checked = false;
+                document.getElementById('selected-count').innerText = "0";
+            } else {
+                showToast("❌ Ошибка: " + (data.error || "Не удалось отправить"), "danger");
+            }
+        })
+        .catch(err => {
+            console.error('Error:', err);
+            showToast("❌ Ошибка соединения с сервером", "danger");
+        });
+}
+
+// Функция, которая находит все даты на странице и форматирует их вашей функцией fmt
+function applyGlobalDateFormatting() {
+    document.querySelectorAll('.js-date-format').forEach(el => {
+        const rawDate = el.innerText.trim();
+        if (rawDate && rawDate !== '---') {
+            el.innerText = fmt(rawDate); // Используем вашу функцию fmt
+        }
+    });
+}
+
+
+
+
+
+document.addEventListener("DOMContentLoaded",async () => {
     console.log("Sellion ERP 2026: Инициализация системы...");
 
     // --- 1. СИСТЕМНЫЕ СЛУЖБЫ ---

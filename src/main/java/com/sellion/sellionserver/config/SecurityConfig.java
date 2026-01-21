@@ -35,6 +35,8 @@ public class SecurityConfig {
                         // Но пока оставим доступ для разработки, но ограничим админку:
                         .requestMatchers("/admin/**").hasAnyRole("ADMIN", "OPERATOR", "ACCOUNTANT")
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                        .requestMatchers("/api/reports/**").hasAnyRole("ADMIN", "OPERATOR", "ACCOUNTANT")
+
                         // Все остальные запросы требуют логина
                         .anyRequest().authenticated()
                 )

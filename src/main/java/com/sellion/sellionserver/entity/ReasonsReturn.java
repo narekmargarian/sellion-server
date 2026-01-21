@@ -8,32 +8,24 @@ public enum ReasonsReturn {
     EXPIRED("Просрочка"),
     DAMAGED("Поврежденная упаковка"),
     WAREHOUSE("На склад"),
+    CORRECTION_ORDER("Корректировка заказа"),    // Новое
+    CORRECTION_RETURN("Корректировка возврата"), // Новое
     OTHER("Другое");
 
     private final String displayName;
+    ReasonsReturn(String displayName) { this.displayName = displayName; }
 
-    ReasonsReturn(String displayName) {
-        this.displayName = displayName;
-    }
-
-    // @JsonValue заставляет Jackson отправлять на фронтенд "Просрочка"
     @JsonValue
-    public String getDisplayName() {
-        return displayName;
-    }
+    public String getDisplayName() { return displayName; }
 
-    // @JsonCreator говорит Jackson использовать этот метод при получении данных
     @JsonCreator
     public static ReasonsReturn fromString(String value) {
         if (value == null || value.trim().isEmpty()) return OTHER;
-
         for (ReasonsReturn r : ReasonsReturn.values()) {
-            // Проверка по системному имени (EXPIRED) или по русскому (Просрочка)
-            if (r.name().equalsIgnoreCase(value.trim()) ||
-                    r.displayName.equalsIgnoreCase(value.trim())) {
+            if (r.name().equalsIgnoreCase(value.trim()) || r.displayName.equalsIgnoreCase(value.trim())) {
                 return r;
             }
         }
-        return OTHER; // Защита от падения: если прислали бред, вернет "Другое"
+        return OTHER;
     }
 }

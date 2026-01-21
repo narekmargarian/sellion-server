@@ -37,7 +37,7 @@ public class ReturnOrder {
     private Map<Long, Integer> items = new HashMap<>(); // Инициализация обязательна
 
     @Enumerated(EnumType.STRING) // Это ОБЯЗАТЕЛЬНО, чтобы в БД хранилось "EXPIRED", а не число 0
-    @Column(name = "return_reason")
+    @Column(name = "return_reason",length = 50)
     private ReasonsReturn returnReason;
 
     @JsonProperty("returnDate")
@@ -54,6 +54,7 @@ public class ReturnOrder {
     private BigDecimal totalAmount = BigDecimal.ZERO;
 
     private String createdAt;
+    private String comment;
 
     @PrePersist
     public void formatAndSetReturnDate() {

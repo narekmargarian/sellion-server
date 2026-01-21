@@ -17,6 +17,7 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -30,6 +31,7 @@ public class InvoiceExcelService {
     private final CompanySettings companySettings;
     private static final Logger log = LoggerFactory.getLogger(InvoiceExcelService.class);
 
+
     public Workbook generateExcel(Order order) {
         return generateExcel(List.of(order), null, "Հաշիվ №" + order.getId());
     }
@@ -38,61 +40,83 @@ public class InvoiceExcelService {
         SXSSFWorkbook workbook = new SXSSFWorkbook(100);
         Map<String, String> seller = companySettings.getSellerData();
 
-        if (orders != null && !orders.isEmpty()) {
-            fillSheetData(workbook, "Վաճառք", orders, null, seller);
-        }
-        if (returns != null && !returns.isEmpty()) {
-            fillSheetData(workbook, "Վերադարձ", null, returns, seller);
-        }
+        // 2026: Группировка и обработка данных
+        fillSheetData(workbook, seller, orders, returns);
+
         return workbook;
     }
 
-    private void fillSheetData(Workbook workbook, String sheetBaseName, List<Order> orders, List<ReturnOrder> returns, Map<String, String> seller) {
+    private void fillSheetData(SXSSFWorkbook workbook, Map<String, String> seller, List<Order> orders, List<ReturnOrder> returns) {
         Map<String, Client> clients = clientRepository.findAll().stream()
                 .collect(Collectors.toMap(Client::getName, Function.identity(), (existing, replacement) -> existing));
 
-        // ՓՈՓՈԽՈՒԹՅՈՒՆ 1: Ապրանքները քարտեզագրում ենք ըստ ID-ի
         Map<Long, Product> products = productRepository.findAll().stream()
                 .collect(Collectors.toMap(Product::getId, Function.identity(), (existing, replacement) -> existing));
 
-        if (orders != null) {
-            for (Order o : orders) {
-                Client c = clients.getOrDefault(o.getShopName(), new Client());
-                Sheet sheet = workbook.createSheet(sheetBaseName + " " + (c.getName() != null ? c.getName() : o.getId()));
-                int rowIdx = 0;
+        // --- ЛОГИКА ЗАКАЗОВ (Վաճառք) ---
+        if (orders != null && !orders.isEmpty()) {
+            // Группируем заказы по магазину
+            Map<String, List<Order>> ordersByShop = orders.stream()
+                    .collect(Collectors.groupingBy(Order::getShopName));
 
-                rowIdx = addSellerHeader(sheet, rowIdx, seller);
+            ordersByShop.forEach((shopName, shopOrders) -> {
+                // Разделяем: те, кому нужна отдельная фактура, и те, кого объединяем
+                List<Order> separate = shopOrders.stream().filter(Order::isNeedsSeparateInvoice).toList();
+                List<Order> combined = shopOrders.stream().filter(o -> !o.isNeedsSeparateInvoice()).toList();
 
-                addRow(sheet, rowIdx++, "ԳՆՈՐԴԻ ՏՎՅԱԼՆԵՐ", "");
-                addRow(sheet, rowIdx++, "Անվանում:", c.getName());
-                addRow(sheet, rowIdx++, "ՀՎՀՀ:", c.getInn());
-                addRow(sheet, rowIdx++, "Հաշվեհամար (բանկ):", c.getBankAccount());
-                addRow(sheet, rowIdx++, "Մենեջեր:", o.getManagerId() != null ? o.getManagerId() : "");
-                rowIdx++;
+                // 1. Объединенные (Отдельная фактура: НЕТ)
+                if (!combined.isEmpty()) {
+                    Map<Long, Integer> mergedItems = new HashMap<>();
+                    combined.forEach(o -> o.getItems().forEach((id, qty) -> mergedItems.merge(id, qty, Integer::sum)));
 
-                // Կանչում ենք թարմացված մեթոդը
-                rowIdx = fillItemsTable(sheet, rowIdx, o.getItems(), products);
-            }
+                    String sheetName = createSafeSheetName("Վաճառք " + shopName);
+                    renderSheet(workbook, sheetName, shopName, clients.get(shopName), mergedItems, products, seller, "Объединенный");
+                }
+
+                // 2. Отдельные (Отдельная фактура: ДА)
+                for (Order o : separate) {
+                    String sheetName = createSafeSheetName("Վաճառք " + shopName + " №" + o.getId());
+                    renderSheet(workbook, sheetName, shopName, clients.get(shopName), o.getItems(), products, seller, "Заказ №" + o.getId());
+                }
+            });
         }
 
-        if (returns != null) {
+        // --- ЛОГИКА ВОЗВРАТОВ (Վերադարձ) ---
+        if (returns != null && !returns.isEmpty()) {
             for (ReturnOrder r : returns) {
-                Client c = clients.getOrDefault(r.getShopName(), new Client());
-                Sheet sheet = workbook.createSheet(sheetBaseName + " " + (c.getName() != null ? c.getName() : r.getId()));
-                int rowIdx = 0;
-
-                rowIdx = addSellerHeader(sheet, rowIdx, seller);
-
-                addRow(sheet, rowIdx++, "ԳՆՈՐԴԻ ՏՎՅԱԼՆԵՐ", "");
-                addRow(sheet, rowIdx++, "Անվանում:", c.getName());
-                addRow(sheet, rowIdx++, "ՀՎՀՀ:", c.getInn());
-                addRow(sheet, rowIdx++, "Հաշվեհամար (բանկ):", c.getBankAccount());
-                addRow(sheet, rowIdx++, "Մենեջեր:", r.getManagerId() != null ? r.getManagerId() : "");
-                rowIdx++;
-
-                rowIdx = fillItemsTable(sheet, rowIdx, r.getItems(), products);
+                // Возвраты всегда печатаем отдельно, чтобы не путать бухгалтерию
+                String sheetName = createSafeSheetName("Վերադարձ " + r.getShopName() + " №" + r.getId());
+                renderSheet(workbook, sheetName, r.getShopName(), clients.get(r.getShopName()), r.getItems(), products, seller, "Возврат №" + r.getId());
             }
         }
+    }
+
+    private void renderSheet(Workbook workbook, String sheetName, String shopName, Client c,
+                             Map<Long, Integer> items, Map<Long, Product> products,
+                             Map<String, String> seller, String docInfo) {
+        Sheet sheet = workbook.createSheet(sheetName);
+        int rowIdx = 0;
+
+        rowIdx = addSellerHeader(sheet, rowIdx, seller);
+
+        addRow(sheet, rowIdx++, "ԳՆՈՐԴԻ ՏՎՅԱԼՆԵՐ (Данные покупателя)", "");
+        addRow(sheet, rowIdx++, "Անվանում (Магазин):", shopName);
+        if (c != null) {
+            addRow(sheet, rowIdx++, "ՀՎՀՀ (ИНН):", c.getInn());
+            addRow(sheet, rowIdx++, "Հասցե (Адрес):", c.getAddress());
+        }
+        addRow(sheet, rowIdx++, "Փաստաթուղթ (Документ):", docInfo);
+        rowIdx++;
+
+        fillItemsTable(sheet, rowIdx, items, products);
+    }
+
+    private String createSafeSheetName(String name) {
+        // Excel лимит 31 символ на имя листа
+        if (name.length() > 31) {
+            return name.substring(0, 28) + "...";
+        }
+        return name;
     }
 
     private int addSellerHeader(Sheet sheet, int rowIdx, Map<String, String> seller) {
@@ -106,7 +130,6 @@ public class InvoiceExcelService {
         return ++rowIdx;
     }
 
-    // ՓՈՓՈԽՈՒԹՅՈՒՆ 2: Մեթոդն այժմ ընդունում է Map<Long, Integer> items և Map<Long, Product> products
     private int fillItemsTable(Sheet sheet, int rowIdx, Map<Long, Integer> items, Map<Long, Product> products) {
         Row header = sheet.createRow(rowIdx++);
         String[] cols = {"Ապրանք", "Կոդ (ԱՏԳ)", "Միավոր", "Քանակ", "Գին (առանց ԱԱՀ)", "ԱԱՀ գումար", "Ընդհանուր գումար"};
@@ -116,10 +139,7 @@ public class InvoiceExcelService {
         if (items != null) {
             for (Map.Entry<Long, Integer> item : items.entrySet()) {
                 Product p = products.get(item.getKey());
-                if (p == null) {
-                    log.warn("Ապրանքը ID-ով {} չի գտնվել բազայում Excel-ի համար", item.getKey());
-                    continue;
-                }
+                if (p == null) continue;
 
                 BigDecimal qty = BigDecimal.valueOf(item.getValue());
                 BigDecimal itemTotal = (p.getPrice() != null ? p.getPrice() : BigDecimal.ZERO).multiply(qty);
@@ -131,7 +151,7 @@ public class InvoiceExcelService {
 
         rowIdx++;
         Row totalRow = sheet.createRow(rowIdx++);
-        totalRow.createCell(5).setCellValue("Ընդհանուր վճարվող գումար:");
+        totalRow.createCell(5).setCellValue("Ընդհանուր (Итого):");
         totalRow.createCell(6).setCellValue(totalAmount.setScale(2, RoundingMode.HALF_UP).doubleValue());
         return rowIdx;
     }
@@ -139,7 +159,6 @@ public class InvoiceExcelService {
     private void writeProductRow(Row row, Product p, int qty) {
         BigDecimal priceWithVat = (p.getPrice() != null) ? p.getPrice() : BigDecimal.ZERO;
         BigDecimal divisor = new BigDecimal("1.2");
-
         BigDecimal priceNoVat = priceWithVat.divide(divisor, 2, RoundingMode.HALF_UP);
         BigDecimal totalLine = priceWithVat.multiply(BigDecimal.valueOf(qty));
         BigDecimal totalVatLine = totalLine.subtract(priceNoVat.multiply(BigDecimal.valueOf(qty)));
@@ -160,4 +179,3 @@ public class InvoiceExcelService {
         row.createCell(1).setCellValue(value != null ? value : "");
     }
 }
-

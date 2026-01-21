@@ -45,7 +45,7 @@ public class AdminManagementController {
             return ResponseEntity.badRequest().body(Map.of("error", "Заказ со счетом нельзя менять!"));
         }
 
-        // 1. Возврат старых товаров (теперь order.getItems() возвращает Map<Long, Integer>)
+        // 1. Возврат старых товаров
         stockService.returnItemsToStock(order.getItems(), "Корректировка состава заказа #" + id, "ADMIN");
 
         // 2. Обновление основных полей
@@ -64,24 +64,32 @@ public class AdminManagementController {
         order.setCarNumber((String) payload.get("carNumber"));
 
         // 3. Конвертация полученных данных в Map<Long, Integer>
-        // Входящий JSON приходит как Map<String, Integer>, нам нужно сменить тип ключа
         Map<Long, Integer> newItems = new HashMap<>();
         Object itemsObj = payload.get("items");
         if (itemsObj instanceof Map) {
             @SuppressWarnings("unchecked")
-            Map<String, Object> rawItems = (Map<String, Object>) itemsObj;
+            Map<Object, Object> rawItems = (Map<Object, Object>) itemsObj;
             rawItems.forEach((key, value) -> {
-                newItems.put(Long.valueOf(key), ((Number) value).intValue());
+                // ИСПРАВЛЕНО: Безопасное преобразование ключа (ID) и значения (Кол-во)
+                try {
+                    Long productId = Long.valueOf(key.toString());
+                    Integer qty = (value instanceof Number) ? ((Number) value).intValue() : Integer.parseInt(value.toString());
+                    if (qty > 0) {
+                        newItems.put(productId, qty);
+                    }
+                } catch (Exception e) {
+                    log.error("Ошибка парсинга товара в заказе {}: key={}, value={}", id, key, value);
+                }
             });
         }
 
-        // 4. Резерв новых товаров (теперь передаем корректный Map<Long, Integer>)
+        // 4. Резерв новых товаров
         stockService.reserveItemsFromStock(newItems, "Обновление состава заказа #" + id);
 
-        // 5. Расчет сумм (метод calculateTotalSaleAndCost также должен принимать Map<Long, Integer>)
+        // 5. Расчет сумм
         Map<String, BigDecimal> totals = calculateTotalSaleAndCost(newItems);
 
-        order.setItems(newItems); // Теперь типы совпадают (Map<Long, Integer>)
+        order.setItems(newItems);
         order.setTotalAmount(totals.get("totalSale"));
         order.setTotalPurchaseCost(totals.get("totalCost"));
 
@@ -95,28 +103,29 @@ public class AdminManagementController {
         ));
     }
 
-
     @PostMapping("/orders/{id}/cancel")
     @Transactional(rollbackFor = Exception.class)
     public ResponseEntity<?> cancelOrder(@PathVariable Long id) {
-        Order order = orderRepository.findById(id).orElseThrow();
+        Order order = orderRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Заказ не найден: " + id));
 
-        if (order.getStatus() == OrderStatus.CANCELLED) {
-            return ResponseEntity.badRequest().body(Map.of("error", "Заказ уже отменен"));
-        }
+        // Если счет уже выставлен, запрещаем удаление (защита бухгалтерии)
         if (order.getInvoiceId() != null) {
-            return ResponseEntity.badRequest().body(Map.of("error", "Нельзя отменить заказ с выставленным счетом!"));
+            return ResponseEntity.badRequest().body(Map.of("error", "Нельзя удалить заказ со счетом!"));
         }
 
-        stockService.returnItemsToStock(order.getItems(), "Отмена заказа #" + id, "ADMIN");
-        order.setStatus(OrderStatus.CANCELLED);
-        order.setTotalAmount(BigDecimal.ZERO);
-        order.setTotalPurchaseCost(BigDecimal.ZERO);
-        orderRepository.save(order);
+        // 1. Возвращаем товар на склад (отменяем резерв)
+        if (order.getItems() != null && !order.getItems().isEmpty()) {
+            stockService.returnItemsToStock(order.getItems(), "Отмена заказа #" + id, "ADMIN");
+        }
 
-        recordAudit(id, "ORDER", "ОТМЕНА ЗАКАЗА", "Заказ отменен, товар возвращен на склад");
-        return ResponseEntity.ok(Map.of("message", "Заказ отменен, товар возвращен на склад"));
+        // 2. Удаляем запись
+        orderRepository.delete(order);
+
+        return ResponseEntity.ok(Map.of("message", "Заказ полностью удален, товар вернулся на склад"));
     }
+
+
 
     @PutMapping("/products/{id}/edit")
     @Transactional(rollbackFor = Exception.class)
@@ -187,6 +196,27 @@ public class AdminManagementController {
     }
 
 
+    @PostMapping("/returns/{id}/delete")
+    @Transactional(rollbackFor = Exception.class)
+    public ResponseEntity<?> deleteReturn(@PathVariable Long id) {
+        ReturnOrder ret = returnOrderRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Возврат не найден: " + id));
+
+        // Если возврат уже подтвержден (CONFIRMED), его нельзя удалять,
+        // так как он уже уменьшил долг клиента в FinanceService.
+        if (ret.getStatus() == ReturnStatus.CONFIRMED) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Нельзя удалить уже подтвержденный возврат!"));
+        }
+
+        // Полностью удаляем запись из базы данных
+        returnOrderRepository.deleteById(id);
+
+        recordAudit(id, "RETURN", "ПОЛНОЕ УДАЛЕНИЕ", "Возврат #" + id + " полностью удален");
+
+        return ResponseEntity.ok(Map.of("message", "Возврат полностью удален"));
+    }
+
+
     @PutMapping("/clients/{id}/edit")
     @Transactional(rollbackFor = Exception.class)
     public ResponseEntity<?> editClient(@PathVariable Long id, @RequestBody Map<String, Object> payload) {
@@ -228,15 +258,50 @@ public class AdminManagementController {
     @PostMapping("/returns/{id}/confirm")
     @Transactional(rollbackFor = Exception.class)
     public ResponseEntity<?> confirmReturn(@PathVariable Long id) {
-        ReturnOrder ret = returnOrderRepository.findById(id).orElseThrow();
-        if (ret.getStatus() != ReturnStatus.CONFIRMED) {
-            financeService.registerOperation(null, "RETURN", ret.getTotalAmount(), id, "Возврат товара", ret.getShopName());
-            ret.setStatus(ReturnStatus.CONFIRMED);
-            returnOrderRepository.save(ret);
-            recordAudit(id, "RETURN", "ПОДТВЕРЖДЕНИЕ ВОЗВРАТА", "Долг уменьшен на " + ret.getTotalAmount() + " ֏");
+        // 1. Ищем возврат в базе
+        ReturnOrder ret = returnOrderRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Возврат не найден: " + id));
+
+        // Проверка, чтобы не подтвердить дважды
+        if (ret.getStatus() == ReturnStatus.CONFIRMED) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Этот возврат уже был подтвержден ранее."));
         }
-        return ResponseEntity.ok(Map.of("message", "Возврат подтвержден"));
+
+        // 2. ФИНАНСЫ (Выполняется ВСЕГДА)
+        // Раз фактура (инвойс) уже есть, мы обязаны уменьшить долг клиента в любом случае
+        financeService.registerOperation(
+                null,
+                "RETURN",
+                ret.getTotalAmount(),
+                id,
+                "Возврат (" + ret.getReturnReason().getDisplayName() + ")",
+                ret.getShopName()
+        );
+
+        // 3. СКЛАД (Выполняется ТОЛЬКО для определенных причин)
+        // Если товар пригоден для перепродажи или это ошибка склада/заказа — возвращаем в остатки
+        ReasonsReturn reason = ret.getReturnReason();
+        if (reason == ReasonsReturn.WAREHOUSE ||
+                reason == ReasonsReturn.CORRECTION_ORDER ||
+                reason == ReasonsReturn.CORRECTION_RETURN) {
+
+            // Метод addStockById внутри returnItemsToStock прибавит количество к товарам
+            stockService.returnItemsToStock(ret.getItems(), "Корректировка/Возврат на склад #" + id, "ADMIN");
+        }
+
+        // 4. Обновляем статус
+        ret.setStatus(ReturnStatus.CONFIRMED);
+        returnOrderRepository.save(ret);
+
+        // Логируем в аудит
+        recordAudit(id, "RETURN", "ПОДТВЕРЖДЕНИЕ", "Возврат подтвержден. Долг уменьшен на " + ret.getTotalAmount());
+
+        return ResponseEntity.ok(Map.of(
+                "message", "Возврат успешно подтвержден. Долг клиента уменьшен.",
+                "stockUpdated", (reason == ReasonsReturn.WAREHOUSE || reason == ReasonsReturn.CORRECTION_ORDER || reason == ReasonsReturn.CORRECTION_RETURN)
+        ));
     }
+
 
     @PostMapping("/products/{id}/inventory")
     @Transactional(rollbackFor = Exception.class)

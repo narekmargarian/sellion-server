@@ -14,6 +14,7 @@ public class LoginController {
     @GetMapping("/")
     public String index() {
         // Перенаправляем в админку. Если юзер не залогинен, Security сам кинет на /login
-        return "redirect:/admin";
+//        return "redirect:/admin";
+        return "index";
     }
 }

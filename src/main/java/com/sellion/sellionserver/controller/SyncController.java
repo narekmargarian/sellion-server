@@ -35,6 +35,7 @@ public class SyncController {
     private final SimpMessagingTemplate messagingTemplate;
     private final StockService stockService;
     private final ProductRepository productRepository;
+    private final OrderSyncService orderSyncService;
     private static final Logger log = LoggerFactory.getLogger(SyncController.class);
 
     // Добавленный форматтер для дат из Android-приложения
@@ -62,7 +63,7 @@ public class SyncController {
                     continue;
                 }
 
-                processSingleOrderSync(order);
+                orderSyncService.processOrderFromAndroid(order);
                 savedCount++;
 
             } catch (Exception e) {

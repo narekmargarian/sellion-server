@@ -1097,3 +1097,18 @@ body {
 .js-category-toggle td {
     pointer-events: auto !important;
 }
+.managers-grid {
+    padding-bottom: 20px;
+}
+
+
+
+.manager-table-container {
+    /* height: calc(100vh - 200px); Пример расчета динамической высоты */
+    max-height: max-content; /* Максимальная высота видимой области */
+    overflow-y: auto; /* Скролл только тут при переполнении */
+    background: white; /* Фон, если нужен */
+    border-radius: 12px;
+    /* Убраны border и box-shadow, чтобы не дублировать стиль карточек */
+    margin-bottom: 10px;
+}
