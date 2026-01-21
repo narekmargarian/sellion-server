@@ -17,11 +17,11 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 
 @RestController
@@ -36,15 +36,18 @@ public class ReportApiController {
 
     @GetMapping("/orders-detailed")
     public ResponseEntity<?> exportOrdersDetailed(@RequestParam String start, @RequestParam String end) throws IOException {
+        // ИСПРАВЛЕНО: Преобразование String в LocalDateTime для безопасности
+        LocalDateTime from = LocalDate.parse(start).atStartOfDay();
+        LocalDateTime to = LocalDate.parse(end).atTime(LocalTime.MAX);
 
-        List<Order> orders = orderRepository.findInvoicedOrdersBetweenDates(start + "T00:00:00", end + "T23:59:59");
+        List<Order> orders = orderRepository.findInvoicedOrdersBetweenDates(from, to);
 
         if (orders.isEmpty()) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(Map.of("message", "Заказы не найдены за указанный период."));
         }
 
-        // Используем try-with-resources для надежного закрытия Workbook
+        // ИСПРАВЛЕНО: try-with-resources гарантирует закрытие
         try (Workbook workbook = invoiceExcelService.generateExcel(orders, null, "Մանրամասն հաշվետվություն")) {
             return getResponseEntity(workbook, "Detailed_Report_Orders_" + start + ".xlsx");
         }
@@ -52,7 +55,10 @@ public class ReportApiController {
 
     @GetMapping("/returns-detailed")
     public ResponseEntity<?> exportReturnsDetailed(@RequestParam String start, @RequestParam String end) throws IOException {
-        List<ReturnOrder> returns = returnOrderRepository.findReturnsBetweenDates(start + "T00:00:00", end + "T23:59:59");
+        LocalDateTime from = LocalDate.parse(start).atStartOfDay();
+        LocalDateTime to = LocalDate.parse(end).atTime(LocalTime.MAX);
+
+        List<ReturnOrder> returns = returnOrderRepository.findReturnsBetweenDates(from, to);
         if (returns.isEmpty()) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(Map.of("message", "Возвраты не найдены за указанный период."));
@@ -70,11 +76,16 @@ public class ReportApiController {
             @RequestParam String email,
             @RequestParam(required = false) List<String> types) {
         try {
+            LocalDateTime from = LocalDate.parse(start).atStartOfDay();
+            LocalDateTime to = LocalDate.parse(end).atTime(LocalTime.MAX);
+
             List<String> reportTypes = (types != null) ? types : Collections.emptyList();
+
             List<Order> orders = reportTypes.contains("orders") ?
-                    orderRepository.findOrdersBetweenDates(start + "T00:00:00", end + "T23:59:59") : Collections.emptyList();
+                    orderRepository.findOrdersBetweenDates(from, to) : Collections.emptyList();
+
             List<ReturnOrder> returns = reportTypes.contains("returns") ?
-                    returnOrderRepository.findReturnsBetweenDates(start + "T00:00:00", end + "T23:59:59") : Collections.emptyList();
+                    returnOrderRepository.findReturnsBetweenDates(from, to) : Collections.emptyList();
 
             if (orders.isEmpty() && returns.isEmpty()) {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND)
@@ -82,19 +93,12 @@ public class ReportApiController {
             }
 
             try (Workbook workbook = invoiceExcelService.generateExcel(orders, returns, "Отчет для бухгалтерии")) {
-                ByteArrayOutputStream bos = new ByteArrayOutputStream();
-                workbook.write(bos);
-                byte[] bytes = bos.toByteArray();
-
-                // Очистка временных файлов перед отправкой письма, чтобы не держать их в фоне
-                if (workbook instanceof SXSSFWorkbook sx) {
-                    sx.dispose();
-                }
+                byte[] bytes = workbookToBytes(workbook);
 
                 emailService.sendReportWithAttachment(
                         email,
-                        "Sellion ERP: Հաշվետվություն " + start + " / " + end,
-                        "Добрый день. Во вложении финансовый отчет.",
+                        "Sellion ERP 2026: Հաշվետվություն " + start + " / " + end,
+                        "Добрый день. Во вложении финансовый отчет системы Sellion.",
                         bytes,
                         "Financial_Report_" + start + ".xlsx"
                 );
@@ -103,36 +107,14 @@ public class ReportApiController {
             return ResponseEntity.ok(Map.of("message", "Հաշվետվությունն ուղարկված է " + email));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "Ошибка: " + e.getMessage()));
+                    .body(Map.of("error", "Ошибка сервера: " + e.getMessage()));
         }
-    }
-
-    // ВСПОМОГАТЕЛЬНЫЙ МЕТОД: Формирует HTTP-ответ с очисткой ресурсов POI
-    private ResponseEntity<byte[]> getResponseEntity(Workbook workbook, String fileName) throws IOException {
-        ByteArrayOutputStream bos = new ByteArrayOutputStream();
-        workbook.write(bos);
-        byte[] bytes = bos.toByteArray();
-
-        // Очистка временных XML-файлов SXSSF (крайне важно для 2026 года)
-        if (workbook instanceof SXSSFWorkbook sx) {
-            sx.dispose();
-        }
-
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
-        // Стандарт RFC 6266 для корректных имен файлов
-        headers.setContentDisposition(ContentDisposition.attachment().filename(fileName).build());
-        headers.setContentLength(bytes.length);
-
-        return new ResponseEntity<>(bytes, headers, HttpStatus.OK);
     }
 
     @PostMapping("/send-selected-corrections")
     @Transactional(readOnly = true)
-
     public ResponseEntity<?> sendSelectedCorrections(@RequestBody Map<String, Object> payload) {
         try {
-            // Получаем список ID и почту
             List<Long> ids = ((List<?>) payload.get("ids")).stream()
                     .map(id -> Long.valueOf(id.toString()))
                     .toList();
@@ -140,19 +122,15 @@ public class ReportApiController {
 
             if (ids.isEmpty()) return ResponseEntity.badRequest().body(Map.of("error", "Ничего не выбрано"));
 
-            // Загружаем именно выбранные возвраты
             List<ReturnOrder> selected = returnOrderRepository.findAllById(ids);
 
-            // Генерируем Excel
-            try (Workbook workbook = invoiceExcelService.generateExcel(null, selected, "РЕЕСТР КОРРЕКТИРОВОК ДЛЯ ПЕРЕВЫСТАВЛЕНИЯ ФАКТУР")) {
-                ByteArrayOutputStream bos = new ByteArrayOutputStream();
-                workbook.write(bos);
-                byte[] bytes = bos.toByteArray();
+            try (Workbook workbook = invoiceExcelService.generateExcel(null, selected, "РЕЕСТР КОРРЕКТИРОВОК ФАКТУР")) {
+                byte[] bytes = workbookToBytes(workbook);
 
                 emailService.sendReportWithAttachment(
                         email,
                         "Sellion ERP: КОРРЕКТИРОВКИ ФАКТУР (" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")) + ")",
-                        "Добрый день. Прикрепляем список корректировок для изменения фактур в системе.",
+                        "Добрый день. Прикрепляем список корректировок для изменения документов.",
                         bytes,
                         "Selected_Corrections_" + LocalDate.now() + ".xlsx"
                 );
@@ -164,4 +142,27 @@ public class ReportApiController {
         }
     }
 
+    // ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ДЛЯ СТАБИЛЬНОСТИ
+
+    private byte[] workbookToBytes(Workbook workbook) throws IOException {
+        try (ByteArrayOutputStream bos = new ByteArrayOutputStream()) {
+            workbook.write(bos);
+            byte[] bytes = bos.toByteArray();
+            if (workbook instanceof SXSSFWorkbook sx) {
+                sx.dispose(); // Освобождаем временные файлы на диске
+            }
+            return bytes;
+        }
+    }
+
+    private ResponseEntity<byte[]> getResponseEntity(Workbook workbook, String fileName) throws IOException {
+        byte[] bytes = workbookToBytes(workbook);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
+        headers.setContentDisposition(ContentDisposition.attachment().filename(fileName).build());
+        headers.setContentLength(bytes.length);
+
+        return new ResponseEntity<>(bytes, headers, HttpStatus.OK);
+    }
 }

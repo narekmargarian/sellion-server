@@ -18,7 +18,7 @@ public class AuditLog {
     private Long id;
 
     private String username;
-    private String action; // Например: "Удалил товар из заказа #15"
+    private String action;
     private String details;
 
     private Long entityId;      // ID объекта (заказа, товара и т.д.)

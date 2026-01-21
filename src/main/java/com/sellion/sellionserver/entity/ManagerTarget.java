@@ -22,7 +22,7 @@ public class ManagerTarget {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    private String managerId; // Например, "1011" или "Менеджер Офис"
+    private String managerId;
     private BigDecimal targetAmount;
     private Month month;
     private Year year;

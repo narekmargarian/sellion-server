@@ -13,7 +13,6 @@ public class ManagerApiController {
 
     @GetMapping("/managers")
     public List<String> getManagerList() {
-        // Используем новый метод, который исключает OFFICE
         return ManagerId.getFieldManagerDisplayNames();
     }
 }

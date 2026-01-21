@@ -32,7 +32,6 @@ public class UserApiController {
 
     @PostMapping("/reset-password/{id}")
     public ResponseEntity<?> resetPassword(@PathVariable Long id) {
-        // Вызываем метод с паролем по умолчанию
         userService.resetPassword(id, "qwerty");
         return ResponseEntity.ok(Map.of("message", "Пароль сброшен на qwerty"));
     }
@@ -45,7 +44,6 @@ public class UserApiController {
 
     @PutMapping("/edit/{id}")
     public ResponseEntity<?> editUser(@PathVariable Long id, @RequestBody User updatedUser) {
-        // Логика простого обновления данных без смены пароля
         userService.saveUser(updatedUser);
         return ResponseEntity.ok(Map.of("message", "Данные обновлены"));
     }

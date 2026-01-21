@@ -10,23 +10,30 @@ import java.math.RoundingMode;
 public class ManagerKpiDTO {
     private final Long totalSales;
     private final Long totalReturns;
-    private int efficiency;
+    private final int efficiency;
 
     @Setter
-    private BigDecimal targetAmount; // Новое поле для хранения цели
+    private BigDecimal targetAmount = BigDecimal.ZERO;
 
     public ManagerKpiDTO(BigDecimal sales, BigDecimal returns) {
-        this.totalSales = sales != null ? sales.longValue() : null;
-        this.totalReturns = returns != null ? returns.longValue() : null;
+        // Защита от Null
+        BigDecimal s = (sales != null) ? sales : BigDecimal.ZERO;
+        BigDecimal r = (returns != null) ? returns : BigDecimal.ZERO;
 
-        if (sales != null && sales.compareTo(BigDecimal.ZERO) > 0) {
-            BigDecimal netSales = sales.subtract(returns != null ? returns : BigDecimal.ZERO);
-            this.efficiency = netSales.multiply(new BigDecimal(100))
-                    .divide(sales, 0, RoundingMode.HALF_UP)
-                    .intValue();
+        this.totalSales = s.longValue();
+        this.totalReturns = r.longValue();
 
-            if (this.efficiency < 0) this.efficiency = 0;
-            if (this.efficiency > 100) this.efficiency = 100;
+        // ИСПРАВЛЕНО: Надежная проверка на деление на ноль
+        if (s.compareTo(BigDecimal.ZERO) > 0) {
+            BigDecimal netSales = s.subtract(r);
+            // Если возвратов больше чем продаж (бывает при корректировках)
+            if (netSales.compareTo(BigDecimal.ZERO) <= 0) {
+                this.efficiency = 0;
+            } else {
+                this.efficiency = netSales.multiply(new BigDecimal(100))
+                        .divide(s, 0, RoundingMode.HALF_UP)
+                        .intValue();
+            }
         } else {
             this.efficiency = 0;
         }

@@ -23,7 +23,6 @@ public class OrderSyncService {
 
     @Transactional(rollbackFor = Exception.class)
     public void processOrderFromAndroid(Order order) {
-        // Убеждаемся, что ID пустой для нового заказа
         order.setId(null);
         order.setStatus(OrderStatus.RESERVED);
 

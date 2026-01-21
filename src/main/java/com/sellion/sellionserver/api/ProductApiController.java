@@ -13,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -41,6 +42,7 @@ public class ProductApiController {
         return productRepository.findAllActive();
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/import")
     @Transactional
     public ResponseEntity<?> importProducts(@RequestParam("file") MultipartFile file) {
@@ -68,33 +70,31 @@ public class ProductApiController {
                 try {
                     String qtyStr = dataFormatter.formatCellValue(qtyCell).replace(",", ".");
                     rawQty = (int) Double.parseDouble(qtyStr);
-                } catch (Exception e) { continue; }
+                } catch (Exception e) {
+                    continue;
+                }
 
                 final int incomingQty = rawQty;
                 productRepository.findByName(name).ifPresent(product -> {
-                    // 1. Обновляем остаток
                     int currentStock = (product.getStockQuantity() != null) ? product.getStockQuantity() : 0;
                     product.setStockQuantity(currentStock + incomingQty);
 
-                    // 2. ИСПРАВЛЕНО: Обновляем цену закупки (себестоимость) через BigDecimal
                     if (purchaseCell != null) {
                         try {
                             String pPriceStr = dataFormatter.formatCellValue(purchaseCell).replace(",", ".");
-                            // Используем new BigDecimal(String) - это самый точный способ
                             BigDecimal pPrice = new BigDecimal(pPriceStr);
                             product.setPurchasePrice(pPrice);
-                        } catch (Exception ignored) {}
+                        } catch (Exception ignored) {
+                        }
                     }
 
                     productRepository.save(product);
 
-                    // 3. Логируем движение
                     stockService.logMovement(name, incomingQty, "INCOMING", "Импорт через Excel", "ADMIN");
                 });
                 updatedCount++;
             }
 
-            // СОЗДАНИЕ ЛОГА АУДИТА
             AuditLog log = new AuditLog();
             log.setUsername("ADMIN");
             log.setAction("Импорт поступления");
@@ -115,6 +115,7 @@ public class ProductApiController {
         return movementRepository.findAllByProductNameOrderByTimestampDesc(name);
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping("/{id}")
     @Transactional
     public ResponseEntity<?> deleteProduct(@PathVariable Long id) {

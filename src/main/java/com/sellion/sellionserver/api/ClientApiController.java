@@ -8,7 +8,6 @@ import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -21,7 +20,6 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/clients")
 @RequiredArgsConstructor
-//@PreAuthorize("hasAnyRole('ADMIN', 'ACCOUNTANT', 'OPERATOR')")
 public class ClientApiController {
 
     private final ClientRepository clientRepository;
@@ -30,7 +28,6 @@ public class ClientApiController {
 
     @GetMapping
     public List<Client> getAllClients() {
-        // Возвращаем всех клиентов, отсортированных по имени для удобства в JS
         return clientRepository.findAll()
                 .stream()
                 .sorted(Comparator.comparing(Client::getName))
@@ -55,7 +52,6 @@ public class ClientApiController {
         Client client = clientRepository.findById(id).orElseThrow();
         List<Transaction> transactions = transactionRepository.findAllByClientIdOrderByTimestampAsc(id);
 
-        // Фильтруем транзакции за период
         List<Transaction> periodTransactions = transactions.stream()
                 .filter(tx -> !tx.getTimestamp().toLocalDate().isBefore(start) &&
                         !tx.getTimestamp().toLocalDate().isAfter(end))

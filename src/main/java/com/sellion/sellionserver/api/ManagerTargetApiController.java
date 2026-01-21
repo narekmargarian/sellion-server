@@ -1,7 +1,6 @@
 package com.sellion.sellionserver.api;
 
 import com.sellion.sellionserver.entity.ManagerTarget;
-
 import com.sellion.sellionserver.repository.ManagerTargetRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -22,13 +21,10 @@ public class ManagerTargetApiController {
 
     private final ManagerTargetRepository targetRepository;
 
-    // Конструктор (используется аннотация @RequiredArgsConstructor, как в вашем коде)
-
     @PostMapping("/save")
     public void saveTarget(@RequestBody Map<String, Object> payload) {
         String managerId = (String) payload.get("managerId");
         BigDecimal amount = new BigDecimal(payload.get("targetAmount").toString());
-        // В 2026 году берем текущие месяц и год на сервере
         Month currentMonth = LocalDate.now().getMonth();
         Year currentYear = Year.now();
 
@@ -40,6 +36,6 @@ public class ManagerTargetApiController {
             existingTarget.setYear(currentYear);
         }
         existingTarget.setTargetAmount(amount);
-        targetRepository.save(existingTarget); // Сохранение данных в БД
+        targetRepository.save(existingTarget);
     }
 }

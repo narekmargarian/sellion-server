@@ -22,7 +22,7 @@ public class Payment {
     private Long invoiceId;
     private Double amount;
     private LocalDateTime paymentDate = LocalDateTime.now();
-    private String comment; // Например, "Наличными" или "Перевод"
+    private String comment;
 
 
 }

@@ -8,7 +8,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.Comparator;
 import java.util.List;
 
 @RestController
@@ -19,7 +18,6 @@ public class AuditApiController {
 
     @GetMapping("/order/{id}")
     public List<AuditLog> getOrderLogs(@PathVariable Long id) {
-        // Ищем строго по ID заказа и типу ORDER
         return auditLogRepository.findAllByEntityIdAndEntityTypeOrderByTimestampDesc(id, "ORDER");
     }
 }

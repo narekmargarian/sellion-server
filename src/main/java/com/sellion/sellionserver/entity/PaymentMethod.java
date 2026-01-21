@@ -8,6 +8,7 @@ public enum PaymentMethod {
     CASH("Наличный"),
     TRANSFER("Перевод");
 
+
     private final String displayName;
     PaymentMethod(String displayName) { this.displayName = displayName; }
 

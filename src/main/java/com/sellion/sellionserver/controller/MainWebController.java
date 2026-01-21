@@ -12,10 +12,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.Month;
-import java.time.Year;
+import java.time.*;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -44,15 +41,17 @@ public class MainWebController {
             @RequestParam(value = "activeTab", required = false, defaultValue = "tab-orders") String activeTab,
             Model model) {
 
-        // В 2026 году используем LocalDate.now() сервера
         String today = LocalDate.now().toString();
 
-        // --- 1. ЛОГИКА ДЛЯ ЗАКАЗОВ ---
-        String oStart = (orderStartDate != null && !orderStartDate.isEmpty()) ? orderStartDate : today;
-        String oEnd = (orderEndDate != null && !orderEndDate.isEmpty()) ? orderEndDate : oStart;
+        // --- 1. ЛОГИКА ДЛЯ ЗАКАЗОВ (Исправлено для LocalDateTime) ---
+        LocalDate startD = (orderStartDate != null && !orderStartDate.isEmpty()) ? LocalDate.parse(orderStartDate) : LocalDate.now();
+        LocalDate endD = (orderEndDate != null && !orderEndDate.isEmpty()) ? LocalDate.parse(orderEndDate) : startD;
 
-        // Загружаем заказы за период
-        List<Order> allOrders = Optional.ofNullable(orderRepository.findOrdersBetweenDates(oStart + "T00:00:00", oEnd + "T23:59:59"))
+        LocalDateTime oStartDT = startD.atStartOfDay();
+        LocalDateTime oEndDT = endD.atTime(LocalTime.MAX);
+
+// Теперь передаем объекты LocalDateTime, а не строки
+        List<Order> allOrders = Optional.ofNullable(orderRepository.findOrdersBetweenDates(oStartDT, oEndDT))
                 .orElse(new ArrayList<>());
 
         // Фильтруем по менеджеру, если выбран
@@ -73,11 +72,13 @@ public class MainWebController {
                 .map(o -> o.getTotalPurchaseCost() != null ? o.getTotalPurchaseCost() : BigDecimal.ZERO)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        // --- 2. ЛОГИКА ДЛЯ ВОЗВРАТОВ ---
-        String rStart = (returnStartDate != null && !returnStartDate.isEmpty()) ? returnStartDate : today;
-        String rEnd = (returnEndDate != null && !returnEndDate.isEmpty()) ? returnEndDate : rStart;
+        LocalDate startR = (returnStartDate != null && !returnStartDate.isEmpty()) ? LocalDate.parse(returnStartDate) : LocalDate.now();
+        LocalDate endR = (returnEndDate != null && !returnEndDate.isEmpty()) ? LocalDate.parse(returnEndDate) : startR;
 
-        List<ReturnOrder> allReturns = Optional.ofNullable(returnOrderRepository.findReturnsBetweenDates(rStart + "T00:00:00", rEnd + "T23:59:59"))
+        LocalDateTime rStartDT = startR.atStartOfDay();
+        LocalDateTime rEndDT = endR.atTime(LocalTime.MAX);
+
+        List<ReturnOrder> allReturns = Optional.ofNullable(returnOrderRepository.findReturnsBetweenDates(rStartDT, rEndDT))
                 .orElse(new ArrayList<>());
 
         List<ReturnOrder> filteredReturns = (returnManagerId != null && !returnManagerId.isEmpty())
@@ -181,15 +182,15 @@ public class MainWebController {
         // Данные таблиц
         model.addAttribute("orders", filteredOrders);
         model.addAttribute("totalOrdersCount", filteredOrders.size());
-        model.addAttribute("orderStartDate", oStart);
-        model.addAttribute("orderEndDate", oEnd);
+        model.addAttribute("orderStartDate", startD.toString());
+        model.addAttribute("orderEndDate", endD.toString());
         model.addAttribute("selectedOrderManager", orderManagerId);
 
         model.addAttribute("returns", filteredReturns);
         model.addAttribute("totalReturnsCount", filteredReturns.size());
         model.addAttribute("totalReturnsSum", totalReturnsSum);
-        model.addAttribute("returnStartDate", rStart);
-        model.addAttribute("returnEndDate", rEnd);
+        model.addAttribute("returnStartDate", startR.toString());
+        model.addAttribute("returnEndDate", endR.toString());
         model.addAttribute("selectedReturnManager", returnManagerId);
 
         // --- 6. СКЛАД И КЛИЕНТЫ ---

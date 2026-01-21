@@ -20,6 +20,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -33,12 +34,10 @@ public class SyncController {
     private final OrderRepository orderRepository;
     private final ReturnOrderRepository returnOrderRepository;
     private final SimpMessagingTemplate messagingTemplate;
-    private final StockService stockService;
     private final ProductRepository productRepository;
     private final OrderSyncService orderSyncService;
-    private static final Logger log = LoggerFactory.getLogger(SyncController.class);
 
-    // Добавленный форматтер для дат из Android-приложения
+    private static final Logger log = LoggerFactory.getLogger(SyncController.class);
     private static final DateTimeFormatter ANDROID_DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     @PostMapping("/orders/sync")
@@ -48,125 +47,94 @@ public class SyncController {
         int savedCount = 0;
         int duplicateCount = 0;
         int errorCount = 0;
-        LocalDate today = LocalDate.now();
+        List<String> errorMessages = new ArrayList<>();
 
         for (Order order : orders) {
             try {
+                // 1. Проверка на дубликат по Android ID
                 if (order.getAndroidId() != null && orderRepository.existsByAndroidId(order.getAndroidId())) {
                     duplicateCount++;
                     continue;
                 }
 
-                if (order.getDeliveryDate() != null && order.getDeliveryDate().isBefore(today)) {
-                    log.warn("Заказ {} отклонен: дата доставки в прошлом", order.getAndroidId());
-                    errorCount++;
-                    continue;
-                }
+                // 2. Обработка даты (Конвертация строки в LocalDateTime)
+                order.setCreatedAt(parseAndroidDate(order.getCreatedAt() != null ? order.getCreatedAt().toString() : null));
 
+                // 3. Обработка заказа через сервис (Резерв товара + сохранение)
                 orderSyncService.processOrderFromAndroid(order);
                 savedCount++;
 
             } catch (Exception e) {
-                log.error("Ошибка при синхронизации заказа {}: {}", order.getAndroidId(), e.getMessage());
                 errorCount++;
+                String msg = "Заказ " + order.getAndroidId() + ": " + e.getMessage();
+                log.error(msg);
+                errorMessages.add(msg);
             }
         }
 
+        // Уведомление через WebSocket, если есть новые заказы
         if (savedCount > 0) {
-            messagingTemplate.convertAndSend("/topic/new-order", "Получено новых заказов: " + savedCount);
+            messagingTemplate.convertAndSend("/topic/new-order", "Синхронизировано заказов: " + savedCount);
         }
 
         return ResponseEntity.ok(Map.of(
-                "status", "success",
+                "status", errorCount == 0 ? "success" : "partial_success",
                 "saved", savedCount,
                 "duplicates", duplicateCount,
-                "errors", errorCount
+                "errors", errorCount,
+                "details", errorMessages
         ));
     }
 
-    @Transactional
-    protected void processSingleOrderSync(Order order) {
-        try {
-            order.setId(null);
-            order.setStatus(OrderStatus.RESERVED);
-
-            // Логика обработки даты
-            String rawDate = order.getCreatedAt();
-            if (rawDate == null || rawDate.isEmpty()) {
-                order.setCreatedAt(LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
-            } else if (!rawDate.contains("T")) {
-                try {
-                    LocalDateTime ldt = LocalDateTime.parse(rawDate, ANDROID_DATE_FORMAT);
-                    order.setCreatedAt(ldt.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
-                } catch (DateTimeParseException e) {
-                    log.error("Ошибка парсинга даты Android: {}", rawDate);
-                    order.setCreatedAt(LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
-                }
-            }
-
-            // ИСПРАВЛЕНО: Теперь передаем Map<Long, Integer>
-            BigDecimal purchaseCost = calculatePurchaseCost(order.getItems());
-            order.setTotalPurchaseCost(purchaseCost);
-
-            stockService.reserveItemsFromStock(order.getItems(), "Заказ Android: " + order.getShopName());
-            orderRepository.saveAndFlush(order);
-
-        } catch (DataIntegrityViolationException e) {
-            log.warn("Дубликат заказа проигнорирован: {}", order.getAndroidId());
-        }
-    }
-
     @PostMapping("/returns/sync")
-    @Transactional
     public ResponseEntity<?> syncReturns(@RequestBody List<ReturnOrder> returns) {
         if (returns == null || returns.isEmpty()) return ResponseEntity.ok(Map.of("status", "empty"));
 
+        int saved = 0;
         for (ReturnOrder ret : returns) {
-            ret.setId(null);
-            ret.setStatus(ReturnStatus.DRAFT);
+            try {
+                ret.setId(null);
+                ret.setStatus(ReturnStatus.DRAFT);
 
-            BigDecimal total = BigDecimal.ZERO;
-            if (ret.getItems() != null) {
-                // ИСПРАВЛЕНО: В ReturnOrder.java ключ тоже должен быть Long
-                for (Map.Entry<Long, Integer> entry : ret.getItems().entrySet()) {
-                    BigDecimal price = productRepository.findById(entry.getKey())
-                            .map(Product::getPrice).orElse(BigDecimal.ZERO);
-                    total = total.add(price.multiply(BigDecimal.valueOf(entry.getValue())));
+                // ИСПРАВЛЕНО: Парсинг даты для возврата
+                if (ret.getCreatedAt() == null) {
+                    ret.setCreatedAt(LocalDateTime.now());
                 }
-            }
-            ret.setTotalAmount(total.setScale(2, RoundingMode.HALF_UP));
 
-            if (ret.getCreatedAt() == null || ret.getCreatedAt().isEmpty()) {
-                ret.setCreatedAt(LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
+                // Расчет суммы возврата на стороне сервера (безопасность)
+                BigDecimal total = BigDecimal.ZERO;
+                if (ret.getItems() != null) {
+                    for (Map.Entry<Long, Integer> entry : ret.getItems().entrySet()) {
+                        BigDecimal price = productRepository.findById(entry.getKey())
+                                .map(Product::getPrice).orElse(BigDecimal.ZERO);
+                        total = total.add(price.multiply(BigDecimal.valueOf(entry.getValue())));
+                    }
+                }
+                ret.setTotalAmount(total.setScale(2, RoundingMode.HALF_UP));
+
+                returnOrderRepository.save(ret);
+                saved++;
+            } catch (Exception e) {
+                log.error("Ошибка синхронизации возврата: {}", e.getMessage());
             }
         }
 
-        returnOrderRepository.saveAll(returns);
-        return ResponseEntity.ok(Map.of("status", "success", "count", returns.size()));
+        return ResponseEntity.ok(Map.of("status", "success", "count", saved));
     }
 
-    @GetMapping("/orders/manager/{managerId}/current-month")
-    public ResponseEntity<List<Order>> getOrdersByManagerCurrentMonth(@PathVariable String managerId) {
-        String start = LocalDate.now().withDayOfMonth(1).atStartOfDay().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
-        String end = LocalDate.now().plusMonths(1).withDayOfMonth(1).atStartOfDay().minusSeconds(1).format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
-        return ResponseEntity.ok(orderRepository.findOrdersByManagerAndDateRange(managerId, start, end));
-    }
-
-    private BigDecimal calculatePurchaseCost(Map<Long, Integer> items) {
-        BigDecimal cost = BigDecimal.ZERO;
-        if (items == null) return cost;
-
-        for (Map.Entry<Long, Integer> entry : items.entrySet()) {
-            // Ищем строго по ID (ключам типа Long)
-            Product p = productRepository.findById(entry.getKey())
-                    .orElseThrow(() -> new RuntimeException("Товар с ID " + entry.getKey() + " не найден"));
-
-            BigDecimal purchasePrice = (p.getPurchasePrice() != null) ? p.getPurchasePrice() : BigDecimal.ZERO;
-            cost = cost.add(purchasePrice.multiply(BigDecimal.valueOf(entry.getValue())));
+    // Вспомогательный метод парсинга даты (2026 стандарт)
+    private LocalDateTime parseAndroidDate(String dateStr) {
+        if (dateStr == null || dateStr.isEmpty()) return LocalDateTime.now();
+        try {
+            // Если Android прислал ISO формат (с T)
+            if (dateStr.contains("T")) {
+                return LocalDateTime.parse(dateStr);
+            }
+            // Если прислал пробельный формат (наш кастомный)
+            return LocalDateTime.parse(dateStr, ANDROID_DATE_FORMAT);
+        } catch (Exception e) {
+            log.warn("Не удалось распарсить дату {}, ставим текущую", dateStr);
+            return LocalDateTime.now();
         }
-        return cost.setScale(2, RoundingMode.HALF_UP);
     }
-
-
-
 }

@@ -1,11 +1,11 @@
 package com.sellion.sellionserver.entity;
 
 public enum OrderStatus {
-    NEW,        // Только что пришел с Android
+    NEW,
     ACCEPTED,
-    PENDING,//
-    INVOICED,   // Счет создан (редактирование запрещено)
+    PENDING,
+    INVOICED,
     CANCELLED,
-    PROCESSED,// Отменен
+    PROCESSED,
     RESERVED
     }

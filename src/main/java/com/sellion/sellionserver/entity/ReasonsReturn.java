@@ -8,8 +8,8 @@ public enum ReasonsReturn {
     EXPIRED("Просрочка"),
     DAMAGED("Поврежденная упаковка"),
     WAREHOUSE("На склад"),
-    CORRECTION_ORDER("Корректировка заказа"),    // Новое
-    CORRECTION_RETURN("Корректировка возврата"), // Новое
+    CORRECTION_ORDER("Корректировка заказа"),
+    CORRECTION_RETURN("Корректировка возврата"),
     OTHER("Другое");
 
     private final String displayName;

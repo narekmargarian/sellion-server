@@ -23,7 +23,6 @@ public class Product {
     private Integer itemsPerBox;
     private String barcode;
     private String category;
-
     private BigDecimal purchasePrice = BigDecimal.ZERO;
     private Integer stockQuantity;
     private boolean isDeleted = false; // Флаг мягкого удаления

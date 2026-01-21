@@ -32,11 +32,11 @@ public class ReturnOrder {
     // ИСПРАВЛЕНО: Переход на ID товаров (Long) вместо имен (String)
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "return_items", joinColumns = @JoinColumn(name = "return_id"))
-    @MapKeyColumn(name = "product_id") // В БД колонка теперь будет хранить ID
+    @MapKeyColumn(name = "product_id")
     @Column(name = "quantity")
-    private Map<Long, Integer> items = new HashMap<>(); // Инициализация обязательна
+    private Map<Long, Integer> items = new HashMap<>();
 
-    @Enumerated(EnumType.STRING) // Это ОБЯЗАТЕЛЬНО, чтобы в БД хранилось "EXPIRED", а не число 0
+    @Enumerated(EnumType.STRING)
     @Column(name = "return_reason",length = 50)
     private ReasonsReturn returnReason;
 
@@ -53,22 +53,17 @@ public class ReturnOrder {
     @JsonProperty("totalAmount")
     private BigDecimal totalAmount = BigDecimal.ZERO;
 
-    private String createdAt;
+    private LocalDateTime createdAt;
+
 
     private String comment;
     private String carNumber;
 
 
     @PrePersist
-    public void formatAndSetReturnDate() {
-        // Форматтер для 2026 года в формате ISO
-        DateTimeFormatter fullFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
-        LocalDateTime now = LocalDateTime.now();
-
-        if (this.createdAt == null || this.createdAt.isEmpty()) {
-            this.createdAt = now.format(fullFormatter);
-        } else if (this.createdAt.length() > 19) {
-            this.createdAt = this.createdAt.substring(0, 19);
+    protected void onCreate() {
+        if (this.createdAt == null) {
+            this.createdAt = LocalDateTime.now();
         }
     }
 }

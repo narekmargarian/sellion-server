@@ -8,7 +8,6 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableScheduling
 public class SellionServerApplication {
 
-    // ДОБАВЛЕНО: ключевое слово public
     public static void main(String[] args) {
         SpringApplication.run(SellionServerApplication.class, args);
     }

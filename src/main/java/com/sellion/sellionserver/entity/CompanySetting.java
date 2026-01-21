@@ -19,4 +19,5 @@ public class CompanySetting {
     @Id
     private String settingKey; // Например, "COMPANY_NAME"
     private String settingValue; // Например, "Սելլիոն ՍՊԸ"
+
 }

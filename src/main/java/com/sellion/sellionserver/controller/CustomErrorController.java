@@ -16,7 +16,6 @@ public class CustomErrorController implements ErrorController {
     public String handleError(HttpServletRequest request, Model model) {
         Object status = request.getAttribute(RequestDispatcher.ERROR_STATUS_CODE);
 
-        // Значения по умолчанию
         String errorCode = "APP ERROR";
         String errorTitle = "Системный сбой";
         String errorMessage = "Произошла непредвиденная ошибка в логике Sellion.";

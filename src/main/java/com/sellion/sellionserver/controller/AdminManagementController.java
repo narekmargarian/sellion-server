@@ -4,11 +4,12 @@ import com.sellion.sellionserver.entity.*;
 import com.sellion.sellionserver.repository.*;
 import com.sellion.sellionserver.services.FinanceService;
 import com.sellion.sellionserver.services.StockService;
-
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
@@ -88,15 +89,11 @@ public class AdminManagementController {
 
         // 5. Расчет сумм
         Map<String, BigDecimal> totals = calculateTotalSaleAndCost(newItems);
-
         order.setItems(newItems);
         order.setTotalAmount(totals.get("totalSale"));
         order.setTotalPurchaseCost(totals.get("totalCost"));
-
         orderRepository.save(order);
-
         recordAudit(id, "ORDER", "РЕДАКТИРОВАНИЕ ЗАКАЗА", "Заказ изменен. Новая сумма: " + order.getTotalAmount() + " ֏");
-
         return ResponseEntity.ok(Map.of(
                 "finalSum", order.getTotalAmount(),
                 "message", "Заказ успешно обновлен"
@@ -108,24 +105,19 @@ public class AdminManagementController {
     public ResponseEntity<?> cancelOrder(@PathVariable Long id) {
         Order order = orderRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Заказ не найден: " + id));
-
         // Если счет уже выставлен, запрещаем удаление (защита бухгалтерии)
         if (order.getInvoiceId() != null) {
             return ResponseEntity.badRequest().body(Map.of("error", "Нельзя удалить заказ со счетом!"));
         }
-
         // 1. Возвращаем товар на склад (отменяем резерв)
         if (order.getItems() != null && !order.getItems().isEmpty()) {
             stockService.returnItemsToStock(order.getItems(), "Отмена заказа #" + id, "ADMIN");
         }
-
         // 2. Удаляем запись
         orderRepository.delete(order);
 
         return ResponseEntity.ok(Map.of("message", "Заказ полностью удален, товар вернулся на склад"));
     }
-
-
 
     @PutMapping("/products/{id}/edit")
     @Transactional(rollbackFor = Exception.class)
@@ -136,7 +128,6 @@ public class AdminManagementController {
 
             Object priceVal = payload.get("price");
             p.setPrice(priceVal != null ? new BigDecimal(priceVal.toString()) : BigDecimal.ZERO);
-
             p.setStockQuantity(((Number) payload.get("stockQuantity")).intValue());
             p.setBarcode((String) payload.get("barcode"));
             p.setItemsPerBox(((Number) payload.get("itemsPerBox")).intValue());
@@ -178,10 +169,7 @@ public class AdminManagementController {
             });
         }
 
-        // 2. ИСПРАВЛЕНО: Теперь передаем Map<Long, Integer>
         Map<String, BigDecimal> totals = calculateTotalSaleAndCost(newItems);
-
-        // 3. ИСПРАВЛЕНО: Устанавливаем обновленный список (типы теперь совпадают)
         ret.setItems(newItems);
         ret.setTotalAmount(totals.get("totalSale"));
 
@@ -202,17 +190,12 @@ public class AdminManagementController {
         ReturnOrder ret = returnOrderRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Возврат не найден: " + id));
 
-        // Если возврат уже подтвержден (CONFIRMED), его нельзя удалять,
-        // так как он уже уменьшил долг клиента в FinanceService.
         if (ret.getStatus() == ReturnStatus.CONFIRMED) {
             return ResponseEntity.badRequest().body(Map.of("error", "Нельзя удалить уже подтвержденный возврат!"));
         }
 
-        // Полностью удаляем запись из базы данных
         returnOrderRepository.deleteById(id);
-
         recordAudit(id, "RETURN", "ПОЛНОЕ УДАЛЕНИЕ", "Возврат #" + id + " полностью удален");
-
         return ResponseEntity.ok(Map.of("message", "Возврат полностью удален"));
     }
 
@@ -241,28 +224,53 @@ public class AdminManagementController {
     @PostMapping("/orders/create-manual")
     @Transactional(rollbackFor = Exception.class)
     public ResponseEntity<?> createOrderManual(@RequestBody Order order) {
-        order.setStatus(OrderStatus.RESERVED);
-        order.setCreatedAt(LocalDateTime.now().format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME));
+        try {
+            // 1. Установка базовых параметров
+            order.setStatus(OrderStatus.RESERVED);
 
-        Map<String, BigDecimal> totals = calculateTotalSaleAndCost(order.getItems());
-        order.setTotalAmount(totals.get("totalSale"));
-        order.setTotalPurchaseCost(totals.get("totalCost"));
+            // ИСПРАВЛЕНО: Устанавливаем объект LocalDateTime напрямую, без конвертации в String
+            order.setCreatedAt(LocalDateTime.now());
 
-        stockService.reserveItemsFromStock(order.getItems(), "Ручной заказ");
-        Order saved = orderRepository.save(order);
+            // 2. Валидация товаров
+            if (order.getItems() == null || order.getItems().isEmpty()) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Заказ не может быть пустым"));
+            }
 
-        recordAudit(saved.getId(), "ORDER", "СОЗДАНИЕ ЗАКАЗА", "Создан заказ #" + saved.getId());
-        return ResponseEntity.ok(Map.of("message", "Заказ создан", "id", saved.getId()));
+            // 3. Расчет сумм (используем существующий метод calculateTotalSaleAndCost)
+            Map<String, BigDecimal> totals = calculateTotalSaleAndCost(order.getItems());
+            order.setTotalAmount(totals.get("totalSale"));
+            order.setTotalPurchaseCost(totals.get("totalCost"));
+
+            // 4. Резервирование товара на складе
+            // Если товара не хватит, stockService выбросит исключение и транзакция откатится
+            stockService.reserveItemsFromStock(order.getItems(), "Ручной заказ через админ-панель");
+
+            // 5. Сохранение
+            Order saved = orderRepository.save(order);
+
+            // 6. Аудит
+            recordAudit(saved.getId(), "ORDER", "СОЗДАНИЕ ЗАКАЗА",
+                    "Ручной заказ создан. Сумма: " + saved.getTotalAmount() + " ֏");
+
+            return ResponseEntity.ok(Map.of(
+                    "message", "Заказ успешно создан",
+                    "id", saved.getId(),
+                    "total", saved.getTotalAmount()
+            ));
+
+        } catch (Exception e) {
+            log.error("Ошибка при ручном создании заказа: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Не удалось создать заказ: " + e.getMessage()));
+        }
     }
 
     @PostMapping("/returns/{id}/confirm")
     @Transactional(rollbackFor = Exception.class)
     public ResponseEntity<?> confirmReturn(@PathVariable Long id) {
-        // 1. Ищем возврат в базе
         ReturnOrder ret = returnOrderRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Возврат не найден: " + id));
 
-        // Проверка, чтобы не подтвердить дважды
         if (ret.getStatus() == ReturnStatus.CONFIRMED) {
             return ResponseEntity.badRequest().body(Map.of("error", "Этот возврат уже был подтвержден ранее."));
         }
@@ -292,7 +300,6 @@ public class AdminManagementController {
         // 4. Обновляем статус
         ret.setStatus(ReturnStatus.CONFIRMED);
         returnOrderRepository.save(ret);
-
         // Логируем в аудит
         recordAudit(id, "RETURN", "ПОДТВЕРЖДЕНИЕ", "Возврат подтвержден. Долг уменьшен на " + ret.getTotalAmount());
 
@@ -302,8 +309,8 @@ public class AdminManagementController {
         ));
     }
 
-
     @PostMapping("/products/{id}/inventory")
+    @PreAuthorize("hasRole('ADMIN')")
     @Transactional(rollbackFor = Exception.class)
     public ResponseEntity<?> updateStockManual(@PathVariable Long id, @RequestBody Map<String, Object> payload) {
         Product p = productRepository.findById(id).orElseThrow();

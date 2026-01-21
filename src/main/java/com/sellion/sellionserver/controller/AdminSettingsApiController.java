@@ -3,7 +3,6 @@ package com.sellion.sellionserver.controller;
 import com.sellion.sellionserver.services.CompanySettings;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -14,7 +13,6 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/admin/settings")
 @RequiredArgsConstructor
-//@PreAuthorize("hasRole('ADMIN')")
 
 public class AdminSettingsApiController {
     private final CompanySettings companySettings;

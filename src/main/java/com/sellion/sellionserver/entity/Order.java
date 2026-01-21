@@ -37,7 +37,6 @@ public class Order {
     @Column(name = "quantity")
     private Map<Long, Integer> items = new HashMap<>(); // ИСПРАВЛЕНО: тип ключа Long
 
-
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd")
     private LocalDate deliveryDate;
 
@@ -60,7 +59,10 @@ public class Order {
     private BigDecimal totalPurchaseCost = BigDecimal.ZERO;
 
     private Long invoiceId;
-    private String createdAt;
+
+    @Column(name = "created_at", updatable = false)
+    private LocalDateTime createdAt;
+
     private String comment;
 
     @Column(unique = true, name = "android_id") // ИСПРАВЛЕНО: Индекс на уровне БД
@@ -68,18 +70,9 @@ public class Order {
     private String carNumber;
 
     @PrePersist
-    public void formatAndSetDate() {
-        // Логика форматирования остается только для createdAt,
-        // чтобы сохранить полную дату и время создания заказа.
-        if (this.createdAt == null || this.createdAt.isEmpty() || this.createdAt.length() > 19) {
-            DateTimeFormatter appFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
-            LocalDateTime now = LocalDateTime.now();
-
-            if (this.createdAt != null && this.createdAt.length() > 19) {
-                this.createdAt = this.createdAt.substring(0, 19);
-            } else {
-                this.createdAt = now.format(appFormatter);
-            }
+    protected void onCreate() {
+        if (this.createdAt == null) {
+            this.createdAt = LocalDateTime.now();
         }
     }
 

@@ -4,8 +4,9 @@ import com.sellion.sellionserver.entity.Client;
 import com.sellion.sellionserver.repository.ClientRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Controller;
-import org.springframework.ui.Model;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
 
 
 @Controller
@@ -17,7 +18,6 @@ public class ClientWebController {
     @PostMapping("/create")
     public String createClient(@ModelAttribute Client client) {
         clientRepository.save(client);
-        // Редиректим обратно на /admin и указываем открыть вкладку клиентов
         return "redirect:/admin?activeTab=tab-clients";
     }
 

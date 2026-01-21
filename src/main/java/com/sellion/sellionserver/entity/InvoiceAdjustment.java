@@ -21,7 +21,7 @@ public class InvoiceAdjustment {
     private String productName;
     private Integer oldQuantity;
     private Integer newQuantity;
-    private String reason; // Причина изменения
+    private String reason;
     private LocalDateTime createdAt = LocalDateTime.now();
     private String adjustedBy; // Кто внес изменения
 }

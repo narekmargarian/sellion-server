@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -29,7 +30,6 @@ public class PrintController {
     private final ClientRepository clientRepository;
     private final TransactionRepository transactionRepository;
 
-    // Вспомогательный класс обновлен на BigDecimal для точности
     public static class PrintItemDto {
         public String name;
         public Integer quantity;
@@ -44,9 +44,7 @@ public class PrintController {
 
         model.addAttribute("op", order);
         model.addAttribute("title", "НАКЛАДНАЯ (ЗАКАЗ) №" + id);
-        // Теперь передаем Map<Long, Integer>
         model.addAttribute("printItems", preparePrintItems(order.getItems()));
-
         return "print_template";
     }
 
@@ -57,9 +55,7 @@ public class PrintController {
 
         model.addAttribute("op", ret);
         model.addAttribute("title", "АКТ ВОЗВРАТА №" + id);
-        // Теперь передаем Map<Long, Integer>
         model.addAttribute("printItems", preparePrintItems(ret.getItems()));
-
         return "print_template";
     }
 
@@ -70,14 +66,17 @@ public class PrintController {
             @RequestParam(value = "orderEndDate", required = false) String end,
             Model model) {
 
-        String s = (start == null || start.isEmpty()) ? LocalDate.now().toString() : start;
-        String e = (end == null || end.isEmpty()) ? s : end;
+        // ИСПРАВЛЕНО: Безопасный парсинг в LocalDateTime
+        LocalDate startD = (start == null || start.isEmpty()) ? LocalDate.now() : LocalDate.parse(start);
+        LocalDate endD = (end == null || end.isEmpty()) ? startD : LocalDate.parse(end);
 
-        List<Order> orders = orderRepository.findOrdersBetweenDates(s + "T00:00:00", e + "T23:59:59");
+        LocalDateTime from = startD.atStartOfDay();
+        LocalDateTime to = endD.atTime(LocalTime.MAX);
+
+        List<Order> orders = orderRepository.findOrdersBetweenDates(from, to);
         List<Order> filtered = (orderManagerId == null || orderManagerId.isEmpty()) ? orders :
                 orders.stream().filter(o -> orderManagerId.equals(o.getManagerId())).toList();
 
-        // ИСПРАВЛЕНО: Суммирование BigDecimal
         BigDecimal total = filtered.stream()
                 .map(o -> o.getTotalAmount() != null ? o.getTotalAmount() : BigDecimal.ZERO)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -97,14 +96,17 @@ public class PrintController {
             @RequestParam(value = "returnEndDate", required = false) String end,
             Model model) {
 
-        String s = (start == null || start.isEmpty()) ? LocalDate.now().toString() : start;
-        String e = (end == null || end.isEmpty()) ? s : end;
+        // ИСПРАВЛЕНО: Безопасный парсинг в LocalDateTime
+        LocalDate startD = (start == null || start.isEmpty()) ? LocalDate.now() : LocalDate.parse(start);
+        LocalDate endD = (end == null || end.isEmpty()) ? startD : LocalDate.parse(end);
 
-        List<ReturnOrder> returns = returnOrderRepository.findReturnsBetweenDates(s + "T00:00:00", e + "T23:59:59");
+        LocalDateTime from = startD.atStartOfDay();
+        LocalDateTime to = endD.atTime(LocalTime.MAX);
+
+        List<ReturnOrder> returns = returnOrderRepository.findReturnsBetweenDates(from, to);
         List<ReturnOrder> filtered = (returnManagerId == null || returnManagerId.isEmpty()) ? returns :
                 returns.stream().filter(r -> returnManagerId.equals(r.getManagerId())).toList();
 
-        // ИСПРАВЛЕНО: Суммирование BigDecimal
         BigDecimal total = filtered.stream()
                 .map(r -> r.getTotalAmount() != null ? r.getTotalAmount() : BigDecimal.ZERO)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -122,10 +124,7 @@ public class PrintController {
         if (items == null) return dtoList;
 
         for (Map.Entry<Long, Integer> entry : items.entrySet()) {
-            // Ищем товар по ID для получения актуального имени и цены
-            Product product = productRepository.findById(entry.getKey())
-                    .orElse(null);
-
+            Product product = productRepository.findById(entry.getKey()).orElse(null);
             PrintItemDto dto = new PrintItemDto();
             if (product != null) {
                 dto.name = product.getName();
@@ -134,26 +133,17 @@ public class PrintController {
                 dto.name = "Товар (ID: " + entry.getKey() + ") удален";
                 dto.price = BigDecimal.ZERO;
             }
-
             dto.quantity = entry.getValue();
-            // Расчет суммы строки: цена * кол-во
-            dto.total = dto.price.multiply(BigDecimal.valueOf(dto.quantity));
-
+            dto.total = (dto.price != null) ? dto.price.multiply(BigDecimal.valueOf(dto.quantity)) : BigDecimal.ZERO;
             dtoList.add(dto);
         }
         return dtoList;
     }
 
     @GetMapping("/logistic/route-list")
-    public String printRouteList(
-            @RequestParam String managerId,
-            @RequestParam String date,
-            Model model) {
-
+    public String printRouteList(@RequestParam String managerId, @RequestParam String date, Model model) {
         LocalDate deliveryDate = LocalDate.parse(date);
         List<Order> orders = orderRepository.findDailyRouteOrders(managerId, deliveryDate);
-
-        // ИСПРАВЛЕНО: Суммирование BigDecimal
         BigDecimal routeTotal = orders.stream()
                 .map(o -> o.getTotalAmount() != null ? o.getTotalAmount() : BigDecimal.ZERO)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -164,24 +154,19 @@ public class PrintController {
         model.addAttribute("routeTotal", routeTotal);
         model.addAttribute("title", "МАРШРУТНЫЙ ЛИСТ: " + managerId);
         model.addAttribute("clientRepo", clientRepository);
-
         return "print_route_template";
     }
 
     @GetMapping("/clients/print-statement/{id}")
-    public String printClientStatement(
-            @PathVariable Long id,
-            @RequestParam String start,
-            @RequestParam String end,
-            Model model) {
-
+    public String printClientStatement(@PathVariable Long id, @RequestParam String start, @RequestParam String end, Model model) {
         Client client = clientRepository.findById(id).orElseThrow();
         LocalDate startDate = LocalDate.parse(start);
         LocalDate endDate = LocalDate.parse(end);
 
         List<Transaction> transactions = transactionRepository.findAllByClientIdOrderByTimestampAsc(id)
                 .stream()
-                .filter(tx -> !tx.getTimestamp().toLocalDate().isBefore(startDate) &&
+                .filter(tx -> tx.getTimestamp() != null &&
+                        !tx.getTimestamp().toLocalDate().isBefore(startDate) &&
                         !tx.getTimestamp().toLocalDate().isAfter(endDate))
                 .collect(Collectors.toList());
 
@@ -190,7 +175,6 @@ public class PrintController {
         model.addAttribute("startDate", start);
         model.addAttribute("endDate", end);
         model.addAttribute("title", "Акт сверки");
-
         return "print_statement_template";
     }
 }

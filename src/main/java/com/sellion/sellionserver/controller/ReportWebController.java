@@ -22,7 +22,6 @@ public class ReportWebController {
 
     @GetMapping("/debts")
     public String debtReport(Model model) {
-        // 1. Фильтруем клиентов с долгом через compareTo (debt > 0)
         List<Client> clientsWithDebt = clientRepository.findAll().stream()
                 .filter(c -> c.getDebt() != null && c.getDebt().compareTo(BigDecimal.ZERO) > 0)
                 .collect(Collectors.toList());

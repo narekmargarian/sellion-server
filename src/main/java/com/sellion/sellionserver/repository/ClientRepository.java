@@ -16,12 +16,9 @@ public interface ClientRepository extends JpaRepository<Client, Long> {
 
     Optional<Client> findByName(String name);
 
-    // Обновляем стандартный findAll()
-    // В ClientRepository
     @Query("SELECT c FROM Client c WHERE c.isDeleted = false")
     List<Client> findAllActive();
 
-    // Метод для мягкого удаления клиента
     @Modifying
     @Transactional
     @Query("UPDATE Client c SET c.isDeleted = true WHERE c.id = :id")
