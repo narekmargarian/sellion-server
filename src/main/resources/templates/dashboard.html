@@ -172,6 +172,21 @@
                     </tbody>
                 </table>
             </div>
+
+            <!-- ИСПРАВЛЕНО: Блок переключения страниц -->
+            <div class="pagination-wrapper" th:if="${totalPages > 1}"
+                 style="margin-top: 20px; display: flex; gap: 10px; justify-content: center;">
+                <a th:href="@{/admin(activeTab='tab-orders', page=${currentPage - 1}, orderStartDate=${orderStartDate}, orderEndDate=${orderEndDate})}"
+                   th:if="${currentPage > 0}" class="btn-ghost">← Назад</a>
+
+                  <span style="align-self: center; font-weight: 700;">
+                   Страница <span th:text="${currentPage + 1}"></span> из <span th:text="${totalPages}"></span>
+                     </span>
+
+                     <a th:href="@{/admin(activeTab='tab-orders', page=${currentPage + 1}, orderStartDate=${orderStartDate}, orderEndDate=${orderEndDate})}"
+                   th:if="${currentPage < totalPages - 1}" class="btn-ghost">Вперед →</a>
+            </div>
+
         </div>
 
 
@@ -466,6 +481,7 @@
                 </form>
             </div>
 
+
             <div class="manager-table-container"> <!-- Добавлена высота для демонстрации скролла -->
                 <div class="managers-grid"
                      style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; margin-top: 20px;">
@@ -514,8 +530,6 @@
                                         <span th:if="${returns == null}">—</span>
                                     </b>
                                 </div>
-
-
                             </div>
 
                             <!-- Прогресс-бар эффективности -->
@@ -598,7 +612,7 @@
         <div id="tab-reports" class="tab-pane">
             <div class="glass-card" style="padding: 30px; margin: 20px;">
 
-                <h3 style="margin-bottom: 25px; font-weight: 800; color: #1e293b;">📊 Центр отчетности и экспорта</h3>
+                <h3 style="margin-bottom: 15px; font-weight: 800; color: #1e293b;">📊 Центр отчетности и экспорта</h3>
 
                 <div class="filter-bar"
                      style="background: #f8fafc; padding: 25px; border-radius: 16px; display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-end; border: 1px solid #e2e8f0;">
@@ -660,7 +674,7 @@
                     </div>
                 </div>
 
-                <div style="margin-top: 30px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <div style="margin-top: 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
                     <div style="padding: 15px; background: #f0fdf4; border-radius: 10px; border: 1px solid #bbf7d0; font-size: 12px; color: #166534;">
                         <b>💡 Инструкция:</b> В конце дня проверьте все заказы и нажмите «Отправить». Письмо уйдет на
                         указанный почтовый ящик с выбранными типами данных.
@@ -670,7 +684,7 @@
 
             <!-- БЛОК ВЫБОРА КОРРЕКТИРОВОК ДЛЯ БУХГАЛТЕРА -->
             <div class="glass-card"
-                 style="padding: 25px; margin-top: 30px; border-top: 4px solid #10b981; background: #fff;">
+                 style="padding: 25px; margin-top: 10px; border-top: 4px solid #10b981; background: #fff;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                     <h4 style="font-weight: 800; color: #1e293b; margin: 0;">
                         📝 Реестр корректировок (для изменения фактур)

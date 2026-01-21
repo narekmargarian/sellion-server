@@ -2354,7 +2354,53 @@ function applyGlobalDateFormatting() {
         }
     });
 }
+// Функция загрузки списка ключей при открытии вкладки Менеджеры
+function loadApiKeys() {
+    fetch('/api/admin/manager-keys')
+        .then(response => response.json())
+        .then(keys => {
+            const tbody = document.getElementById('api-keys-list');
+            tbody.innerHTML = '';
+            keys.forEach(key => {
+                const row = tbody.insertRow();
+                row.innerHTML = `
+                    <td>${key.managerId}</td>
+                    <td><code>${key.apiKeyHash}</code></td>
+                    <td>
+                        <button onclick="deleteApiKey('${key.managerId}')" class="btn-primary" style="background: #ef4444;">Удалить</button>
+                    </td>
+                `;
+            });
+        });
+}
 
+// Функция генерации нового ключа (понадобится модальное окно выбора менеджера)
+function generateApiKeyForManager() {
+    const managerId = prompt("Введите ID менеджера (например, 1011):");
+    if (managerId) {
+        fetch('/api/admin/manager-keys/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ managerId: managerId })
+        })
+            .then(response => response.json())
+            .then(data => {
+                showToast(`Ключ сгенерирован: ${data.apiKeyHash}`);
+                loadApiKeys(); // Обновляем список
+            });
+    }
+}
+
+// Функция удаления ключа
+function deleteApiKey(managerId) {
+    if (confirm(`Уверены, что хотите удалить ключ для ${managerId}?`)) {
+        fetch(`/api/admin/manager-keys/delete/${managerId}`, { method: 'DELETE' })
+            .then(() => {
+                showToast("Ключ удален");
+                loadApiKeys(); // Обновляем список
+            });
+    }
+}
 
 
 
@@ -2377,6 +2423,9 @@ document.addEventListener("DOMContentLoaded",async () => {
         } catch (e) {
             console.error("Ошибка при предзагрузке списка менеджеров:", e);
         }
+    }
+    if (typeof loadApiKeys === 'function') {
+        loadApiKeys();
     }
 
     // --- 3. НАВИГАЦИЯ ---
