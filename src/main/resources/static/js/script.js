@@ -1953,7 +1953,7 @@ async function submitInventoryAdjustment() {
 }
 
 
-// Функция для скачивания отдельного типа отчета
+// Функция для скачивания отдельного типа отчета с проверкой количества
 function downloadExcel(type) {
     const start = document.getElementById('report-start').value;
     const end = document.getElementById('report-end').value;
@@ -1963,28 +1963,37 @@ function downloadExcel(type) {
         return;
     }
 
+    // --- НОВОЕ: Проверка количества записей в таблицах ---
+    const tableId = type === 'orders' ? 'orders-table-body' : 'returns-table-body';
+    const rowCount = document.querySelectorAll(`#${tableId} tr:not(.no-data)`).length;
+
+    if (rowCount === 0) {
+        showToast(`⚠️ Нет данных (${type}) для скачивания за этот период!`, "error");
+        return;
+    }
+
+    // Информируем пользователя об объеме
+    showToast(`⏳ Подготовка файла: ${rowCount} записей...`, "info");
+
     const url = type === 'orders' ?
         `/api/reports/excel/orders-detailed?start=${start}&end=${end}` :
         `/api/reports/excel/returns-detailed?start=${start}&end=${end}`;
 
-    // Используем fetch для контроля ответа
     fetch(url)
         .then(response => {
             if (response.ok) {
-                // Если OK, обрабатываем скачивание файла
                 return response.blob().then(blob => {
                     const downloadUrl = window.URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.style.display = 'none';
                     a.href = downloadUrl;
-                    a.download = `${type}_report_${start}.xlsx`;
+                    a.download = `${type}_report_${start}_to_${end}.xlsx`;
                     document.body.appendChild(a);
                     a.click();
                     window.URL.revokeObjectURL(downloadUrl);
-                    showToast('Отчет успешно скачан!', 'success');
+                    showToast(`✅ Отчет (${rowCount} поз.) успешно скачан!`, 'success');
                 });
             } else {
-                // Если ошибка (например, 404), показываем toast
                 return response.json().then(data => {
                     showToast(data.message || 'Ошибка сервера', 'error');
                 });
@@ -1995,63 +2004,65 @@ function downloadExcel(type) {
         });
 }
 
-// Функция для отправки отчета по Email (использует чекбоксы)
 function sendToEmail() {
-    const start = document.getElementById('report-start').value;
-    const end = document.getElementById('report-end').value;
-    const email = document.getElementById('report-email').value;
+const start = document.getElementById('report-start').value;
+const end = document.getElementById('report-end').value;
+const email = document.getElementById('report-email').value;
 
-    if (!start || !end || !email) {
-        showToast("⚠️ Выберите период и введите email!", "error");
-        return;
-    }
+if (!start || !end || !email) {
+    showToast("⚠️ Выберите период и введите email!", "error");
+    return;
+}
 
-    const types = [];
-    if (document.getElementById('check-orders').checked) types.push('orders');
-    if (document.getElementById('check-returns').checked) types.push('returns');
+// --- ПОЛУЧЕНИЕ CSRF ТОКЕНА (Защита от 403) ---
+const csrfToken = document.querySelector('input[name="_csrf"]')?.value;
+const csrfHeader = "X-CSRF-TOKEN";
 
-    if (types.length === 0) {
-        showToast("⚠️ Выберите хотя бы один тип отчета (заказы или возвраты)!", "error");
-        return;
-    }
+const types = [];
+if (document.getElementById('check-orders').checked) types.push('orders');
+if (document.getElementById('check-returns').checked) types.push('returns');
 
-    // 1. Показываем уведомление о начале процесса (2026 UX стандарт)
-    showToast("⏳ Подготовка и отправка отчета...", "info");
+const params = new URLSearchParams();
+params.append('start', start);
+params.append('end', end);
+params.append('email', email);
+types.forEach(type => params.append('types', type));
 
-    const params = new URLSearchParams();
-    params.append('start', start);
-    params.append('end', end);
-    params.append('email', email);
-    types.forEach(type => params.append('types', type));
+showToast(`⏳ Отправка отчета на ${email}...`, "info");
 
-    fetch('/api/reports/excel/send-to-accountant', {
-        method: 'POST',
-        headers: {
-            // Явно указываем тип контента для сервера
-            'Content-Type': 'application/x-www-form-urlencoded'
-        },
-        body: params
+// ИСПРАВЛЕННЫЙ URL: Используем точный путь из Java-контроллера
+const url = '/api/reports/excel/send-to-accountant';
+
+fetch(url, {
+    method: 'POST',
+    headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        // Добавляем заголовок безопасности
+        [csrfHeader]: csrfToken
+    },
+    body: params
+})
+    .then(async response => {
+        // Проверяем, не пришел ли HTML вместо JSON (ошибка авторизации)
+        const contentType = response.headers.get("content-type");
+        if (contentType && contentType.includes("text/html")) {
+            // Эта ошибка у вас возникала в консоли
+            throw new Error("Ошибка доступа (403/401). Перезагрузите страницу.");
+        }
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || `Ошибка сервера ${response.status}`);
+        }
+        return response.json();
     })
-        .then(response => {
-            // Проверяем статус ответа
-            return response.json().then(data => {
-                if (!response.ok) {
-                    throw new Error(data.error || data.message || 'Ошибка при отправке');
-                }
-                return data;
-            });
-        })
-        .then(data => {
-            // 2. Успешное завершение
-            if (data.message) {
-                showToast("✅ " + data.message, 'success');
-            }
-        })
-        .catch(error => {
-            // 3. Обработка ошибок (например, если нет данных за период)
-            console.error('Report Error:', error);
-            showToast('❌ ' + error.message, 'error');
-        });
+    .then(data => {
+        showToast(`✅ ${data.message || 'Отчет успешно отправлен!'}`, 'success');
+    })
+    .catch(error => {
+        console.error('Email error:', error);
+        showToast('❌ ' + error.message, 'error');
+    });
 }
 
 
@@ -2218,6 +2229,18 @@ function setMinDateToday(inputId) {
 }
 
 
+function updateSelectedCount() {
+    const checked = document.querySelectorAll('.correction-checkbox:checked').length;
+    const counter = document.getElementById('selected-count');
+    if (counter) {
+        counter.innerText = checked;
+    }
+}
+
+// Обновление функции выделения всех сразу
+
+
+
 // Функции для печати всего списка заказов/возвратов (для доставщиков)
 
 window.printOrderList = function () {
@@ -2287,6 +2310,8 @@ function toggleAllCorrections(source) {
     document.getElementById('selected-count').innerText = checked;
 }
 
+
+
 // 3. Функция отправки выбранных ID на сервер
 function sendSelectedCorrections() {
     const selectedIds = Array.from(document.querySelectorAll('.correction-checkbox:checked')).map(cb => cb.value);
@@ -2354,25 +2379,46 @@ function applyGlobalDateFormatting() {
         }
     });
 }
-// Функция загрузки списка ключей при открытии вкладки Менеджеры
+// Функция загрузки списка ключей с защитой от ошибок
 function loadApiKeys() {
+    const tbody = document.getElementById('api-keys-list');
+
+    // ПРОВЕРКА: Если элемента нет на странице, просто выходим из функции
+    if (!tbody) {
+        // Не пишем ошибку, так как вкладка Настройки/Менеджеры может быть просто закрыта
+        return;
+    }
+
     fetch('/api/admin/manager-keys')
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) throw new Error('Ошибка сети');
+            return response.json();
+        })
         .then(keys => {
-            const tbody = document.getElementById('api-keys-list');
+            // Очищаем только если элемент найден
             tbody.innerHTML = '';
+
+            if (!keys || keys.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="3" class="text-center">Ключи не найдены</td></tr>';
+                return;
+            }
+
             keys.forEach(key => {
                 const row = tbody.insertRow();
                 row.innerHTML = `
                     <td>${key.managerId}</td>
                     <td><code>${key.apiKeyHash}</code></td>
                     <td>
-                        <button onclick="deleteApiKey('${key.managerId}')" class="btn-primary" style="background: #ef4444;">Удалить</button>
+                        <button onclick="deleteApiKey('${key.managerId}')" class="btn-primary" style="background: #ef4444; padding: 5px 10px;">Удалить</button>
                     </td>
                 `;
             });
+        })
+        .catch(err => {
+            console.warn("API ключи не загружены:", err.message);
         });
 }
+
 
 // Функция генерации нового ключа (понадобится модальное окно выбора менеджера)
 function generateApiKeyForManager() {
@@ -2401,22 +2447,59 @@ function deleteApiKey(managerId) {
             });
     }
 }
+function refreshReportCounters() {
+    // 1. Считаем заказы, у которых есть номер счета (статус ПРОВЕРЕНО)
+    // Ищем в основной таблице заказов (id="orders-table-body")
+    const verifiedOrders = Array.from(document.querySelectorAll('#orders-table-body tr')).filter(tr => {
+        return tr.innerText.includes('Счет №') || tr.innerText.includes('ПРОВЕРЕНО');
+    }).length;
+
+    // 2. Считаем проведенные возвраты (статус Проведено / COMPLETED)
+    const processedReturns = Array.from(document.querySelectorAll('#returns-table-body tr')).filter(tr => {
+        return tr.innerText.includes('Проведено') || tr.innerText.includes('COMPLETED');
+    }).length;
+
+    // Обновляем текст в карточках
+    if(document.getElementById('count-verified-orders'))
+        document.getElementById('count-verified-orders').innerText = verifiedOrders + " поз.";
+    if(document.getElementById('count-processed-returns'))
+        document.getElementById('count-processed-returns').innerText = processedReturns + " поз.";
+
+    // Обновляем текст на кнопках
+    if(document.getElementById('btn-count-orders'))
+        document.getElementById('btn-count-orders').innerText = verifiedOrders;
+    if(document.getElementById('btn-count-returns'))
+        document.getElementById('btn-count-returns').innerText = processedReturns;
+}
 
 
 
+// --- 1. ГЛОБАЛЬНЫЕ ФУНКЦИИ (Должны быть вне DOMContentLoaded, чтобы кнопки их видели) ---
+function applyReportFilters() {
+    const startEl = document.getElementById('report-start');
+    const endEl = document.getElementById('report-end');
 
-document.addEventListener("DOMContentLoaded",async () => {
+    if (!startEl || !endEl || !startEl.value || !endEl.value) {
+        if (typeof showToast === 'function') showToast("Выберите период!", "error");
+        return;
+    }
+
+    // Сохраняем вкладку, чтобы вернуться в неё после перезагрузки
+    localStorage.setItem('sellion_tab', 'tab-reports');
+
+    // Перезагрузка с параметрами
+    window.location.href = `/admin?activeTab=tab-reports&orderStartDate=${startEl.value}&orderEndDate=${endEl.value}&returnStartDate=${startEl.value}&returnEndDate=${endEl.value}`;
+}
+
+document.addEventListener("DOMContentLoaded", async () => {
     console.log("Sellion ERP 2026: Инициализация системы...");
 
-    // --- 1. СИСТЕМНЫЕ СЛУЖБЫ ---
-    // WebSocket подключаем сразу для получения уведомлений в реальном времени
+    // --- 2. СИСТЕМНЫЕ СЛУЖБЫ ---
     if (typeof connectWebSocket === 'function') {
         connectWebSocket();
     }
 
-    // --- 2. ЗАГРУЗКА ДАННЫХ ---
-    // Загружаем список менеджеров. Используем await, чтобы данные были готовы
-    // до того, как пользователь успеет открыть модальное окно.
+    // --- 3. ЗАГРУЗКА ДАННЫХ ---
     if (typeof loadManagerIds === 'function') {
         try {
             await loadManagerIds();
@@ -2428,47 +2511,78 @@ document.addEventListener("DOMContentLoaded",async () => {
         loadApiKeys();
     }
 
-    // --- 3. НАВИГАЦИЯ ---
-    // Восстанавливаем последнюю открытую вкладку (Заказы, Склад или Клиенты)
+    // --- 4. НАВИГАЦИЯ ---
     const lastTab = localStorage.getItem('sellion_tab') || 'tab-main';
     if (typeof showTab === 'function') {
         showTab(lastTab);
     }
 
-    // --- 4. ФОРМАТИРОВАНИЕ ДАННЫХ (Очистка таблиц) ---
-    // Группируем все правила форматирования, чтобы не плодить циклы по всему коду.
+    // --- 5. ФОРМАТИРОВАНИЕ И СЧЕТЧИКИ ---
     const runFormatting = () => {
-        // Форматируем даты (только если они еще не отформатированы)
+        // Форматируем даты
         document.querySelectorAll('.js-date-format').forEach(el => {
             const val = el.innerText.trim();
-            if (val && val !== '---' && !val.includes('.')) {
+            if (val && val !== '---' && (val.includes('T') || val.includes('-'))) {
                 el.innerText = formatOrderDate(val);
             }
         });
 
         // Переводим причины возвратов
         document.querySelectorAll('.js-reason-translate').forEach(el => {
-            if (el.innerText.trim()) {
+            if (el && el.innerText.trim()) {
                 el.innerText = translateReason(el.innerText);
             }
         });
 
-        // Превращаем текстовые статусы в красивые баджи (badges)
+        // Статусы возвратов (Исправлено: защита от TypeError)
         document.querySelectorAll('.js-status-translate').forEach(el => {
+            if (!el) return;
             const rawStatus = el.innerText.trim();
-            if (rawStatus) {
+
+            // Если пусто или уже есть бадж — пропускаем
+            if (!rawStatus || rawStatus === "" || el.querySelector('.badge')) return;
+
+            if (typeof translateReturnStatus === 'function') {
                 const statusInfo = translateReturnStatus(rawStatus);
-                el.innerHTML = `<span class="badge ${statusInfo.class}">${statusInfo.text}</span>`;
+                if (statusInfo && statusInfo.text) {
+                    // Безопасное обновление через innerHTML
+                    el.innerHTML = `<span class="badge ${statusInfo.class || 'bg-secondary'}">${statusInfo.text}</span>`;
+                }
             }
         });
+
+        // --- ОБНОВЛЕНИЕ СЧЕТЧИКОВ ВО ВКЛАДКЕ ОТЧЕТЫ ---
+        const verifiedOrders = Array.from(document.querySelectorAll('#orders-table-body tr')).filter(tr => {
+            const text = tr.innerText;
+            return text.includes('ПРОВЕРЕНО') || text.includes('Счет №');
+        }).length;
+
+        const processedReturns = Array.from(document.querySelectorAll('#returns-table-body tr')).filter(tr => {
+            const text = tr.innerText;
+            return text.includes('Проведено') || text.includes('COMPLETED') || text.includes('ПРОВЕДЕНО');
+        }).length;
+
+        const updateEl = (id, val, suffix = "") => {
+            const el = document.getElementById(id);
+            if (el) el.innerText = val + suffix;
+        };
+
+        updateEl('count-verified-orders', verifiedOrders, " поз.");
+        updateEl('count-processed-returns', processedReturns, " поз.");
+        updateEl('btn-count-orders', verifiedOrders);
+        updateEl('btn-count-returns', processedReturns);
     };
 
-    // Запускаем форматирование для данных, которые пришли в HTML при загрузке
+    // Запуск при загрузке
     runFormatting();
 
-    // --- 5. ГЛОБАЛЬНЫЕ СОБЫТИЯ (Делегирование) ---
-    // Логика сворачивания категорий (чтобы работало даже на новых элементах)
+    // --- 6. ГЛОБАЛЬНЫЕ СОБЫТИЯ ---
     document.body.addEventListener('click', function(e) {
+        // Логика пересчета при переходе в отчеты
+        if (e.target.id === 'btn-reports' || e.target.closest('#btn-reports')) {
+            setTimeout(runFormatting, 50); // Небольшая задержка для рендеринга
+        }
+
         const header = e.target.closest('.js-category-toggle');
         if (!header) return;
 
@@ -2487,4 +2601,3 @@ document.addEventListener("DOMContentLoaded",async () => {
 
     console.log("Sellion ERP 2026: Система готова.");
 });
-

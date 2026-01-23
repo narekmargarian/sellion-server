@@ -16,7 +16,6 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.List;
-
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
@@ -27,7 +26,8 @@ public class SecurityConfig {
 
     @Bean
     public ApiKeyAuthFilter apiKeyAuthFilter() {
-        return new ApiKeyAuthFilter(apiKeyRepository);
+        // ИДЕАЛЬНО: Передаем PasswordEncoder в фильтр для безопасной проверки хэшей
+        return new ApiKeyAuthFilter(apiKeyRepository, passwordEncoder());
     }
 
     @Bean
@@ -39,32 +39,39 @@ public class SecurityConfig {
                 )
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
 
-                // 2. Отключаем CSRF для API (так как Android использует API-ключи, а не сессии)
+                // 2. ОТКЛЮЧЕНИЕ CSRF (ИСПРАВЛЕНО)
                 .csrf(csrf -> csrf.ignoringRequestMatchers("/ws-sellion/**", "/api/**"))
 
-                // 3. Добавляем наш фильтр API-ключей перед стандартным логином
+                // 3. Добавляем фильтр API-ключей ПЕРЕД стандартным логином
                 .addFilterBefore(apiKeyAuthFilter(), UsernamePasswordAuthenticationFilter.class)
 
                 .authorizeHttpRequests(auth -> auth
-                        // --- МОБИЛЬНОЕ API ---
-                        // Разрешаем только получение списка менеджеров (для экрана выбора)
-                        .requestMatchers("/api/public/managers").permitAll()
-                        // Все остальные API методы ТРЕБУЮТ наличия ROLE_MANAGER (её дает наш фильтр)
-                        .requestMatchers("/api/**").hasAuthority("ROLE_MANAGER")
+                        // --- 1. ПУБЛИЧНЫЕ РЕСУРСЫ ---
+                        .requestMatchers("/", "/login", "/css/**", "/js/**", "/ws-sellion/**").permitAll()
+                        .requestMatchers("/api/public/**").permitAll()
 
-                        // --- ПАНЕЛЬ УПРАВЛЕНИЯ (Web) ---
-                        .requestMatchers("/admin/settings/**", "/api/admin/settings/**").hasRole("ADMIN")
-                        .requestMatchers("/admin/users/**", "/api/admin/users/**").hasRole("ADMIN")
+                        // --- 2. АДМИНСКИЕ API (КРИТИЧНО: ДОЛЖНЫ БЫТЬ ВЫШЕ ЧЕМ /api/**) ---
+                        .requestMatchers("/api/admin/manager-keys/**").hasRole("ADMIN")
+                        .requestMatchers("/api/admin/returns/**").hasAnyRole("ADMIN", "OPERATOR")
+                        .requestMatchers("/api/admin/settings/**", "/api/admin/users/**").hasRole("ADMIN")
+
+                        // --- 3. МОБИЛЬНОЕ API (Android) ---
+                        // ИДЕАЛЬНОЕ ИСПРАВЛЕНИЕ: Добавляем ROLE_ADMIN,
+                        // чтобы администратор мог использовать ВСЕ API
+                        .requestMatchers("/api/**").hasAnyAuthority("ROLE_MANAGER", "ROLE_ADMIN")
+
+                        // --- 4. ВЕБ-ИНТЕРФЕЙС АДМИНКИ (Thymeleaf страницы) ---
+                        .requestMatchers("/admin/settings/**", "/admin/users/**").hasRole("ADMIN")
                         .requestMatchers("/admin/dashboard-stats/**").hasRole("ADMIN")
                         .requestMatchers("/admin/invoices/**", "/api/payments/**").hasAnyRole("ADMIN", "ACCOUNTANT")
                         .requestMatchers("/admin/reports/**", "/api/reports/**").hasAnyRole("ADMIN", "ACCOUNTANT")
                         .requestMatchers("/admin/**").hasAnyRole("ADMIN", "OPERATOR", "ACCOUNTANT")
 
-                        // --- ПУБЛИЧНЫЕ РЕСУРСЫ ---
-                        .requestMatchers("/", "/login", "/css/**", "/js/**", "/ws-sellion/**").permitAll()
+                        // Все остальные запросы должны быть аутентифицированы
                         .anyRequest().authenticated()
                 )
 
+                // 5. НАСТРОЙКИ ЛОГИНА
                 .formLogin(form -> form
                         .loginPage("/login")
                         .defaultSuccessUrl("/admin", true)
@@ -95,6 +102,7 @@ public class SecurityConfig {
 
     @Bean
     public PasswordEncoder passwordEncoder() {
+        // Используем BCrypt для безопасного хэширования паролей в 2026 году
         return new BCryptPasswordEncoder();
     }
 }

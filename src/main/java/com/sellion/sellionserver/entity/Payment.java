@@ -6,6 +6,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
@@ -20,7 +21,9 @@ public class Payment {
     private Long id;
 
     private Long invoiceId;
-    private Double amount;
+    // ИСПРАВЛЕНО: BigDecimal вместо Double
+    @Column(precision = 19, scale = 2)
+    private BigDecimal amount = BigDecimal.ZERO;
     private LocalDateTime paymentDate = LocalDateTime.now();
     private String comment;
 

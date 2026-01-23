@@ -68,6 +68,8 @@ public class Order {
     @Column(unique = true, name = "android_id") // ИСПРАВЛЕНО: Индекс на уровне БД
     private String androidId;
     private String carNumber;
+    private BigDecimal purchaseCost = BigDecimal.ZERO; // Вместо Double
+
 
     @PrePersist
     protected void onCreate() {

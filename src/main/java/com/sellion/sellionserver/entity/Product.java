@@ -25,7 +25,7 @@ public class Product {
     private String category;
     private BigDecimal purchasePrice = BigDecimal.ZERO;
     private Integer stockQuantity;
-    private boolean isDeleted = false; // Флаг мягкого удаления
+    private Boolean isDeleted = false;  // Флаг мягкого удаления
     private String unit;
     private String hsnCode;
 

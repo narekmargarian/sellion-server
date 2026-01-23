@@ -1,5 +1,7 @@
 package com.sellion.sellionserver.api;
 
+import com.sellion.sellionserver.dto.ApiResponse;
+import com.sellion.sellionserver.dto.PaymentRequest;
 import com.sellion.sellionserver.entity.Client;
 import com.sellion.sellionserver.entity.Invoice;
 import com.sellion.sellionserver.entity.Payment;
@@ -7,7 +9,9 @@ import com.sellion.sellionserver.repository.ClientRepository;
 import com.sellion.sellionserver.repository.InvoiceRepository;
 import com.sellion.sellionserver.repository.PaymentRepository;
 import com.sellion.sellionserver.services.FinanceService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
@@ -26,75 +30,76 @@ import java.util.Optional;
 @RestController
 @RequestMapping("/api/payments")
 @RequiredArgsConstructor
+@Slf4j // Используем Slf4j вместо ручного создания логгера
 public class PaymentApiController {
 
     private final PaymentRepository paymentRepository;
     private final InvoiceRepository invoiceRepository;
-    private final ClientRepository clientRepository;
     private final FinanceService financeService;
-    private static final Logger log = LoggerFactory.getLogger(PaymentApiController.class);
 
     @PostMapping("/register")
     @Transactional(rollbackFor = Exception.class)
-    public ResponseEntity<?> registerPayment(@RequestBody Map<String, Object> payload) {
-        try {
-            Long invoiceId = Long.valueOf(payload.get("invoiceId").toString());
-            BigDecimal paymentAmount = new BigDecimal(payload.get("amount").toString());
-            String comment = payload.get("comment") != null ? payload.get("comment").toString() : "";
+    // ИДЕАЛЬНО: Используем @Valid DTO и ApiResponse для стандартизации ответа
+    public ResponseEntity<ApiResponse<?>> registerPayment(@Valid @RequestBody PaymentRequest request) {
 
-            Invoice invoice = invoiceRepository.findById(invoiceId)
-                    .orElseThrow(() -> new RuntimeException("Счет не найден: " + invoiceId));
+        Long invoiceId = request.getInvoiceId();
+        BigDecimal paymentAmount = request.getAmount().setScale(2, RoundingMode.HALF_UP);
+        String comment = request.getComment() != null ? request.getComment() : "";
 
-            Client clientObj = clientRepository.findByName(invoice.getShopName())
-                    .orElseThrow(() -> new RuntimeException("Клиент не найден: " + invoice.getShopName()));
+        Invoice invoice = invoiceRepository.findById(invoiceId)
+                .orElseThrow(() -> new RuntimeException("Счет не найден: " + invoiceId));
 
-            if (paymentAmount.compareTo(BigDecimal.ZERO) <= 0) {
-                return ResponseEntity.badRequest().body(Map.of("error", "Сумма платежа должна быть больше 0"));
-            }
+        // Проверка, что оплата не превышает остаток долга
+        BigDecimal currentDebt = invoice.getTotalAmount().subtract(
+                Optional.ofNullable(invoice.getPaidAmount()).orElse(BigDecimal.ZERO)
+        );
 
-            Payment payment = new Payment();
-            payment.setInvoiceId(invoiceId);
-            payment.setAmount(paymentAmount.doubleValue());
-            payment.setComment(comment);
-            payment.setPaymentDate(LocalDateTime.now());
-            Payment savedPayment = paymentRepository.save(payment);
-
-            BigDecimal currentPaid = Optional.ofNullable(invoice.getPaidAmount()).orElse(BigDecimal.ZERO);
-            BigDecimal totalAmount = Optional.ofNullable(invoice.getTotalAmount()).orElse(BigDecimal.ZERO);
-
-            BigDecimal newPaidAmount = currentPaid.add(paymentAmount);
-            invoice.setPaidAmount(newPaidAmount);
-
-            if (newPaidAmount.compareTo(totalAmount) >= 0) {
-                invoice.setStatus("PAID");
-            } else if (newPaidAmount.compareTo(BigDecimal.ZERO) > 0) {
-                invoice.setStatus("PARTIAL");
-            } else {
-                invoice.setStatus("UNPAID");
-            }
-
-            invoiceRepository.save(invoice);
-
-            financeService.registerOperation(
-                    clientObj.getId(),
-                    "PAYMENT",
-                    paymentAmount,
-                    savedPayment.getId(),
-                    "Оплата по счету " + invoice.getInvoiceNumber() + " (" + comment + ")",
-                    invoice.getShopName()
-            );
-
-            log.info("Успешная оплата: счет {}, сумма {}", invoiceId, paymentAmount);
-
-            return ResponseEntity.ok(Map.of(
-                    "message", "Платеж успешно зарегистрирован",
-                    "newInvoiceStatus", invoice.getStatus(),
-                    "remainingDebt", totalAmount.subtract(newPaidAmount).setScale(2, RoundingMode.HALF_UP)
-            ));
-
-        } catch (Exception e) {
-            log.error("Критическая ошибка при регистрации платежа: {}", e.getMessage());
-            return ResponseEntity.status(500).body(Map.of("error", "Ошибка сервера: " + e.getMessage()));
+        if (paymentAmount.compareTo(currentDebt) > 0) {
+            throw new RuntimeException("Сумма платежа (" + paymentAmount + ") превышает остаток долга (" + currentDebt + ")");
         }
+
+        // 1. Создание записи о платеже
+        Payment payment = new Payment();
+        payment.setInvoiceId(invoiceId);
+        // ИСПРАВЛЕНО: Теперь amount - это BigDecimal, ошибки нет
+        payment.setAmount(paymentAmount);
+        payment.setComment(comment);
+        payment.setPaymentDate(LocalDateTime.now());
+        Payment savedPayment = paymentRepository.save(payment);
+
+        // 2. Обновление статуса счета
+        BigDecimal newPaidAmount = Optional.ofNullable(invoice.getPaidAmount()).orElse(BigDecimal.ZERO).add(paymentAmount);
+        invoice.setPaidAmount(newPaidAmount);
+
+        if (newPaidAmount.compareTo(invoice.getTotalAmount()) >= 0) {
+            invoice.setStatus("PAID");
+        } else if (newPaidAmount.compareTo(BigDecimal.ZERO) > 0) {
+            invoice.setStatus("PARTIAL");
+        } else {
+            invoice.setStatus("UNPAID");
+        }
+
+        invoiceRepository.save(invoice);
+
+        // 3. Регистрация финансовой операции (обновление долга клиента)
+        // FinanceService использует @Transactional, поэтому всё безопасно
+        financeService.registerOperation(
+                null, // ID клиента не нужен, найдем по имени магазина
+                "PAYMENT",
+                paymentAmount,
+                savedPayment.getId(),
+                "Оплата по счету " + invoice.getInvoiceNumber() + " (" + comment + ")",
+                invoice.getShopName()
+        );
+
+        log.info("Успешная оплата: счет {}, сумма {}", invoiceId, paymentAmount);
+
+        // 4. Стандартизированный ответ клиенту (Android/Web)
+        Map<String, Object> responseData = Map.of(
+                "newInvoiceStatus", invoice.getStatus(),
+                "remainingDebt", invoice.getTotalAmount().subtract(newPaidAmount).setScale(2, RoundingMode.HALF_UP)
+        );
+
+        return ResponseEntity.ok(ApiResponse.ok("Платеж успешно зарегистрирован", responseData));
     }
 }

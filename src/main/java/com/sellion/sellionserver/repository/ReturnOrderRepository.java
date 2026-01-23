@@ -29,4 +29,7 @@ public interface ReturnOrderRepository extends JpaRepository<ReturnOrder, Long> 
     @Query("SELECT SUM(r.totalAmount) FROM ReturnOrder r WHERE r.createdAt BETWEEN :start AND :end AND r.status = 'CONFIRMED'")
     BigDecimal sumConfirmedReturns(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 
+    boolean existsByAndroidId(String androidId);
+    List<ReturnOrder> findByManagerIdAndCreatedAtBetween(String managerId, LocalDateTime start, LocalDateTime end);
+
 }

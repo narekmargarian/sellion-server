@@ -4,6 +4,7 @@ import com.sellion.sellionserver.entity.Role;
 import com.sellion.sellionserver.entity.User;
 import com.sellion.sellionserver.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -14,6 +15,7 @@ import java.util.List;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j // Используем Slf4j
 public class UserService {
 
     private final UserRepository userRepository;
@@ -26,7 +28,7 @@ public class UserService {
     @Transactional
     public User saveUser(User user) {
         // Проверяем, не зашифрован ли уже пароль (длина BCrypt обычно 60 символов)
-        if (user.getPassword().length() < 30) {
+        if (user.getPassword() != null && user.getPassword().length() < 30) {
             user.setPassword(passwordEncoder.encode(user.getPassword()));
         }
         return userRepository.save(user);
@@ -40,27 +42,8 @@ public class UserService {
         });
     }
 
-    // Объединенный метод инициализации (выполняется 1 раз при запуске)
-    @EventListener(ApplicationReadyEvent.class)
-    @Transactional
-    public void setupDefaultAdmin() {
-        String adminUsername = "admin";
-        User admin = userRepository.findByUsername(adminUsername).orElseGet(() -> {
-            User newUser = new User();
-            newUser.setUsername(adminUsername);
-            return newUser;
-        });
-
-        admin.setFullName("Администратор Системы");
-        admin.setRole(Role.ADMIN);
-
-        // В 2026 году пароль должен быть зашифрован BCrypt
-        // Если пароль в базе не совпадает с зашифрованным "1111", обновляем его
-        admin.setPassword(passwordEncoder.encode("1111"));
-
-        userRepository.save(admin);
-        System.out.println("✅ [System] Учетная запись администратора готова. Логин: admin, Пароль: 1111");
-    }
+    // ИДЕАЛЬНО: Метод инициализации полностью удален по запросу пользователя.
+    // Теперь вы должны создать первого администратора вручную в вашей БД.
 
     @Transactional
     public void toggleUserStatus(Long id) {
@@ -68,6 +51,5 @@ public class UserService {
             user.setEnabled(!user.isEnabled());
             userRepository.save(user);
         });
-
     }
 }

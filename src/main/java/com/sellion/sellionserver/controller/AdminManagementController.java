@@ -19,7 +19,9 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/admin")
@@ -324,39 +326,36 @@ public class AdminManagementController {
         return ResponseEntity.ok(Map.of("message", "Склад обновлен"));
     }
 
-    // ИСПРАВЛЕНО: Теперь метод принимает Map<Long, Integer>
     private Map<String, BigDecimal> calculateTotalSaleAndCost(Map<Long, Integer> items) {
+        if (items == null || items.isEmpty()) {
+            return Map.of("totalSale", BigDecimal.ZERO, "totalCost", BigDecimal.ZERO);
+        }
+
+        // ИСПРАВЛЕНО (Оптимизация): Один запрос к БД вместо цикла
+        List<Product> products = productRepository.findAllById(items.keySet());
+
         BigDecimal totalSale = BigDecimal.ZERO;
         BigDecimal totalCost = BigDecimal.ZERO;
 
-        if (items != null) {
-            for (Map.Entry<Long, Integer> entry : items.entrySet()) {
-                // Ключ уже является типом Long (ID товара)
-                Long productId = entry.getKey();
+        for (Product p : products) {
+            Integer qtyInt = items.get(p.getId());
+            if (qtyInt == null) continue;
 
-                // Поиск по ID (рекомендуется findByIdWithLock, если вы его добавили в репозиторий)
-                Product p = productRepository.findById(productId)
-                        .orElseThrow(() -> new RuntimeException("Товар с ID " + productId + " не найден"));
+            BigDecimal qty = BigDecimal.valueOf(qtyInt);
 
-                BigDecimal qty = BigDecimal.valueOf(entry.getValue());
+            BigDecimal price = Optional.ofNullable(p.getPrice()).orElse(BigDecimal.ZERO);
+            BigDecimal pPrice = Optional.ofNullable(p.getPurchasePrice()).orElse(BigDecimal.ZERO);
 
-                // Расчет стоимости продажи
-                if (p.getPrice() != null) {
-                    totalSale = totalSale.add(p.getPrice().multiply(qty));
-                }
-
-                // Расчет себестоимости (используем purchasePrice из вашей модели)
-                BigDecimal purchasePrice = (p.getPurchasePrice() != null) ? p.getPurchasePrice() : BigDecimal.ZERO;
-                totalCost = totalCost.add(purchasePrice.multiply(qty));
-            }
+            totalSale = totalSale.add(price.multiply(qty));
+            totalCost = totalCost.add(pPrice.multiply(qty));
         }
 
-        Map<String, BigDecimal> result = new HashMap<>();
-        // Округляем до 2 знаков (стандарт для ֏ AMD в 2026 году)
-        result.put("totalSale", totalSale.setScale(2, RoundingMode.HALF_UP));
-        result.put("totalCost", totalCost.setScale(2, RoundingMode.HALF_UP));
-        return result;
+        return Map.of(
+                "totalSale", totalSale.setScale(2, RoundingMode.HALF_UP),
+                "totalCost", totalCost.setScale(2, RoundingMode.HALF_UP)
+        );
     }
+
 
 
     private void recordAudit(Long entityId, String type, String action, String details) {

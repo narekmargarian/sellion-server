@@ -32,7 +32,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
     List<Order> findByManagerId(String managerId);
 
-    boolean existsByAndroidId(String androidId);
+
 
     @Query("SELECT o FROM Order o WHERE o.managerId = :managerId AND o.deliveryDate = :date AND o.status != 'CANCELLED'")
     List<Order> findDailyRouteOrders(@Param("managerId") String managerId, @Param("date") LocalDate date);
@@ -54,5 +54,9 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             @Param("end") LocalDateTime end,
             Pageable pageable
     );
+
+
+    boolean existsByAndroidId(String androidId);
+    List<Order> findByManagerIdAndCreatedAtBetween(String managerId, LocalDateTime start, LocalDateTime end);
 }
 

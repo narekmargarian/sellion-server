@@ -58,6 +58,10 @@ public class ReturnOrder {
 
     private String comment;
     private String carNumber;
+    // ИСПРАВЛЕНО: BigDecimal вместо Double для себестоимости
+    @Column(precision = 19, scale = 2)
+    private BigDecimal purchaseCost = BigDecimal.ZERO;
+    private String androidId;
 
 
     @PrePersist

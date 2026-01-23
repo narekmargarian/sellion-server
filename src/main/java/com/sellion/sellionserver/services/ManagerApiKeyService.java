@@ -3,6 +3,8 @@ package com.sellion.sellionserver.services;
 import com.sellion.sellionserver.config.ManagerApiKey;
 import com.sellion.sellionserver.repository.ManagerApiKeyRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -12,42 +14,41 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ManagerApiKeyService {
     private final ManagerApiKeyRepository apiKeyRepository;
+    private final PasswordEncoder passwordEncoder; // Используем BCrypt
 
     public List<ManagerApiKey> findAllKeys() {
         return apiKeyRepository.findAll();
     }
 
-    public Optional<ManagerApiKey> findByKeyHash(String apiKeyHash) {
-        return apiKeyRepository.findByApiKeyHash(apiKeyHash);
-    }
-
     @Transactional
     public ManagerApiKey generateNewKeyForManager(String managerId) {
-        // Генерируем уникальный, длинный ключ
-        String newApiKey = UUID.randomUUID().toString().replace("-", "");
+        // 1. Генерируем случайный ключ (UUID)
+        String rawKey = UUID.randomUUID().toString().replace("-", "");
 
-        ManagerApiKey existingKey = apiKeyRepository.findById(managerId).orElse(new ManagerApiKey());
-        existingKey.setManagerId(managerId);
-        // Пока храним как есть, без хэширования, чтобы было проще найти в фильтре
-        existingKey.setApiKeyHash(newApiKey);
+        // 2. Хэшируем его перед сохранением
+        String hashedKey = passwordEncoder.encode(rawKey);
 
-        return apiKeyRepository.save(existingKey);
+        ManagerApiKey apiKeyEntry = apiKeyRepository.findById(managerId)
+                .orElse(new ManagerApiKey());
+
+        apiKeyEntry.setManagerId(managerId);
+        apiKeyEntry.setApiKeyHash(hashedKey);
+        apiKeyRepository.save(apiKeyEntry);
+
+        // ВАЖНО: Возвращаем объект с СЫРЫМ ключом только один раз, чтобы показать админу
+        ManagerApiKey response = new ManagerApiKey();
+        response.setManagerId(managerId);
+        response.setApiKeyHash(rawKey); // Здесь на мгновение передаем сырой ключ для UI
+
+        log.info("Сгенерирован новый API-ключ для менеджера: {}", managerId);
+        return response;
     }
 
     @Transactional
     public void deleteKey(String managerId) {
         apiKeyRepository.deleteById(managerId);
-    }
-
-
-
-    @Transactional
-    public void saveKeyForManager(String managerId, String rawApiKey) {
-        ManagerApiKey key = new ManagerApiKey();
-        key.setManagerId(managerId);
-        key.setApiKeyHash(rawApiKey); // Сохраняем полученный Android ID
-        apiKeyRepository.save(key);
     }
 }

@@ -1,5 +1,6 @@
 package com.sellion.sellionserver.controller;
 
+import com.sellion.sellionserver.dto.ApiResponse;
 import com.sellion.sellionserver.entity.*;
 import com.sellion.sellionserver.repository.OrderRepository;
 import com.sellion.sellionserver.repository.ProductRepository;
@@ -20,9 +21,8 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.stream.Collectors;
 
 
 @RestController
@@ -41,50 +41,92 @@ public class SyncController {
     private static final DateTimeFormatter ANDROID_DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     @PostMapping("/orders/sync")
-    public ResponseEntity<?> syncOrders(@RequestBody List<Order> orders) {
-        if (orders == null || orders.isEmpty()) return ResponseEntity.ok(Map.of("status", "empty"));
+    // УДАЛЕНО: @Transactional убран отсюда, так как каждый заказ должен быть отдельной транзакцией
+    public ResponseEntity<ApiResponse<Map<String, Object>>> syncOrders(@RequestBody List<Order> orders) {
+        if (orders == null || orders.isEmpty()) {
+            return ResponseEntity.ok(ApiResponse.ok("Список пуст", Map.of("status", "empty")));
+        }
 
         int savedCount = 0;
         int duplicateCount = 0;
         int errorCount = 0;
         List<String> errorMessages = new ArrayList<>();
 
+        // ОПТИМИЗАЦИЯ: Предварительная загрузка цен (оставляем, это отлично для скорости)
+        Set<Long> allProductIds = orders.stream()
+                .filter(o -> o.getItems() != null)
+                .flatMap(o -> o.getItems().keySet().stream())
+                .collect(Collectors.toSet());
+
+        Map<Long, BigDecimal> purchasePrices = productRepository.findAllById(allProductIds).stream()
+                .collect(Collectors.toMap(
+                        Product::getId,
+                        p -> p.getPurchasePrice() != null ? p.getPurchasePrice() : BigDecimal.ZERO
+                ));
+
         for (Order order : orders) {
             try {
-                // 1. Проверка на дубликат по Android ID
+                // 1. Валидация входных данных (Базовая)
+                if (order.getShopName() == null || order.getItems() == null || order.getItems().isEmpty()) {
+                    errorCount++;
+                    errorMessages.add("Заказ без данных магазина или товаров (AndroidID: " + order.getAndroidId() + ")");
+                    continue;
+                }
+
+                // 2. Проверка на дубликат (Безопасно выносим за транзакцию записи)
                 if (order.getAndroidId() != null && orderRepository.existsByAndroidId(order.getAndroidId())) {
                     duplicateCount++;
                     continue;
                 }
 
-                // 2. Обработка даты (Конвертация строки в LocalDateTime)
+                // 3. Подготовка данных (Даты и Себестоимость)
                 order.setCreatedAt(parseAndroidDate(order.getCreatedAt() != null ? order.getCreatedAt().toString() : null));
 
-                // 3. Обработка заказа через сервис (Резерв товара + сохранение)
+                BigDecimal totalOrderPurchaseCost = BigDecimal.ZERO;
+                for (Map.Entry<Long, Integer> item : order.getItems().entrySet()) {
+                    BigDecimal price = purchasePrices.getOrDefault(item.getKey(), BigDecimal.ZERO);
+                    totalOrderPurchaseCost = totalOrderPurchaseCost.add(price.multiply(BigDecimal.valueOf(item.getValue())));
+                }
+                // ИСПРАВЛЕНО: Убедитесь, что в Order.java тип BigDecimal
+                order.setPurchaseCost(totalOrderPurchaseCost.setScale(2, RoundingMode.HALF_UP));
+
+                // 4. ГЛАВНОЕ: Вызов сервиса.
+                // Метод processOrderFromAndroid внутри помечен как @Transactional,
+                // поэтому каждый заказ зафиксируется или откатится ИНДИВИДУАЛЬНО.
                 orderSyncService.processOrderFromAndroid(order);
                 savedCount++;
 
             } catch (Exception e) {
                 errorCount++;
-                String msg = "Заказ " + order.getAndroidId() + ": " + e.getMessage();
-                log.error(msg);
-                errorMessages.add(msg);
+                String androidId = (order.getAndroidId() != null) ? order.getAndroidId() : "unknown";
+                log.error("Ошибка синхронизации заказа [{}]: {}", androidId, e.getMessage());
+                errorMessages.add("Заказ " + androidId + ": " + e.getMessage());
             }
         }
 
-        // Уведомление через WebSocket, если есть новые заказы
+        // 5. Уведомление через WebSocket (Используем ApiResponse стиль)
         if (savedCount > 0) {
-            messagingTemplate.convertAndSend("/topic/new-order", "Синхронизировано заказов: " + savedCount);
+            Map<String, Object> wsPayload = Map.of(
+                    "message", "Новые заказы: " + savedCount,
+                    "count", savedCount,
+                    "timestamp", LocalDateTime.now().toString()
+            );
+            messagingTemplate.convertAndSend("/topic/new-order", (Object) wsPayload);
         }
 
-        return ResponseEntity.ok(Map.of(
-                "status", errorCount == 0 ? "success" : "partial_success",
+        // 6. Итоговый ответ в едином стандарте ApiResponse
+        Map<String, Object> resultData = Map.of(
                 "saved", savedCount,
                 "duplicates", duplicateCount,
                 "errors", errorCount,
-                "details", errorMessages
-        ));
+                "errorDetails", errorMessages
+        );
+
+        String finalStatus = errorCount == 0 ? "success" : (savedCount > 0 ? "partial_success" : "failed");
+
+        return ResponseEntity.ok(ApiResponse.ok("Обработка завершена. Статус: " + finalStatus, resultData));
     }
+
 
     @PostMapping("/returns/sync")
     public ResponseEntity<?> syncReturns(@RequestBody List<ReturnOrder> returns) {
@@ -93,15 +135,19 @@ public class SyncController {
         int saved = 0;
         for (ReturnOrder ret : returns) {
             try {
-                ret.setId(null);
-                ret.setStatus(ReturnStatus.DRAFT);
+                // Проверка на дубликат возврата
+                if (ret.getAndroidId() != null && returnOrderRepository.existsByAndroidId(ret.getAndroidId())) {
+                    continue;
+                }
 
-                // ИСПРАВЛЕНО: Парсинг даты для возврата
+                ret.setId(null);
+                ret.setStatus(ReturnStatus.DRAFT); // Ставим SENT, так как пришло с телефона
+
                 if (ret.getCreatedAt() == null) {
                     ret.setCreatedAt(LocalDateTime.now());
                 }
 
-                // Расчет суммы возврата на стороне сервера (безопасность)
+                // Расчет суммы возврата по прайс-листу (безопасность)
                 BigDecimal total = BigDecimal.ZERO;
                 if (ret.getItems() != null) {
                     for (Map.Entry<Long, Integer> entry : ret.getItems().entrySet()) {
@@ -110,7 +156,7 @@ public class SyncController {
                         total = total.add(price.multiply(BigDecimal.valueOf(entry.getValue())));
                     }
                 }
-                ret.setTotalAmount(total.setScale(2, RoundingMode.HALF_UP));
+                ret.setTotalAmount(total.setScale(0, RoundingMode.HALF_UP));
 
                 returnOrderRepository.save(ret);
                 saved++;
@@ -118,22 +164,48 @@ public class SyncController {
                 log.error("Ошибка синхронизации возврата: {}", e.getMessage());
             }
         }
-
         return ResponseEntity.ok(Map.of("status", "success", "count", saved));
     }
 
-    // Вспомогательный метод парсинга даты (2026 стандарт)
+    @GetMapping("/orders/manager/{managerId}/current-month")
+    public ResponseEntity<List<Order>> getOrdersByManagerCurrentMonth(@PathVariable String managerId) {
+        LocalDateTime start = LocalDate.now().withDayOfMonth(1).atStartOfDay();
+        LocalDateTime end = LocalDateTime.now();
+        return ResponseEntity.ok(orderRepository.findByManagerIdAndCreatedAtBetween(managerId, start, end));
+    }
+
+    @GetMapping("/returns/manager/{managerId}/current-month")
+    public ResponseEntity<List<ReturnOrder>> getReturnsByManagerCurrentMonth(@PathVariable String managerId) {
+        LocalDateTime start = LocalDate.now().withDayOfMonth(1).atStartOfDay();
+        LocalDateTime end = LocalDateTime.now();
+        return ResponseEntity.ok(returnOrderRepository.findByManagerIdAndCreatedAtBetween(managerId, start, end));
+    }
+
+    // ИСПРАВЛЕНО: Возвращаем BigDecimal вместо double
+    private BigDecimal calculatePurchaseCost(Map<Long, Integer> items) {
+        if (items == null || items.isEmpty()) return BigDecimal.ZERO;
+
+        List<Product> products = productRepository.findAllById(items.keySet());
+        BigDecimal totalCost = BigDecimal.ZERO;
+
+        for (Product p : products) {
+            Integer qty = items.get(p.getId());
+            if (qty != null) {
+                BigDecimal pPrice = Optional.ofNullable(p.getPurchasePrice()).orElse(BigDecimal.ZERO);
+                totalCost = totalCost.add(pPrice.multiply(BigDecimal.valueOf(qty)));
+            }
+        }
+        return totalCost.setScale(2, RoundingMode.HALF_UP);
+    }
+
+
     private LocalDateTime parseAndroidDate(String dateStr) {
         if (dateStr == null || dateStr.isEmpty()) return LocalDateTime.now();
         try {
-            // Если Android прислал ISO формат (с T)
-            if (dateStr.contains("T")) {
-                return LocalDateTime.parse(dateStr);
-            }
-            // Если прислал пробельный формат (наш кастомный)
+            if (dateStr.contains("T")) return LocalDateTime.parse(dateStr);
             return LocalDateTime.parse(dateStr, ANDROID_DATE_FORMAT);
         } catch (Exception e) {
-            log.warn("Не удалось распарсить дату {}, ставим текущую", dateStr);
+            log.warn("Ошибка даты {}, ставим сейчас", dateStr);
             return LocalDateTime.now();
         }
     }

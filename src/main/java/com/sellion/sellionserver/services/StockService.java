@@ -6,11 +6,16 @@ import com.sellion.sellionserver.repository.ProductRepository;
 import com.sellion.sellionserver.repository.StockMovementRepository;
 
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -18,6 +23,7 @@ public class StockService {
     private final ProductRepository productRepository;
     private final StockMovementRepository movementRepository;
 
+    private static final Logger log = LoggerFactory.getLogger(StockService.class);
     /**
      * Атомарное списание товара.
      * Используется при выставлении счета.
@@ -26,27 +32,30 @@ public class StockService {
     public void deductItemsFromStock(Map<Long, Integer> items, String reason, String operator) {
         if (items == null || items.isEmpty()) return;
 
+        // ИСПРАВЛЕНО (Оптимизация): Загружаем все продукты одним запросом
+        List<Product> products = productRepository.findAllById(items.keySet());
+        Map<Long, Product> productMap = products.stream()
+                .collect(Collectors.toMap(Product::getId, Function.identity()));
+
         for (Map.Entry<Long, Integer> entry : items.entrySet()) {
             Long productId = entry.getKey();
             Integer qty = entry.getValue();
 
             if (qty == null || qty <= 0) continue;
 
-            // Блокируем строку товара в БД (Pessimistic Lock), чтобы никто другой не изменил остаток
-            Product p = productRepository.findByIdWithLock(productId)
-                    .orElseThrow(() -> new RuntimeException("Товар ID " + productId + " не найден"));
+            Product p = productMap.get(productId);
+            if (p == null) throw new RuntimeException("Товар ID " + productId + " не найден");
 
-            // Атомарное списание через кастомный запрос в репозитории
+            // Атомарное списание
             int updatedRows = productRepository.deductStockById(productId, qty);
-
             if (updatedRows == 0) {
-                throw new RuntimeException("Недостаточно товара на складе: " + p.getName() +
-                        " (Требуется: " + qty + ", Наличие: " + p.getStockQuantity() + ")");
+                throw new RuntimeException("Недостаточно товара: " + p.getName());
             }
 
             logMovement(p.getName(), -qty, "SALE", reason, operator);
         }
     }
+
 
     /**
      * Резервирование (для заказов с Android).
@@ -78,17 +87,24 @@ public class StockService {
     public void returnItemsToStock(Map<Long, Integer> items, String reason, String operator) {
         if (items == null || items.isEmpty()) return;
 
-        for (Map.Entry<Long, Integer> entry : items.entrySet()) {
-            Long productId = entry.getKey();
-            Integer qty = entry.getValue();
+        // Оптимизация: загружаем всё сразу
+        List<Product> products = productRepository.findAllById(items.keySet());
+        Map<Long, Product> productMap = products.stream()
+                .collect(Collectors.toMap(Product::getId, Function.identity()));
 
-            productRepository.findById(productId)
-                    .ifPresent(p -> {
-                        productRepository.addStockById(productId, qty);
-                        logMovement(p.getName(), qty, "RETURN", reason, operator);
-                    });
-        }
+        items.forEach((productId, qty) -> {
+            if (qty != null && qty > 0) {
+                Product p = productMap.get(productId);
+                if (p != null) {
+                    productRepository.addStockById(productId, qty);
+                    logMovement(p.getName(), qty, "RETURN", reason, operator);
+                } else {
+                    log.warn("Попытка возврата несуществующего товара ID: {}", productId);
+                }
+            }
+        });
     }
+
 
     // Добавьте этот метод в StockService.java
     @Transactional
