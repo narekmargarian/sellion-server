@@ -21,7 +21,12 @@
 </div>
 
 <div class="details">
-    <strong>Организация:</strong> SELLION ERP 2026<br>
+    <!-- ИСПРАВЛЕНО: Данные компании берутся из CompanySettings -->
+    <strong>Организация (Поставщик):</strong> <span th:text="${@companySettings.getSetting('COMPANY_NAME', 'Sellion ERP')}"></span><br>
+    <strong>ИНН:</strong> <span th:text="${@companySettings.getSetting('COMPANY_INN', '00000000')}"></span><br>
+    <strong>Адрес:</strong> <span th:text="${@companySettings.getSetting('COMPANY_ADDRESS', 'Ереван')}"></span><br>
+
+    <hr>
     <strong>Контрагент:</strong> <span th:text="${client.name}"></span><br>
     <strong>Адрес:</strong> <span th:text="${client.address}"></span>
 </div>
@@ -49,7 +54,7 @@
 
 <div class="footer">
     <div>
-        От SELLION ERP:<br><br>
+        От <span th:text="${@companySettings.getSetting('COMPANY_NAME', 'Sellion ERP')}"></span>:<br><br>
         <div class="sign">(Подпись, печать)</div>
     </div>
     <div>

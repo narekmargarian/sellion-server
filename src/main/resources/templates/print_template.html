@@ -33,8 +33,10 @@
         <td th:text="${op.shopName}">Название магазина</td>
     </tr>
     <tr>
+
         <td>Дата документа:</td>
-        <td th:text="${op.createdAt != null ? op.createdAt : op.returnDate}">01.01.2026</td>
+        <td th:text="${op.createdAt != null ? #temporals.format(op.createdAt, 'dd.MM.yyyy HH:mm') : (op.returnDate != null ? #temporals.format(op.returnDate, 'dd.MM.yyyy') : '---')}"></td>
+
     </tr>
     <tr>
         <td>Ответственное лицо:</td>

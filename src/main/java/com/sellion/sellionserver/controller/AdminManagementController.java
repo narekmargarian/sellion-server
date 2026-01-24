@@ -368,4 +368,31 @@ public class AdminManagementController {
         auditLog.setTimestamp(LocalDateTime.now());
         auditLogRepository.save(auditLog);
     }
+
+    @PostMapping("/orders/write-off")
+    @Transactional(rollbackFor = Exception.class)
+    public ResponseEntity<?> createWriteOff(@RequestBody Order order) {
+        try {
+            order.setType(OrderType.WRITE_OFF);
+            order.setStatus(OrderStatus.PROCESSED); // Списание сразу проведено
+            order.setManagerId("Офис");
+            order.setCreatedAt(LocalDateTime.now());
+
+            // 1. Считаем только себестоимость
+            Map<String, BigDecimal> totals = calculateTotalSaleAndCost(order.getItems());
+            order.setTotalAmount(BigDecimal.ZERO); // Сумма продажи всегда 0
+            order.setTotalPurchaseCost(totals.get("totalCost"));
+
+            // 2. Списываем товар (без резерва, сразу)
+            stockService.deductItemsFromStock(order.getItems(), "Списание: " + order.getComment(), "ADMIN");
+
+            orderRepository.save(order);
+            recordAudit(order.getId(), "ORDER", "СПИСАНИЕ", "Списание товара: " + order.getComment());
+
+            return ResponseEntity.ok(Map.of("message", "Списание успешно проведено"));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
 }

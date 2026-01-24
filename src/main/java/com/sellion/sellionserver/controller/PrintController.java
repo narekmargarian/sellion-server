@@ -5,10 +5,7 @@ import com.sellion.sellionserver.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -29,6 +26,7 @@ public class PrintController {
     private final ProductRepository productRepository;
     private final ClientRepository clientRepository;
     private final TransactionRepository transactionRepository;
+    private final InvoiceRepository invoiceRepository;
 
     public static class PrintItemDto {
         public String name;
@@ -177,4 +175,73 @@ public class PrintController {
         model.addAttribute("title", "Акт сверки");
         return "print_statement_template";
     }
+
+    @PostMapping("/orders/print-batch")
+    public String printOrdersBatch(@RequestParam("ids") List<Long> ids, Model model) {
+        List<Order> orders = orderRepository.findAllById(ids);
+        BigDecimal total = orders.stream()
+                .map(o -> o.getTotalAmount() != null ? o.getTotalAmount() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        model.addAttribute("operations", orders);
+        model.addAttribute("finalTotal", total);
+        model.addAttribute("title", "РЕЕСТР ЗАКАЗОВ");
+        model.addAttribute("currentDateTime", LocalDateTime.now()); // Для центральной даты
+        return "print_list_template";
+    }
+
+    @PostMapping("/returns/print-batch")
+    public String printReturnsBatch(@RequestParam("ids") List<Long> ids, Model model) {
+        List<ReturnOrder> returns = returnOrderRepository.findAllById(ids);
+        BigDecimal total = returns.stream()
+                .map(r -> r.getTotalAmount() != null ? r.getTotalAmount() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        model.addAttribute("operations", returns);
+        model.addAttribute("finalTotal", total);
+        model.addAttribute("title", "РЕЕСТР ВОЗВРАТОВ");
+        model.addAttribute("currentDateTime", LocalDateTime.now());
+        return "print_list_template";
+    }
+    @GetMapping("/logistic/print-compact")
+    public String printCompact(@RequestParam String managerId, @RequestParam String date, @RequestParam String type, Model model) {
+        LocalDate deliveryDate = LocalDate.parse(date);
+        List<PrintItemDto> allData = new ArrayList<>();
+
+        if ("order".equals(type)) {
+            List<Order> orders = orderRepository.findDailyRouteOrders(managerId, deliveryDate);
+            model.addAttribute("payload", orders);
+            model.addAttribute("title", "РЕЕСТР НАКЛАДНЫХ (ДОСТАВКА)");
+        } else {
+            // Логика для возвратов аналогично
+        }
+
+        model.addAttribute("productRepo", productRepository);
+        return "print_compact_template";
+    }
+
+
+    @GetMapping("/invoices/print-debts")
+    public String printManagerDebts(@RequestParam String managerId, Model model) {
+        // Получаем все счета менеджера, которые не оплачены (статус не PAID)
+        List<Invoice> unpaidInvoices = invoiceRepository.findAllByOrderByCreatedAtDesc().stream()
+                // Замените на безопасное сравнение:
+                .filter(inv -> managerId.equals(inv.getManagerId())) // Переменная слева защищает от null
+
+                .filter(inv -> !"PAID".equals(inv.getStatus()))
+                .collect(Collectors.toList());
+
+        BigDecimal totalDebt = unpaidInvoices.stream()
+                .map(inv -> inv.getTotalAmount().subtract(inv.getPaidAmount()))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        model.addAttribute("invoices", unpaidInvoices);
+        model.addAttribute("managerId", managerId);
+        model.addAttribute("totalDebt", totalDebt);
+        model.addAttribute("title", "ЛИСТ ЗАДОЛЖЕННОСТИ: " + managerId);
+        model.addAttribute("currentDate", LocalDateTime.now());
+
+        return "print_debts_template"; // Вам нужно будет создать этот HTML файл в templates
+    }
+
 }

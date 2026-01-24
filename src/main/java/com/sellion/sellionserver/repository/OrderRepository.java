@@ -20,9 +20,14 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     List<Order> findAllByStatus(OrderStatus status);
 
 
-    // ИСПРАВЛЕНО: Теперь работаем с LocalDateTime
-    @Query("SELECT o FROM Order o WHERE o.createdAt BETWEEN :start AND :end")
+    // Найти заказы между датами, исключая списания
+    @Query("SELECT o FROM Order o WHERE o.createdAt BETWEEN :start AND :end AND o.type != 'WRITE_OFF'")
     List<Order> findOrdersBetweenDates(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+
+    // Сумма подтвержденных возвратов (уже было, просто проверьте наличие)
+    @Query("SELECT SUM(r.totalAmount) FROM ReturnOrder r WHERE r.createdAt BETWEEN :start AND :end AND r.status = 'CONFIRMED'")
+    BigDecimal sumConfirmedReturns(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+
 
     @Query("SELECT o FROM Order o WHERE o.managerId = :mId AND o.createdAt BETWEEN :start AND :end")
     List<Order> findOrdersByManagerAndDateRange(@Param("mId") String mId, @Param("start") LocalDateTime start, @Param("end") LocalDateTime end);

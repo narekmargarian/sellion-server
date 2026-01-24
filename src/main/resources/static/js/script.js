@@ -1,4 +1,3 @@
-// Гарантируем, что если сервер не прислал данные, массивы не будут undefined
 if (typeof productsData === 'undefined') window.productsData = [];
 if (typeof clientsData === 'undefined') window.clientsData = [];
 if (typeof ordersData === 'undefined') window.ordersData = [];
@@ -28,7 +27,7 @@ function closeModal(id) {
 
 
 function formatOrderDate(dateVal) {
-    if (!dateVal || dateVal === '---') return '---';
+    if (!dateVal || dateVal === '---' || dateVal === null) return '---';
 
     // Обработка объектов Java (если придут)
     if (typeof dateVal === 'object' && dateVal.year) {
@@ -437,44 +436,56 @@ function openReturnDetails(id) {
     const ret = (returnsData || []).find(r => r.id == id);
     if (!ret) return console.error(`Возврат с ID ${id} не найден.`);
 
-    // 2. Очистка мусора: Используем универсальную функцию синхронизации {ID: Qty}
+    // 2. Очистка мусора
     tempItems = syncTempItems(ret.items);
 
-    // 3. Подготовка статуса и оформления
+    // 3. Подготовка статуса
     const isConfirmed = ret.status === 'CONFIRMED';
     const statusText = isConfirmed ? 'Проведено' : (ret.status === 'DRAFT' ? 'Черновик' : ret.status);
     const statusClass = isConfirmed ? 'bg-success' : 'bg-warning';
     const displayReason = translateReason(ret.returnReason);
 
-    // 4. Обновляем заголовок и инфо-блок
+    // 4. Обновляем заголовок
     document.getElementById('modal-title').innerHTML = `
         Детали операции 
         <span class="badge ${statusClass}" style="margin-left:10px;">${statusText}</span>
         <span class="badge" style="margin-left:5px;">ВОЗВРАТ №${ret.id}</span>
     `;
 
+    // 5. ИНФО-БЛОК: Добавлен НОМЕР АВТО и КОММЕНТАРИЙ
     document.getElementById('order-info').innerHTML = `
-        <div class="modal-info-row" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; background: #fff1f2; padding: 15px; border-radius: 10px; margin-top: 20px;">
+        <div class="modal-info-row" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; background: #fff1f2; padding: 15px; border-radius: 10px; margin-top: 20px; border: 1px solid #fecdd3;">
             <div><small>Магазин:</small><br><b>${ret.shopName}</b></div>
-            <div><small>Дата возврата:</small><br><b>${formatOrderDate(ret.returnDate)}</b></div>
+            <div><small>Дата возврата:</small><br><b>${formatOrderDate(ret.createdAt)}</b></div>
             <div><small>Причина:</small><br><b style="color:#ef4444;">${displayReason}</b></div>
+            
+            <!-- НОВОЕ: НОМЕР АВТО -->
+            <div style="background: #fff; padding: 5px; border-radius: 5px; border: 1px dashed #ef4444;">
+                <small>🚚 Номер авто:</small><br><b>${ret.carNumber || '---'}</b>
+            </div>
+            
+            <!-- НОВОЕ: КОММЕНТАРИЙ (для корректировок) -->
+            <div style="grid-column: span 2; border-top: 1px solid #fecdd3; pt: 5px;">
+                <small>Комментарий (для бухгалтерии):</small><br>
+                <i style="color: #64748b;">${ret.comment || 'Нет комментария'}</i>
+            </div>
         </div>
     `;
 
-    // 5. Рендерим таблицу товаров
+    // 6. Рендерим таблицу товаров
     renderItemsTable(tempItems, false);
 
-    // 6. Обновляем сумму
+    // 7. Сумма
     const totalPriceElement = document.getElementById('order-total-price');
     if (totalPriceElement) {
         totalPriceElement.innerText = "Сумма возврата: " + (ret.totalAmount || 0).toLocaleString() + " ֏";
     }
 
-    // 7. Оптимизированное управление кнопками футера
+    // 8. Кнопки футера
     const footer = document.getElementById('order-footer-actions');
     const printBtn = `<button class="btn-primary" style="background:#475569" onclick="printReturn(${ret.id})">🖨 Печать</button>`;
 
-    if (ret.status === 'DRAFT') {
+    if (ret.status === 'DRAFT' || ret.status === 'SENT') {
         footer.innerHTML = `
             <button class="btn-primary" style="background:#10b981" onclick="confirmReturn(${ret.id})">✅ Подтвердить</button>
             ${printBtn}
@@ -485,7 +496,7 @@ function openReturnDetails(id) {
     } else {
         footer.innerHTML = `
             <div style="flex: 1; display: flex; align-items: center; justify-content: center; color: #64748b; font-weight: bold;">
-                <span>✓ Операция проведена</span>
+                <span>✓ Операция проведена и долг уменьшен</span>
             </div>
             ${printBtn}
             <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-order-view')">Закрыть</button>
@@ -494,6 +505,7 @@ function openReturnDetails(id) {
 
     openModal('modal-order-view');
 }
+
 
 
 
@@ -544,55 +556,34 @@ function getManagerOptionsHTML() {
 
 
 async function saveNewManualOperation(type) {
-    // 1. ПРИНУДИТЕЛЬНЫЙ СБОР ДАННЫХ:
-    // Проходим по всем активным инпутам количества и обновляем tempItems перед отправкой.
-    // Это гарантирует, что данные, введенные, но не подтвержденные кнопкой, попадут в заказ.
+    // Сбор актуальных количеств из инпутов
     document.querySelectorAll('.qty-input-active').forEach(input => {
         const pId = input.id.replace('input-qty-', '');
         const val = parseInt(input.value);
-        if (!isNaN(val) && val > 0) {
-            tempItems[pId] = val;
-        } else if (val <= 0) {
-            delete tempItems[pId];
-        }
+        if (!isNaN(val) && val > 0) tempItems[pId] = val;
     });
 
-    // 2. Получаем дату (с учетом разных возможных ID для заказов и возвратов)
+    if (Object.keys(tempItems).length === 0) return showToast("Ошибка: Состав пуст!", "error");
+
     const dateInput = document.getElementById('new-op-date') || document.getElementById('edit-ret-date');
     const baseDate = dateInput ? dateInput.value : null;
-
-    // 3. Валидация перед отправкой
-    if (Object.keys(tempItems).length === 0) {
-        showToast("Ошибка: Состав операции пуст!", "error");
-        return;
-    }
-
-    if (!baseDate) {
-        showToast("Пожалуйста, выберите дату!", "error");
-        return;
-    }
+    if (!baseDate) return showToast("Выберите дату!", "error");
 
     const url = type === 'order' ? '/api/admin/orders/create-manual' : '/api/returns/sync';
 
-    // Формируем дату создания с текущим временем 2026 года
-    const now = new Date();
-    const currentTime = now.toTimeString().substring(0, 8); // "hh:mm:ss"
-    const formattedDateTime = `${baseDate}T${currentTime}`;
-
-    // 4. Формируем финальный объект данных
-    // Важно: calculateCurrentTempTotal() теперь вызывается после сбора данных из инпутов
+    // Данные для отправки
     const data = {
         shopName: document.getElementById('new-op-shop').value,
         managerId: document.getElementById('new-op-manager').value,
-        items: tempItems, // Теперь здесь точно актуальные ID и Qty
+        items: tempItems,
         totalAmount: calculateCurrentTempTotal(),
-        createdAt: formattedDateTime,
-        androidId: "MANUAL-" + Date.now()
+        createdAt: baseDate + "T" + getCurrentTimeFormat(),
+        androidId: "MANUAL-" + Date.now(),
+        carNumber: document.getElementById('new-op-car')?.value || "", // Сохраняем номер авто
+        comment: document.getElementById('new-op-comment')?.value || ""  // Сохраняем комментарий
     };
 
-    // Специфические поля для Заказа или Возврата
     if (type === 'order') {
-        data.comment = document.getElementById('new-op-comment')?.value || "";
         data.deliveryDate = baseDate;
         data.paymentMethod = document.getElementById('new-op-payment').value;
         data.needsSeparateInvoice = document.getElementById('new-op-invoice').value === "true";
@@ -602,32 +593,27 @@ async function saveNewManualOperation(type) {
     }
 
     try {
-        // Для возвратов бэкенд ожидает массив [data], для заказов — один объект data
         const bodyData = type === 'order' ? data : [data];
-
         const response = await fetch(url, {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
+            headers: {'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="_csrf"]')?.content},
             body: JSON.stringify(bodyData)
         });
 
         if (response.ok) {
-            showToast("✅ Операция успешно сохранена", "success");
-            // Задержка перед релоадом, чтобы пользователь успел увидеть Toast
-            setTimeout(() => {
-                location.reload();
-            }, 1000);
+            showToast("✅ Успешно сохранено", "success");
+            setTimeout(() => location.reload(), 800); // Обновляем страницу для появления в таблице
         } else {
             const err = await response.text();
-            // Обработка ошибки склада или валидации от бэкенда
             showStatus(err || "Ошибка сохранения", true);
-            showToast("Ошибка сервера", "error");
         }
     } catch (e) {
-        console.error("Критическая ошибка при сохранении:", e);
-        showToast("Ошибка сети: сервер недоступен", "error");
+        showToast("Ошибка сети", "error");
     }
 }
+
+
+
 
 // Чистая функция для подготовки товаров (всегда возвращает {ID: Qty})
 function syncTempItems(items) {
@@ -711,31 +697,65 @@ async function saveFullChanges(id) {
         deliveryDate: document.getElementById('edit-delivery').value,
         paymentMethod: document.getElementById('edit-payment').value,
         needsSeparateInvoice: document.getElementById('edit-invoice-type').value === "true",
-        carNumber: document.getElementById('edit-car-number').value,
+        carNumber: document.getElementById('edit-car-number').value, // Сохраняем авто
         items: tempItems
     };
 
     try {
         const response = await fetch(`/api/admin/orders/${id}/full-edit`, {
             method: 'PUT',
-            headers: {'Content-Type': 'application/json'},
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="_csrf"]')?.content
+            },
             body: JSON.stringify(data)
         });
-        const result = await response.json();
+
         if (response.ok) {
-            const idx = ordersData.findIndex(o => o.id == id);
-            if (idx !== -1) {
-                ordersData[idx] = {...ordersData[idx], ...data, totalAmount: result.finalSum};
-                updateRowInTable(ordersData[idx]);
-            }
-            showStatus("✅ Заказ успешно обновлен!");
-            setTimeout(() => openOrderDetails(id), 1000);
+            showToast("✅ Заказ обновлен", "success");
+            setTimeout(() => location.reload(), 500);
         } else {
-            showStatus(result.error || result.message || "Ошибка сохранения", true);
+            const result = await response.json();
+            showStatus(result.error || "Ошибка", true);
         }
     } catch (e) {
         showStatus("❌ Ошибка соединения", true);
     }
+}
+
+function printSelectedOperations(type) {
+    const checkboxClass = type === 'order' ? '.order-print-check' : '.return-print-check';
+    const selectedIds = Array.from(document.querySelectorAll(`${checkboxClass}:checked`)).map(cb => cb.value);
+
+    if (selectedIds.length === 0) {
+        showToast("⚠️ Сначала выберите записи галочкой!", "error");
+        return;
+    }
+
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = type === 'order' ? '/admin/orders/print-batch' : '/admin/returns/print-batch';
+    form.target = '_blank';
+
+    // CSRF
+    const csrfInput = document.createElement('input');
+    csrfInput.type = 'hidden';
+    csrfInput.name = '_csrf';
+    csrfInput.value = document.querySelector('meta[name="_csrf"]').content;
+    form.appendChild(csrfInput);
+
+    // Добавляем ID всех выбранных заказов/возвратов
+    selectedIds.forEach(id => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'ids';
+        input.value = id;
+        form.appendChild(input);
+    });
+
+    document.body.appendChild(form);
+    form.submit();
+    document.body.removeChild(form);
 }
 
 
@@ -797,33 +817,39 @@ function cancelReturnEdit(id) {
 }
 
 async function saveReturnChanges(id) {
+    // Собираем данные из полей редактирования
     const data = {
         shopName: document.getElementById('edit-ret-shop').value,
         returnDate: document.getElementById('edit-ret-date').value,
         returnReason: document.getElementById('edit-ret-reason').value,
+        carNumber: document.getElementById('edit-ret-car')?.value || "",
+        comment: document.getElementById('edit-ret-comment')?.value || "",
         items: tempItems
     };
 
     try {
         const response = await fetch(`/api/admin/returns/${id}/edit`, {
             method: 'PUT',
-            headers: {'Content-Type': 'application/json'},
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="_csrf"]')?.content
+            },
             body: JSON.stringify(data)
         });
+
         if (response.ok) {
+            showToast("✅ Возврат обновлен", "success");
+            // Важно: перезагружаем, чтобы обновить номер авто и суммы в основной таблице
+            setTimeout(() => location.reload(), 500);
+        } else {
             const result = await response.json();
-            const idx = returnsData.findIndex(r => r.id == id);
-            if (idx !== -1) {
-                returnsData[idx] = {...returnsData[idx], ...data, totalAmount: result.newTotal};
-                updateReturnRowInTable(returnsData[idx]); // <--- Вызов обновления строки
-            }
-            showStatus("✅ Возврат обновлен!");
-            setTimeout(() => openReturnDetails(id), 1000);
+            showStatus(result.error || "Ошибка обновления", true);
         }
     } catch (e) {
         showStatus("❌ Ошибка сети", true);
     }
 }
+
 
 
 // Обновление строки ВОЗВРАТА
@@ -850,7 +876,6 @@ function cancelClientEdit(id) {
 }
 
 // 2. Полная карточка клиента (все поля)
-// 2. Полная карточка клиента (все поля)
 async function openClientDetails(id) {
     const client = clientsData.find(c => c.id == id);
     if (!client) return;
@@ -865,14 +890,17 @@ async function openClientDetails(id) {
 
     const info = document.getElementById('client-info');
     info.innerHTML = `
-        <div class="modal-info-row">
+       <div class="modal-info-row">
             <div><small>Название магазина:</small><br><b>${client.name}</b></div>
             <div><small>Владелец / ИП:</small><br><b>${client.ownerName || '---'}</b></div>
             <div><small>ИНН:</small><br><b>${client.inn || '---'}</b></div>
+            <!-- ДОБАВЛЕНО: Менеджер -->
+            <div><small>Менеджер:</small><br><b>${client.managerId || '---'}</b></div>
         </div>
         <div class="modal-info-row">
             <div><small>Телефон:</small><br><b>${client.phone || '---'}</b></div>
             <div><small>Адрес:</small><br><b>${client.address || '---'}</b></div>
+            <div><small>День маршрута:</small><br><b>${client.routeDay || '---'}</b></div>
             <div><small>Текущий долг:</small><br><b class="price-down">${(client.debt || 0).toLocaleString()} ֏</b></div>
         </div>
 
@@ -981,9 +1009,14 @@ function enableClientEdit() {
     const client = clientsData.find(c => c.id === window.currentClientId);
     if (!client) return;
     const info = document.getElementById('client-info');
+
+    const managerOptions = managerIdList.map(m =>
+        `<option value="${m}" ${m === client.managerId ? 'selected' : ''}>${m}</option>`
+    ).join('');
+
     info.innerHTML = `
-        <div class="modal-info-row">
-            <div><label>Магазин</label><input type="text" id="edit-client-name" value="${client.name}"></div>
+         <div class="modal-info-row">
+            <div><label>Название</label><input type="text" id="edit-client-name" value="${client.name}"></div>
             <div><label>Расчетный счет (IBAN)</label><input type="text" id="edit-client-bank" value="${client.bankAccount || ''}"></div>
             <div><label>Владелец</label><input type="text" id="edit-client-owner" value="${client.ownerName || ''}"></div>
             <div><label>ИНН</label><input type="text" id="edit-client-inn" value="${client.inn || ''}"></div>
@@ -991,6 +1024,10 @@ function enableClientEdit() {
         <div class="modal-info-row">
             <div><label>Телефон</label><input type="text" id="edit-client-phone" value="${client.phone || ''}"></div>
             <div><label>Адрес</label><input type="text" id="edit-client-address" value="${client.address || ''}"></div>
+            <!-- ДОБАВЛЕНО: Редактирование менеджера -->
+            <div><label>Менеджер</label><select id="edit-client-manager">${managerOptions}</select></div>
+            <!-- ДОБАВЛЕНО: Редактирование дня маршрута -->
+            <div><label>День маршрута</label><input type="text" id="edit-client-route-day" value="${client.routeDay || ''}"></div>
             <div><label>Долг</label><input type="number" id="edit-client-debt" value="${client.debt || 0}"></div>
         </div>
     `;
@@ -1008,7 +1045,9 @@ async function saveClientChanges(id) {
         phone: document.getElementById('edit-client-phone').value,
         address: document.getElementById('edit-client-address').value,
         debt: parseFloat(document.getElementById('edit-client-debt').value) || 0,
-        bankAccount: document.getElementById('edit-client-bank').value
+        bankAccount: document.getElementById('edit-client-bank').value,
+        managerId: document.getElementById('edit-client-manager').value, // Сохраняем менеджера
+        routeDay: document.getElementById('edit-client-route-day').value
     };
 
     try {
@@ -1056,8 +1095,13 @@ async function openProductDetails(id) {
     const product = productsData.find(p => p.id == id);
     if (!product) return;
 
+    // Сразу очищаем историю перед загрузкой
+    const historyBody = document.getElementById('product-history-body');
+    if (historyBody) historyBody.innerHTML = '<tr><td colspan="4" style="text-align:center;">⌛ Загрузка...</td></tr>';
+
     document.getElementById('modal-product-title').innerHTML = `Детали товара <span class="badge" style="margin-left:10px;">${product.name}</span>`;
     const info = document.getElementById('product-info');
+
 
     // ОБЪЕДИНЕННЫЙ БЛОК (Инфо о товаре + Складские данные + Контейнер истории)
     info.innerHTML = `
@@ -1095,23 +1139,26 @@ async function openProductDetails(id) {
     // 2. Загружаем историю с сервера (адрес /api/products/{name}/history у нас уже есть в контроллере)
     try {
         const response = await fetch(`/api/products/${encodeURIComponent(product.name)}/history`);
+
         if (response.ok) {
             const history = await response.json();
+            if (window.currentProductId != id) return;
             const tbody = document.getElementById('product-history-body');
             tbody.innerHTML = history.map(h => `
                 <tr>
                     <td>${fmt(h.timestamp)}</td>
-                    <td><span class="badge">${h.type}</span></td>
+                    <td><span class="badge ${h.type === 'WRITE_OFF' ? 'bg-danger' : 'bg-info'}">${h.type}</span></td>
                     <td style="color:${h.quantityChange > 0 ? '#10b981' : '#ef4444'}">
                         <b>${h.quantityChange > 0 ? '+' : ''}${h.quantityChange}</b>
                     </td>
                     <td><small>${h.reason || '---'}</small></td>
                 </tr>
             `).join('') || '<tr><td colspan="4" style="text-align:center;">Движений не найдено</td></tr>';
+        } else {
+            throw new Error("Ошибка сервера");
         }
     } catch (e) {
-        console.error("Ошибка загрузки истории:", e);
-        document.getElementById('product-history-body').innerHTML = '<tr><td colspan="4" style="color:red;">Ошибка загрузки</td></tr>';
+        if (historyBody) historyBody.innerHTML = '<tr><td colspan="4" style="color:#ef4444; text-align:center;">❌ Ошибка загрузки истории</td></tr>';
     }
 
     // 3. Футер с кнопкой Инвентаризации
@@ -1130,6 +1177,9 @@ function enableProductEdit() {
     const id = window.currentProductId;
     const product = productsData.find(p => p.id == id);
     if (!product) return;
+
+
+
     document.getElementById('modal-product-title').innerText = "Редактирование товара";
     const info = document.getElementById('product-info');
     // info.style.gridTemplateColumns = '1fr';
@@ -1278,13 +1328,18 @@ async function submitCreateProduct() {
     }
 }
 
-function openCreateClientModal() { // Используй это имя в onclick
+function openCreateClientModal() {
     openModal('modal-client');
+    // Заполняем select managerIdList данными из Enum
+    const select = document.getElementById('new-client-manager-id');
+    if (select && managerIdList.length > 0) {
+        select.innerHTML = managerIdList.map(m => `<option value="${m}">${m}</option>`).join('');
+    } else if (select) {
+        select.innerHTML = `<option value="OFFICE">OFFICE (по умолчанию)</option>`;
+    }
 }
 
-// --- НОВЫЙ ЗАКАЗ ---
-// Вспомогательная функция для получения списка менеджеров (чтобы не дублировать код)
-// В script.js
+
 
 let managerIdList = []; // Глобальный массив для хранения списка из Enum
 
@@ -1308,77 +1363,65 @@ async function loadManagerIds() {
 
 
 
+// 1. Создание ЗАКАЗА (добавлен номер авто)
 async function openCreateOrderModal() {
     await loadManagerIds();
     tempItems = {};
     document.getElementById('modal-title').innerText = "Создание нового заказа";
-
     let clientOptions = clientsData.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
-    // ИСПРАВЛЕНО: Теперь переменная определена
     let managerOptions = getManagerOptionsHTML();
-    const today = new Date().toLocaleDateString('en-CA');
+    const today = new Date().toISOString().split('T')[0];
+
     document.getElementById('order-info').innerHTML = `
         <div class="modal-info-row">
             <div><label>Магазин:</label><select id="new-op-shop">${clientOptions}</select></div>
             <div><label>Менеджер:</label><select id="new-op-manager">${managerOptions}</select></div>
-               <div><label>Доставка:</label><input type="date" id="new-op-date" value="${today}"></div>
+            <div><label>Дата доставки:</label><input type="date" id="new-op-date" value="${today}"></div>
         </div>
         <div class="modal-info-row">
-            <div><label>Оплата:</label>
-                <select id="new-op-payment">
-                    <option value="CASH">Наличный</option>
-                    <option value="TRANSFER">Перевод</option>
-                </select>
-            </div>
-            <div><label>Фактура:</label>
-                <select id="new-op-invoice">
-                    <option value="false">НЕТ</option>
-                    <option value="true">ДА</option>
-                </select>
-            </div>
-             <div><label>Комментарий:</label><input type="text" id="new-op-comment" placeholder="Любой текст"></div>
-        </div>
-        `;
-
-    setMinDateToday('new-op-date');
+            <div><label>Оплата:</label><select id="new-op-payment"><option value="CASH">Наличный</option><option value="TRANSFER">Перевод</option></select></div>
+            <div><label>Номер авто:</label><input type="text" id="new-op-car" placeholder="00XX000"></div>
+            <div><label>Комментарий:</label><input type="text" id="new-op-comment" placeholder="Детали..."></div>
+        </div>`;
     renderItemsTable(tempItems, true);
-    document.getElementById('order-footer-actions').innerHTML = `
-        <button class="btn-primary" style="background:#10b981" onclick="saveNewManualOperation('order')">Создать заказ</button>
-        <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-order-view')">Отмена</button>`;
-
+    document.getElementById('order-footer-actions').innerHTML = `<button class="btn-primary" onclick="saveNewManualOperation('order')">Создать</button><button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-order-view')">Отмена</button>`;
     openModal('modal-order-view');
 }
 
-// --- НОВЫЙ ВОЗВРАТ ---
+// 2. Создание ВОЗВРАТА (номер авто + коментарий для реестра)
 async function openCreateReturnModal() {
     await loadManagerIds();
     tempItems = {};
-    document.getElementById('modal-title').innerText = "Оформление нового возврата";
-
+    document.getElementById('modal-title').innerText = "Новый возврат";
     let clientOptions = clientsData.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
     let reasonOptions = returnReasons.map(r => `<option value="${r.name || r}">${translateReason(r)}</option>`).join('');
-    // ИСПРАВЛЕНО: Используем общую функцию со списком менеджеров
     let managerOptions = getManagerOptionsHTML();
+    const today = new Date().toISOString().split('T')[0];
 
-    const today = new Date().toLocaleDateString('en-CA');
     document.getElementById('order-info').innerHTML = `
         <div class="modal-info-row">
             <div><label>Магазин:</label><select id="new-op-shop">${clientOptions}</select></div>
             <div><label>Менеджер:</label><select id="new-op-manager">${managerOptions}</select></div>
+            <div><label>Дата:</label><input type="date" id="new-op-date" value="${today}"></div>
+        </div>
+        <div class="modal-info-row">
             <div><label>Причина:</label><select id="new-op-reason">${reasonOptions}</select></div>
-             <div><label>Дата возврата::</label><input type="date" id="edit-ret-date" value="${today}"></div>
-           
-          
+            <div><label>Номер авто:</label><input type="text" id="new-op-car" placeholder="🚚"></div>
+            <div><label>Комментарий (для реестра):</label><input type="text" id="new-op-comment" placeholder="Причина для бухгалтера"></div>
         </div>`;
-
-    setMinDateToday('edit-ret-date');
     renderItemsTable(tempItems, true);
-    document.getElementById('order-footer-actions').innerHTML = `
-        <button class="btn-primary" style="background:#10b981" onclick="saveNewManualOperation('return')">Создать возврат</button>
-        <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-order-view')">Отмена</button>`;
-
+    document.getElementById('order-footer-actions').innerHTML = `<button class="btn-primary" onclick="saveNewManualOperation('return')">Создать</button>`;
     openModal('modal-order-view');
 }
+
+
+
+// 4. Утилита выбора всех
+function toggleSelectAll(className, source) {
+    document.querySelectorAll(`.${className}`).forEach(cb => cb.checked = source.checked);
+}
+
+
 
 function getCurrentTimeFormat() {
     const now = new Date();
@@ -1589,19 +1632,6 @@ function triggerImport() {
     input.click();
 }
 
-// //todo Toast//
-// function showToast(text, type = 'info') {
-//     const container = document.getElementById('toast-container');
-//     const toast = document.createElement('div');
-//     toast.className = `toast-msg toast-${type}`;
-//     const icon = type === 'success' ? '✅' : (type === 'error' ? '❌' : 'ℹ️');
-//     toast.innerHTML = `<span>${icon}</span> <span>${text}</span>`;
-//     container.appendChild(toast);
-//     setTimeout(() => {
-//         toast.style.opacity = '0';
-//         setTimeout(() => toast.remove(), 500);
-//     }, 4000);
-// }
 
 
 function showToast(text, type = 'info') {
@@ -1783,39 +1813,46 @@ window.printReturn = function (id) {
     printAction(url);
 }
 
+// Универсальная функция тихой печати
 function printAction(url) {
     const frame = document.getElementById('printFrame');
     if (!frame) {
-        window.open(url, '_blank');
-        return;
+        // Если фрейма почему-то нет, создаем его на лету
+        const newFrame = document.createElement('iframe');
+        newFrame.id = 'printFrame';
+        newFrame.style.display = 'none';
+        document.body.appendChild(newFrame);
+        return printAction(url);
     }
 
-    // 1. Сначала «очищаем» фрейм
-    frame.src = "about:blank";
+    showToast("⏳ Подготовка к печати...", "info");
 
-    // 2. Устанавливаем обработчик события загрузки ПЕРЕД тем как задать URL
-    frame.onload = function () {
-        // Пропускаем, если это очистка фрейма
-        if (frame.src === "about:blank" || frame.contentWindow.location.href === "about:blank") return;
+    frame.src = url;
 
-        // Небольшая пауза, чтобы стили 2026 года успели примениться
+    frame.onload = function() {
+        // Даем 500мс на рендеринг стилей внутри фрейма
         setTimeout(() => {
             try {
                 frame.contentWindow.focus();
                 frame.contentWindow.print();
             } catch (e) {
-                console.error("Ошибка печати через iframe, открываю в новом окне:", e);
-                window.open(url, '_blank');
+                console.error("Ошибка печати:", e);
+                showToast("❌ Ошибка печати. Попробуйте еще раз.", "error");
             }
-        }, 300);
-
-        // Сбрасываем обработчик, чтобы он не сработал повторно
-        frame.onload = null;
+        }, 500);
     };
-
-    // 3. Загружаем реальный URL
-    frame.src = url;
 }
+
+// Теперь обновляем вызовы для всех кнопок
+window.printOrder = (id) => printAction(`/admin/orders/print/${id}`);
+window.printReturn = (id) => printAction(`/admin/returns/print/${id}`);
+window.printOrderList = () => {
+    const manager = document.querySelector('select[name="orderManagerId"]').value;
+    const start = document.querySelector('input[name="orderStartDate"]').value;
+    const end = document.querySelector('input[name="orderEndDate"]').value;
+    printAction(`/admin/orders/print-all?orderManagerId=${manager}&orderStartDate=${start}&orderEndDate=${end}`);
+};
+
 
 
 function printRouteSheet() {
@@ -1829,30 +1866,55 @@ function printRouteSheet() {
 
 let stompClient = null;
 
+
 function connectWebSocket() {
-    // Если уже подключены - не создаем дубликат
+    // 1. Проверка на существующее активное соединение
     if (stompClient !== null && stompClient.connected) return;
 
     const socket = new SockJS('/ws-sellion');
     stompClient = Stomp.over(socket);
-    stompClient.debug = null; // Отключаем лишний спам в консоли
+    stompClient.debug = null; // Отключаем лог в консоли для чистоты
 
     stompClient.connect({}, function (frame) {
-        console.log('✅ Sellion Realtime Connected');
-        stompClient.subscribe('/topic/new-order', function (message) {
-            showToast("🔔 " + message.body, "info");
+        console.log('✅ Sellion Realtime Connected [2026]');
 
-            // Получаем текущую активную вкладку
-            const currentTab = localStorage.getItem('sellion_tab');
+        stompClient.subscribe('/topic/new-order', function (notification) {
+            // Парсим JSON (сервер присылает Map)
+            const data = JSON.parse(notification.body);
 
-            // Если пользователь сейчас смотрит вкладку заказов ИЛИ возвратов — обновляем страницу
-            if (currentTab === 'tab-orders' || currentTab === 'tab-returns') {
-                console.log("Обновление данных для вкладки: " + currentTab);
-                setTimeout(() => location.reload(), 1500);
+            // 2. Показываем красивое уведомление
+            showToast("🔔 " + (data.message || "Поступили новые данные"), "info");
+
+            // 3. Обновляем счетчики на главной (Dashboard) без перезагрузки
+            const pendingOrdersEl = document.getElementById('stat-pending-orders');
+            if (pendingOrdersEl) {
+                let currentCount = parseInt(pendingOrdersEl.innerText) || 0;
+                pendingOrdersEl.innerText = currentCount + (data.count || 1);
+                // Добавляем эффект пульсации для привлечения внимания
+                pendingOrdersEl.style.color = "var(--accent)";
+                setTimeout(() => pendingOrdersEl.style.color = "", 2000);
+            }
+
+            // 4. Логика для активных вкладок (Заказы/Возвраты)
+            const activeTab = localStorage.getItem('activeTab') || 'tab-main';
+
+            if (activeTab === 'tab-orders' || activeTab === 'tab-returns') {
+                // Вместо жесткой перезагрузки (reload), подсвечиваем кнопку "Обновить"
+                // или вызываем функцию обновления таблицы (если она у вас есть)
+                const refreshBtn = document.querySelector(`#${activeTab} button[title="Обновить данные"]`);
+                if (refreshBtn) {
+                    refreshBtn.classList.add('btn-pulse'); // Добавьте этот класс в CSS для мигания
+                    console.log("Новые данные доступны. Кнопка обновления подсвечена.");
+                } else {
+                    // Если кнопки нет, обновляем через 3 секунды, чтобы не прерывать работу пользователя
+                    console.log("Авто-обновление через 3 сек...");
+                    setTimeout(() => location.reload(), 3000);
+                }
             }
         });
     }, function (error) {
-        console.log('🔄 WS Reconnecting...');
+        console.warn('🔄 Соединение потеряно. Повтор через 5 секунд...');
+        stompClient = null;
         setTimeout(connectWebSocket, 5000);
     });
 }
@@ -2437,6 +2499,8 @@ function generateApiKeyForManager() {
     }
 }
 
+
+
 // Функция удаления ключа
 function deleteApiKey(managerId) {
     if (confirm(`Уверены, что хотите удалить ключ для ${managerId}?`)) {
@@ -2474,42 +2538,236 @@ function refreshReportCounters() {
 
 
 
-// --- 1. ГЛОБАЛЬНЫЕ ФУНКЦИИ (Должны быть вне DOMContentLoaded, чтобы кнопки их видели) ---
+
 function applyReportFilters() {
-    const startEl = document.getElementById('report-start');
-    const endEl = document.getElementById('report-end');
+    const start = document.getElementById('report-start').value;
+    const end = document.getElementById('report-end').value;
 
-    if (!startEl || !endEl || !startEl.value || !endEl.value) {
-        if (typeof showToast === 'function') showToast("Выберите период!", "error");
-        return;
-    }
+    if (!start || !end) return showToast("Выберите период!", "error");
 
-    // Сохраняем вкладку, чтобы вернуться в неё после перезагрузки
-    localStorage.setItem('sellion_tab', 'tab-reports');
+    // Вместо перезагрузки всей страницы с параметрами, мы просто
+    // можем запросить у сервера данные только для этой вкладки или
+    // использовать URL параметры так, чтобы они не перекрывали глобальные.
+    // Если используем текущую схему, то просто фиксируем вкладку:
+    const url = new URL(window.location.href);
+    url.searchParams.set('activeTab', 'tab-reports');
+    url.searchParams.set('reportStart', start); // Используем уникальные имена параметров
+    url.searchParams.set('reportEnd', end);
 
-    // Перезагрузка с параметрами
-    window.location.href = `/admin?activeTab=tab-reports&orderStartDate=${startEl.value}&orderEndDate=${endEl.value}&returnStartDate=${startEl.value}&returnEndDate=${endEl.value}`;
+    window.location.href = url.toString();
 }
 
+function printCompactOrders() {
+    const managerId = document.getElementById('route-manager-select').value;
+    const date = document.getElementById('route-date-select').value;
+    if (!date) return showToast("Выберите дату", "error");
+
+    // Вызываем компактную печать заказов
+    const url = `/admin/logistic/print-compact?managerId=${encodeURIComponent(managerId)}&date=${date}&type=order`;
+    printAction(url);
+}
+
+function printCompactReturns() {
+    const managerId = document.getElementById('route-manager-select').value;
+    const date = document.getElementById('route-date-select').value;
+    if (!date) return showToast("Выберите дату", "error");
+
+    // Вызываем компактную печать возвратов
+    const url = `/admin/logistic/print-compact?managerId=${encodeURIComponent(managerId)}&date=${date}&type=return`;
+    printAction(url);
+}
+
+
+
+
+// Глобальный перехватчик для добавления CSRF токена во все запросы
+const csrfToken = document.querySelector('input[name="_csrf"]')?.value;
+
+async function secureFetch(url, options = {}) {
+    // 1. Подготовка заголовков
+    if (!options.headers) options.headers = {};
+
+    // Получаем токены напрямую из meta-тегов (которые мы добавили в Шаге 1)
+    const csrfToken = document.querySelector('meta[name="_csrf"]')?.content;
+    const csrfHeader = document.querySelector('meta[name="_csrf_header"]')?.content;
+
+    // 2. Добавляем CSRF только для запросов, меняющих данные
+    const method = (options.method || 'GET').toUpperCase();
+    if (csrfToken && csrfHeader && method !== 'GET') {
+        options.headers[csrfHeader] = csrfToken;
+    }
+
+    // 3. Автоматическая сериализация тела запроса
+    if (options.body && typeof options.body === 'object') {
+        options.headers['Content-Type'] = 'application/json';
+        options.body = JSON.stringify(options.body);
+    }
+
+    // 4. Выполнение запроса
+    const response = await fetch(url, options);
+
+    // 5. Обработка ошибок сервера
+    if (!response.ok) {
+        let errorMessage = `Ошибка сервера: ${response.status}`;
+        try {
+            const errorData = await response.json();
+            errorMessage = errorData.message || errorMessage;
+        } catch (e) {
+            // Если сервер не прислал JSON с ошибкой, оставляем стандартное сообщение
+        }
+        // Используем ваши тосты для уведомления (из части 31)
+        showToast(errorMessage, 'error');
+        throw new Error(errorMessage);
+    }
+
+    // 6. Обработка пустого ответа (например, статус 204 при удалении)
+    if (response.status === 204 || response.headers.get('content-length') === '0') {
+        return null;
+    }
+
+    // 7. Возврат результата
+    return response.json();
+}
+
+
+function printSelectedRows(tableId) {
+    const selected = Array.from(document.querySelectorAll(`#${tableId} .row-checkbox:checked`))
+        .map(cb => cb.value);
+    if (selected.length === 0) return alert("Выберите хотя бы одну запись");
+
+    // Создаем форму для отправки списка ID на сервер
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '/admin/orders/print-batch';
+    form.target = '_blank';
+
+    // Добавляем CSRF (Критично!)
+    const csrfToken = document.querySelector('meta[name="_csrf"]').content;
+    const csrfInput = document.createElement('input');
+    csrfInput.name = '_csrf';
+    csrfInput.value = csrfToken;
+    form.appendChild(csrfInput);
+
+    selected.forEach(id => {
+        const input = document.createElement('input');
+        input.name = 'ids';
+        input.value = id;
+        form.appendChild(input);
+    });
+
+    document.body.appendChild(form);
+    form.submit();
+    form.remove();
+}
+
+
+
+
+
+
+
+
+
+// 1. Фильтр счетов по менеджеру, статусу и датам
+function filterInvoices() {
+    const manager = document.getElementById('filter-invoice-manager').value.trim().toUpperCase();
+    const status = document.getElementById('filter-invoice-status').value.trim().toUpperCase();
+    const rows = document.querySelectorAll('#invoices-table-body tr');
+
+    rows.forEach(row => {
+        // Предполагаем: 2-я колонка Магазин, 5-я Статус, Менеджера нужно искать в тексте или атрибуте
+        const rowText = row.innerText.toUpperCase();
+        const rowStatus = row.querySelector('.badge').innerText.toUpperCase();
+
+        const matchManager = manager === "" || rowText.includes(manager);
+        const matchStatus = status === "" || rowStatus.includes(status);
+
+        row.style.display = (matchManager && matchStatus) ? "" : "none";
+    });
+}
+
+
+// 2. Открытие окна списания
+function openWriteOffModal() {
+    tempItems = {};
+    document.getElementById('modal-title').innerText = "НОВОЕ СПИСАНИЕ ТОВАРА";
+    document.getElementById('order-info').innerHTML = `
+        <div class="modal-info-row">
+            <div><label>Ответственный:</label><br><b>Офис</b></div>
+            <div><label>Дата списания:</label><br><b>${new Date().toLocaleDateString()}</b></div>
+            <div><label>Причина списания:</label><input type="text" id="write-off-comment" placeholder="Брак, срок годности..."></div>
+        </div>`;
+    renderItemsTable(tempItems, true); // Режим редактирования состава
+    document.getElementById('order-footer-actions').innerHTML = `
+        <button class="btn-primary" style="background:#ef4444" onclick="submitWriteOff()">ПОДТВЕРДИТЬ СПИСАНИЕ</button>
+        <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-order-view')">Отмена</button>`;
+    openModal('modal-order-view');
+}
+
+// 3. Отправка списания
+async function submitWriteOff() {
+    const comment = document.getElementById('write-off-comment').value;
+    if(!comment) return showToast("Укажите причину списания!", "error");
+    if(Object.keys(tempItems).length === 0) return showToast("Список пуст!", "error");
+
+    const data = {
+        comment: comment,
+        items: tempItems
+    };
+
+    const response = await fetch('/api/admin/orders/write-off', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="_csrf"]').content},
+        body: JSON.stringify(data)
+    });
+
+    if(response.ok) {
+        showToast("Товар списан");
+        location.reload();
+    }
+}
+
+// 4. Печать долгов менеджера (все неоплаченные и частичные)
+function printManagerDebts() {
+    const manager = document.getElementById('filter-invoice-manager').value;
+    if (!manager) return showToast("⚠️ Выберите менеджера!", "error");
+
+    const url = `/admin/invoices/print-debts?managerId=${encodeURIComponent(manager)}`;
+    printAction(url); // Используем нашу функцию тихой печати
+}
+
+
+
 document.addEventListener("DOMContentLoaded", async () => {
-    console.log("Sellion ERP 2026: Инициализация системы...");
+    console.log("🚀 Sellion ERP 2026: Инициализация системы...");
+
+    // --- 1. CSRF ЗАЩИТА (КРИТИЧНО ДЛЯ 2026) ---
+    // Автоматически настраиваем все будущие запросы fetch, чтобы не писать токен каждый раз
+    const token = document.querySelector('input[name="_csrf"]')?.value;
+    window.apiHeaders = {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+    };
+    if (token) window.apiHeaders['X-CSRF-TOKEN'] = token;
 
     // --- 2. СИСТЕМНЫЕ СЛУЖБЫ ---
     if (typeof connectWebSocket === 'function') {
         connectWebSocket();
     }
 
-    // --- 3. ЗАГРУЗКА ДАННЫХ ---
-    if (typeof loadManagerIds === 'function') {
+    // --- 3. ЗАГРУЗКА ДАННЫХ (Параллельно для скорости) ---
+    const initData = async () => {
         try {
-            await loadManagerIds();
+            const promises = [];
+            if (typeof loadManagerIds === 'function') promises.push(loadManagerIds());
+            if (typeof loadApiKeys === 'function') promises.push(loadApiKeys());
+
+            await Promise.all(promises);
         } catch (e) {
-            console.error("Ошибка при предзагрузке списка менеджеров:", e);
+            console.error("⚠️ Ошибка загрузки начальных данных:", e);
         }
-    }
-    if (typeof loadApiKeys === 'function') {
-        loadApiKeys();
-    }
+    };
+    initData();
 
     // --- 4. НАВИГАЦИЯ ---
     const lastTab = localStorage.getItem('sellion_tab') || 'tab-main';
@@ -2517,50 +2775,44 @@ document.addEventListener("DOMContentLoaded", async () => {
         showTab(lastTab);
     }
 
-    // --- 5. ФОРМАТИРОВАНИЕ И СЧЕТЧИКИ ---
+    // --- 5. ФОРМАТИРОВАНИЕ И СЧЕТЧИКИ (Оптимизированная функция) ---
     const runFormatting = () => {
         // Форматируем даты
         document.querySelectorAll('.js-date-format').forEach(el => {
             const val = el.innerText.trim();
-            if (val && val !== '---' && (val.includes('T') || val.includes('-'))) {
-                el.innerText = formatOrderDate(val);
+            if (val && val !== '---' && val !== '' && (val.includes('T') || val.includes('-'))) {
+                if (typeof formatOrderDate === 'function') {
+                    el.innerText = formatOrderDate(val);
+                }
             }
         });
 
-        // Переводим причины возвратов
-        document.querySelectorAll('.js-reason-translate').forEach(el => {
-            if (el && el.innerText.trim()) {
-                el.innerText = translateReason(el.innerText);
-            }
-        });
-
-        // Статусы возвратов (Исправлено: защита от TypeError)
+        // Переводим статусы заказов (ПРОВЕРЕНО и т.д.)
         document.querySelectorAll('.js-status-translate').forEach(el => {
-            if (!el) return;
+            if (!el || el.children.length > 0) return; // Пропускаем, если уже есть бадж
             const rawStatus = el.innerText.trim();
-
-            // Если пусто или уже есть бадж — пропускаем
-            if (!rawStatus || rawStatus === "" || el.querySelector('.badge')) return;
+            if (!rawStatus) return;
 
             if (typeof translateReturnStatus === 'function') {
                 const statusInfo = translateReturnStatus(rawStatus);
-                if (statusInfo && statusInfo.text) {
-                    // Безопасное обновление через innerHTML
+                if (statusInfo) {
                     el.innerHTML = `<span class="badge ${statusInfo.class || 'bg-secondary'}">${statusInfo.text}</span>`;
                 }
             }
         });
 
-        // --- ОБНОВЛЕНИЕ СЧЕТЧИКОВ ВО ВКЛАДКЕ ОТЧЕТЫ ---
-        const verifiedOrders = Array.from(document.querySelectorAll('#orders-table-body tr')).filter(tr => {
-            const text = tr.innerText;
-            return text.includes('ПРОВЕРЕНО') || text.includes('Счет №');
-        }).length;
+        // --- ОБНОВЛЕНИЕ СЧЕТЧИКОВ (ИНТЕЛЛЕКТУАЛЬНЫЙ ПОДСЧЕТ) ---
+        const getTableCount = (bodyId, searchTerms) => {
+            const body = document.getElementById(bodyId);
+            if (!body) return 0;
+            return Array.from(body.querySelectorAll('tr')).filter(tr => {
+                const text = tr.innerText.toUpperCase();
+                return searchTerms.some(term => text.includes(term.toUpperCase()));
+            }).length;
+        };
 
-        const processedReturns = Array.from(document.querySelectorAll('#returns-table-body tr')).filter(tr => {
-            const text = tr.innerText;
-            return text.includes('Проведено') || text.includes('COMPLETED') || text.includes('ПРОВЕДЕНО');
-        }).length;
+        const verifiedOrders = getTableCount('orders-table-body', ['ПРОВЕРЕНО', 'Счет №', 'INVOICED']);
+        const processedReturns = getTableCount('returns-table-body', ['Проведено', 'CONFIRMED', 'ПРОВЕДЕНО']);
 
         const updateEl = (id, val, suffix = "") => {
             const el = document.getElementById(id);
@@ -2573,31 +2825,36 @@ document.addEventListener("DOMContentLoaded", async () => {
         updateEl('btn-count-returns', processedReturns);
     };
 
-    // Запуск при загрузке
+    // Запуск первичного форматирования
     runFormatting();
 
-    // --- 6. ГЛОБАЛЬНЫЕ СОБЫТИЯ ---
+    // --- 6. ГЛОБАЛЬНЫЙ ДЕЛЕГАТ СОБЫТИЙ (Оптимизация кликов) ---
     document.body.addEventListener('click', function(e) {
-        // Логика пересчета при переходе в отчеты
-        if (e.target.id === 'btn-reports' || e.target.closest('#btn-reports')) {
-            setTimeout(runFormatting, 50); // Небольшая задержка для рендеринга
+        // Логика перехода в отчеты
+        if (e.target.closest('#btn-reports')) {
+            // Используем requestAnimationFrame для запуска после отрисовки
+            requestAnimationFrame(() => setTimeout(runFormatting, 100));
         }
 
-        const header = e.target.closest('.js-category-toggle');
-        if (!header) return;
+        // Логика аккордеона категорий (Склад)
+        const categoryHeader = e.target.closest('.js-category-toggle');
+        if (categoryHeader) {
+            const targetClass = categoryHeader.getAttribute('data-target');
+            const rows = document.getElementsByClassName(targetClass);
+            const icon = categoryHeader.querySelector('.toggle-icon');
 
-        const targetClass = header.getAttribute('data-target');
-        const rows = document.getElementsByClassName(targetClass);
-        const icon = header.querySelector('.toggle-icon');
-
-        if (rows.length > 0) {
-            const isHidden = rows[0].style.display === "none";
-            for (let i = 0; i < rows.length; i++) {
-                rows[i].style.display = isHidden ? "table-row" : "none";
+            if (rows.length > 0) {
+                const isHidden = rows[0].style.display === "none";
+                for (let row of rows) {
+                    row.style.display = isHidden ? "table-row" : "none";
+                }
+                if (icon) {
+                    icon.style.transform = isHidden ? "rotate(0deg)" : "rotate(-90deg)";
+                    icon.innerText = isHidden ? "▼" : "▶";
+                }
             }
-            if (icon) icon.innerText = isHidden ? "▼" : "▶";
         }
     });
 
-    console.log("Sellion ERP 2026: Система готова.");
+    console.log("✅ Sellion ERP 2026: Система полностью готова к работе.");
 });

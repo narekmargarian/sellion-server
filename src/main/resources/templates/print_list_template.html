@@ -36,7 +36,8 @@
         <td class="col-id" th:text="${stat.index + 1}">1</td> <!-- Выводим порядковый номер -->
 
         <!-- Универсальный вывод даты -->
-        <td th:text="${op.createdAt != null ? #strings.replace(#strings.substring(op.createdAt, 0, 16), 'T', ' ') : '---'}"></td>
+        <td th:text="${op.createdAt != null ? #temporals.format(op.createdAt, 'dd.MM.yyyy HH:mm') : '---'}"></td>
+
 
         <td th:text="${op.shopName}" style="font-weight: bold;"></td>
 

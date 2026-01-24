@@ -69,6 +69,8 @@ public class Order {
     private String androidId;
     private String carNumber;
     private BigDecimal purchaseCost = BigDecimal.ZERO; // Вместо Double
+    @Enumerated(EnumType.STRING)
+    private OrderType type = OrderType.SALE;
 
 
     @PrePersist

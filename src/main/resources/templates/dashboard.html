@@ -11,6 +11,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com" rel="stylesheet">
 
+    <meta name="_csrf" th:content="${_csrf.token}"/>
+    <meta name="_csrf_header" th:content="${_csrf.headerName}"/>
 
     <link rel="stylesheet" th:href="@{/css/style.css}">
 </head>
@@ -104,8 +106,9 @@
                                 th:selected="${m == selectedOrderManager}"></option>
                     </select>
                     <button type="submit" class="btn-primary" title="Обновить">⟳</button>
-                    <button type="button" class="btn-primary" onclick="printOrderList()" title="Печать списка">⎙
-                    </button>
+
+                    <!-- ИСПРАВЛЕНО: Кнопка теперь вызывает функцию пакетной печати выбранных чекбоксов -->
+                    <button type="button" class="btn-primary" onclick="printSelectedOperations('order')" title="Печать выбранных">⎙</button>
                 </form>
                 <button class="btn-primary" onclick="openCreateOrderModal()" title="Новый заказ">+</button>
             </div>
@@ -114,11 +117,16 @@
                 <table class="table">
                     <thead>
                     <tr>
+                        <!-- ДОБАВЛЕНО: Выбор всех -->
+                        <th style="width: 40px;">
+                            <input type="checkbox" onclick="toggleSelectAll('order-print-check', this)" style="cursor:pointer;">
+                        </th>
                         <th>Дата заказа</th>
                         <th>Менеджер</th>
                         <th>Магазин</th>
                         <th>Сумма</th>
-                        <th>Дата доставки</th>
+                        <th>Доставка</th>
+                        <th>Авто</th> <!-- ДОБАВЛЕНО: Номер авто -->
                         <th>Статус</th>
                         <th>Действие</th>
                     </tr>
@@ -129,6 +137,11 @@
                         onclick="openOrderDetails(this.getAttribute('data-id'))"
                         style="cursor:pointer;">
 
+                        <!-- ДОБАВЛЕНО: Checkbox выбора -->
+                        <td onclick="event.stopPropagation()">
+                            <input type="checkbox" class="order-print-check" th:value="${o.id}" style="cursor:pointer;">
+                        </td>
+
                         <td class="js-date-format" th:text="${o.createdAt}"></td>
                         <td th:text="${o.managerId}" style="font-weight:600; color:var(--accent);"></td>
                         <td th:text="${o.shopName}" style="font-weight:700;"></td>
@@ -136,6 +149,9 @@
                             th:text="${o.totalAmount != null ? #numbers.formatInteger(o.totalAmount, 1, 'WHITESPACE') + ' ֏' : '0 ֏'}"></td>
 
                         <td class="js-date-format" th:text="${o.deliveryDate}"></td>
+
+                        <!-- ДОБАВЛЕНО: Номер автомобиля -->
+                        <td><b th:text="${o.carNumber ?: '---'}" style="color: #64748b;"></b></td>
 
                         <td>
                     <span th:class="|badge ${o.invoiceId != null ? 'bg-success' : (o.status.name() == 'RESERVED' ? 'bg-info' : 'bg-primary')}|"
@@ -148,7 +164,6 @@
 
                         <td onclick="event.stopPropagation()">
                             <div style="display: flex; gap: 5px;">
-                                <!-- Если счет НЕ выставлен: кнопки Счет и Отмена (полное удаление) -->
                                 <th:block th:if="${o.invoiceId == null}">
                                     <form th:action="@{'/admin/invoices/create-from-order/' + ${o.id}}" method="post">
                                         <button type="submit" class="btn-primary"
@@ -157,13 +172,11 @@
                                         </button>
                                     </form>
                                     <button type="button" class="btn-primary"
-                                            th:onclick="'showConfirmModal(\'Удаление\', \'Полностью удалить заказ и вернуть товар на склад?\', () => cancelOrder(' + ${o.id} + '))'"
+                                            th:onclick="'showConfirmModal(\'Удаление\', \'Полностью удалить заказ?\', () => cancelOrder(' + ${o.id} + '))'"
                                             style="padding:5px 10px; font-size:11px; background:#ef4444;">
                                         Отмена
                                     </button>
                                 </th:block>
-
-                                <!-- Если счет выставлен: только номер счета -->
                                 <span th:if="${o.invoiceId != null}" class="badge bg-light text-dark"
                                       style="border:1px solid #ccc; padding: 7px;">Счет №[[${o.invoiceId}]]</span>
                             </div>
@@ -173,21 +186,20 @@
                 </table>
             </div>
 
-            <!-- ИСПРАВЛЕНО: Блок переключения страниц -->
             <div class="pagination-wrapper" th:if="${totalPages > 1}"
                  style="margin-top: 20px; display: flex; gap: 10px; justify-content: center;">
                 <a th:href="@{/admin(activeTab='tab-orders', page=${currentPage - 1}, orderStartDate=${orderStartDate}, orderEndDate=${orderEndDate})}"
                    th:if="${currentPage > 0}" class="btn-ghost">← Назад</a>
 
-                  <span style="align-self: center; font-weight: 700;">
-                   Страница <span th:text="${currentPage + 1}"></span> из <span th:text="${totalPages}"></span>
-                     </span>
+                <span style="align-self: center; font-weight: 700;">
+           Страница <span th:text="${currentPage + 1}"></span> из <span th:text="${totalPages}"></span>
+             </span>
 
-                     <a th:href="@{/admin(activeTab='tab-orders', page=${currentPage + 1}, orderStartDate=${orderStartDate}, orderEndDate=${orderEndDate})}"
+                <a th:href="@{/admin(activeTab='tab-orders', page=${currentPage + 1}, orderStartDate=${orderStartDate}, orderEndDate=${orderEndDate})}"
                    th:if="${currentPage < totalPages - 1}" class="btn-ghost">Вперед →</a>
             </div>
-
         </div>
+
 
 
         <div id="tab-invoices" class="tab-pane">
@@ -208,20 +220,29 @@
                     </span>
                 </div>
 
-                <div class="filter-bar" style="margin-top:15px;">
-                    <input type="text" id="search-invoices"
-                           onkeyup="filterTable('search-invoices', 'invoices-table-body')"
-                           placeholder="Поиск по счету или магазину..." class="form-control w-25">
+                <div class="filter-bar">
+                    <input type="text" id="search-invoices" onkeyup="filterTable('search-invoices', 'invoices-table-body')" placeholder="Поиск..." class="form-control" style="width: 150px;">
 
-                    <select id="filter-invoice-status"
-                            onchange="filterTable('filter-invoice-status', 'invoices-table-body')"
-                            class="form-select w-25">
+                    <select id="filter-invoice-manager" class="form-select" style="width: 150px;" onchange="filterInvoices()">
+                        <option value="">Все менеджеры</option>
+                        <option th:each="m : ${managers}" th:value="${m}" th:text="${m}"></option>
+                    </select>
+
+                    <select id="filter-invoice-status" class="form-select" style="width: 150px;" onchange="filterInvoices()">
                         <option value="">Все статусы</option>
                         <option value="Оплачен">Оплачен</option>
                         <option value="Частично">Частично</option>
                         <option value="Не Оплачен">Не Оплачен</option>
                     </select>
+
+                    <div class="d-flex gap-1">
+                        <input type="date" id="inv-date-start" class="form-control" style="width: 130px;">
+                        <input type="date" id="inv-date-end" class="form-control" style="width: 130px;">
+                    </div>
+
+                    <button class="btn-primary" onclick="printManagerDebts()" style="background: #1e293b;">⎙ Лист долгов</button>
                 </div>
+
             </div>
             <div class="table-container">
                 <table class="table">
@@ -278,8 +299,6 @@
 
         <!-- ВКЛАДКА ВОЗВРАТЫ -->
 
-
-        <!-- ВКЛАДКА ВОЗВРАТЫ (ИСПРАВЛЕННАЯ) -->
         <div id="tab-returns" class="tab-pane">
 
             <div class="summary-card" style="background: #fff1f2; border-color: #fecdd3;">
@@ -313,8 +332,9 @@
                     </select>
 
                     <button type="submit" class="btn-primary" title="Обновить">⟳</button>
-                    <button type="button" class="btn-primary" onclick="printReturnList()" title="Печать списка">🖨️
-                    </button>
+
+                    <!-- ИСПРАВЛЕНО: Теперь печатает выбранные через Checkbox -->
+                    <button type="button" class="btn-primary" onclick="printSelectedOperations('return')" title="Печать выбранных">🖨️</button>
                 </form>
 
                 <button class="btn-primary" onclick="openCreateReturnModal()" title="Новый возврат">+</button>
@@ -324,9 +344,14 @@
                 <table class="table">
                     <thead>
                     <tr>
+                        <!-- ДОБАВЛЕНО: Чекбокс выбора всех -->
+                        <th style="width: 40px;">
+                            <input type="checkbox" onclick="toggleSelectAll('return-print-check', this)" style="cursor:pointer;">
+                        </th>
                         <th>Дата</th>
                         <th>Менеджер</th>
                         <th>Магазин</th>
+                        <th>Авто</th> <!-- ДОБАВЛЕНО: Номер авто -->
                         <th>Причина</th>
                         <th>Сумма</th>
                         <th>Статус</th>
@@ -338,16 +363,22 @@
                         onclick="openReturnDetails(this.getAttribute('data-id'))"
                         style="cursor:pointer;">
 
+                        <!-- ДОБАВЛЕНО: Чекбокс выбора строки -->
+                        <td onclick="event.stopPropagation()">
+                            <input type="checkbox" class="return-print-check" th:value="${r.id}" style="cursor:pointer;">
+                        </td>
+
                         <td class="js-date-format" th:text="${r.createdAt}"></td>
                         <td th:text="${r.managerId}"></td>
                         <td th:text="${r.shopName}"></td>
 
-                        <!-- ИСПРАВЛЕННЫЙ БЛОК ПРИЧИНЫ -->
+                        <!-- ДОБАВЛЕНО: Вывод номера авто -->
+                        <td><b th:text="${r.carNumber ?: '---'}" style="color: #64748b;"></b></td>
+
                         <td th:with="rName=${r.returnReason.name()}, isWarehouse=${rName == 'WAREHOUSE' or #strings.contains(rName, 'CORRECTION')}"
                             th:style="${isWarehouse} ? 'color: #059669; font-weight: 800;' : 'color: #dc2626; font-weight: 500;'">
 
                             <span th:text="${isWarehouse ? '🔄 ' : '🗑️ '}"></span>
-                            <!-- Выводим displayName напрямую из Java Enum -->
                             <span th:text="${r.returnReason.displayName}"></span>
                         </td>
 
@@ -362,6 +393,7 @@
                 </table>
             </div>
         </div>
+
 
 
         <!-- ВКЛАДКА КЛИЕНТЫ -->
@@ -413,6 +445,8 @@
                 <input type="text" id="search-products" onkeyup="filterTable('search-products', 'products-table-body')"
                        placeholder="Поиск по складу..." class="form-control w-25">
                 <button class="btn-primary" onclick="openModal('modal-product-create-new')">+ Новый товар</button>
+                <button class="btn-primary" style="background: #64748b;" onclick="openWriteOffModal()">🗑 Списать товар</button>
+
             </div>
 
             <div class="table-container">
@@ -424,6 +458,7 @@
                         <th>Остаток</th>
                         <th>Упак.</th>
                         <th>Штрих-код</th>
+                        <th>Срок годности</th>
                     </tr>
                     </thead>
 
@@ -478,6 +513,9 @@
                             <td class="text-muted" style="font-family: monospace; font-size: 12px;"
                                 th:text="${p.barcode ?: '---'}">
                             </td>
+
+                            <td th:class="${p.expiryDate != null and p.expiryDate.isBefore(#temporals.createToday().plusDays(30))} ? 'text-danger fw-bold' : ''"
+                                th:text="${p.expiryDate != null ? #temporals.format(p.expiryDate, 'dd.MM.yyyy') : '---'}"></td>
                         </tr>
                     </th:block>
                     </tbody>
@@ -577,34 +615,68 @@
         </div>
 
 
-        <!-------------------------------------->
+
 
         <div id="tab-delivery" class="tab-pane">
-            <div class="summary-card" style="background: #eff6ff;">
-                <div class="summary-item"><small>Активных маршрутов:</small> <span th:text="${managers.size()}">0</span>
+            <div class="summary-card" style="background: #eff6ff; border-color: #bee3f8;">
+                <div class="summary-item">
+                    <small>Заказов к отгрузке:</small>
+                    <!-- Считаем только те заказы, по которым уже выставлен счет (invoiceId != null) -->
+                    <span th:text="${invoices != null ? invoices.size() : 0}">0</span>
                 </div>
-                <div class="summary-item"><small>Дата:</small> <span
-                        th:text="${#temporals.format(#temporals.createNow(), 'dd MMMM yyyy')}"></span></div>
+                <div class="summary-item">
+                    <small>Дата:</small>
+                    <span th:text="${#temporals.format(#temporals.createNow(), 'dd.MM.yyyy')}"></span>
+                </div>
             </div>
 
-            <div class="logistics-bar" style="margin-top: 20px;">
-                <label>Выберите водителя/менеджера для печати листа:</label>
+            <div class="logistics-bar" style="margin-top: 25px; background: #fff; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0;">
+                <h5 style="font-weight: 800; margin-bottom: 15px; color: #1e293b;">🚛 Формирование маршрутного листа</h5>
 
-                <select id="route-manager-select" class="form-select form-select-sm border-0 bg-light"
-                        style="max-width: 200px;">
-                    <option th:each="m : ${managers}" th:value="${m}" th:text="${m}"
-                            th:selected="${m == selectedOrderManager}"></option>
-                </select>
+                <div class="d-flex flex-wrap gap-3 align-items-end">
+                    <div style="flex: 1; min-width: 200px;">
+                        <label style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase;">Водитель / Менеджер</label>
+                        <select id="route-manager-select" class="form-select" style="margin-top: 5px;">
+                            <option th:each="m : ${managers}" th:value="${m}" th:text="${m}"
+                                    th:selected="${m == selectedOrderManager}"></option>
+                        </select>
+                    </div>
 
+                    <div style="flex: 1; min-width: 150px;">
+                        <label style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase;">Дата доставки</label>
+                        <input type="date" id="route-date-select" class="form-control" style="margin-top: 5px;"
+                               th:value="${#temporals.format(#temporals.createNow(), 'yyyy-MM-dd')}">
+                    </div>
 
-                <input type="date" id="route-date-select" class="form-control form-select-sm border-0 bg-light"
-                       style="max-width: 150px;"
-                       th:value="${#temporals.format(#temporals.createNow(), 'yyyy-MM-dd')}">
-                <button class="btn-primary btn-sm" style="height: 32px;" onclick="printRouteSheet()">Печать маршрута
-                </button>
+                    <div class="d-flex gap-2">
+                        <!-- Стандартный маршрутный лист (список магазинов) -->
+                        <button class="btn-primary" style="height: 40px; background: #0369a1;" onclick="printRouteSheet()" title="Список адресов и сумм">
+                            📄 Маршрутный лист
+                        </button>
+                    </div>
+                </div>
+
+                <hr style="margin: 25px 0; border-color: #e2e8f0;">
+
+                <h5 style="font-weight: 800; margin-bottom: 15px; color: #1e293b;">📦 Массовая печать документов (Компактно)</h5>
+                <div class="d-flex gap-2">
+                    <!-- Печать всех НАКЛАДНЫХ этого маршрута в один поток -->
+                    <button class="btn-primary" style="background: #10b981; flex: 1;" onclick="printCompactOrders()">
+                        📑 Печать всех Накладных
+                    </button>
+
+                    <!-- Печать всех ВОЗВРАТОВ этого маршрута в один поток -->
+                    <button class="btn-primary" style="background: #ef4444; flex: 1;" onclick="printCompactReturns()">
+                        🔄 Печать всех Возвратов
+                    </button>
+                </div>
+                <p style="font-size: 11px; color: #94a3b8; margin-top: 10px;">
+                    *Функция печатает несколько документов на одном листе, разделяя их по контрагентам.
+                </p>
             </div>
-
         </div>
+
+
 
         <div id="tab-imports" class="tab-pane">
             <div class="glass-card" style="max-width: 600px; margin: 20px auto; text-align: center; padding: 40px;">
@@ -820,10 +892,14 @@
                                th:value="${@companySettings.getSetting('COMPANY_INN', '01234567')}">
                     </div>
                     <div class="col-md-6">
-                        <label>Банковский счет (IBAN)</label>
-                        <input type="text" id="set-COMPANY_IBAN" class="form-control"
-                               th:value="${@companySettings.getSetting('COMPANY_IBAN', 'AM...')}">
+                        <label>Название банка</label>
+                        <input type="text" id="set-COMPANY_BANK_NAME" class="form-control" th:value="${@companySettings.getSetting('COMPANY_BANK_NAME', '---')}">
                     </div>
+                    <div class="col-md-6">
+                        <label>Номер счета (IBAN)</label>
+                        <input type="text" id="set-COMPANY_BANK_ACCOUNT" class="form-control" th:value="${@companySettings.getSetting('COMPANY_BANK_ACCOUNT', '---')}">
+                    </div>
+
                     <div class="col-12">
                         <label>Юридический адрес</label>
                         <input type="text" id="set-COMPANY_ADDRESS" class="form-control"
@@ -983,16 +1059,12 @@
                             style="background: none; border: none; font-size: 24px; cursor: pointer;">&times;
                     </button>
                 </div>
-                <!-- Используем тот же контейнер для информации, стили уже готовы -->
                 <div id="client-info">
-                    <!--                     style="display: grid; gap: 15px; background: #f8fafc; padding: 15px; border-radius: 10px; margin-top: 10px; flex-shrink: 0;"-->
 
                 </div>
 
 
-                <!-- Здесь можно добавить таблицу заказов клиента, если нужно. Пока оставим пусто -->
                 <div id="table-scroll-container-client" style="flex-grow: 1; overflow-y: auto; margin: 10px 0;">
-                    <!-- Таблица заказов клиента будет здесь -->
                 </div>
 
                 <div id="client-footer-actions"
@@ -1004,25 +1076,33 @@
                 </div>
             </div>
         </div>
+
+
         <div id="modal-client" class="modal">
             <div class="modal-content" style="width: 500px;">
                 <h2 style="margin-bottom:20px;">👤 Добавление нового клиента</h2>
                 <!-- Форма отправляет данные напрямую на Java-контроллер /admin/clients/create -->
                 <form th:action="@{/admin/clients/create}" method="post">
                     <div class="modal-info-row">
+
                         <div>
                             <label>Название магазина</label><input type="text" name="name" required
                                                                    placeholder="Например, ЗОВК Папазян">
                             <label>Владелец / ИП</label><input type="text" name="ownerName" placeholder="ФИО Владельца">
                             <label>ИНН</label><input type="text" name="inn" placeholder="ИНН">
+
+                            <label>Менеджер</label>
+                            <select name="managerId" id="new-client-manager-id">
+                                <!-- Этот список заполним через JS, т.к. данные динамические -->
+                            </select>
                         </div>
                     </div>
                     <div class="modal-info-row" style="margin-top:10px;">
                         <div>
                             <label>Телефон</label><input type="text" name="phone" placeholder="+374 XX XX XX">
                             <label>Адрес</label><input type="text" name="address" placeholder="Адрес доставки">
-                            <label>День маршрута</label><input type="text" name="routeDay"
-                                                               placeholder="Например, Вторник">
+                            <label>День маршрута</label><input type="text" name="routeDay" placeholder="Например, Вторник">
+
                         </div>
                     </div>
                     <div style="display: flex; gap: 10px; margin-top: 25px; justify-content: flex-end;">
@@ -1090,6 +1170,12 @@
                         <label>Название</label><input type="text" id="new-p-name" placeholder="Название товара">
                         <label>Цена (֏)</label><input type="number" id="new-p-price" placeholder="0">
                         <label>Категория</label><input type="text" id="new-p-cat" placeholder="Напитки, Еда...">
+                        <label>Ед. измерения</label>
+                        <select id="new-p-unit">
+                            <option value="шт">шт</option>
+                            <option value="кг">кг</option>
+                            <option value="кор">кор</option>
+                        </select>
                     </div>
                 </div>
                 <div class="modal-info-row" style="margin-top:10px;">
@@ -1097,6 +1183,8 @@
                         <label>Остаток</label><input type="number" id="new-p-qty" value="0">
                         <label>Штрих-код</label><input type="text" id="new-p-code" placeholder="000000">
                         <label>В коробке</label><input type="number" id="new-p-box" value="1">
+                        <label>Срок годности</label>
+                        <input type="date" id="new-p-expiry">
                     </div>
                 </div>
                 <div style="display: flex; gap: 10px; margin-top: 25px; justify-content: flex-end;">

@@ -73,13 +73,14 @@ public class MainWebController {
 
         // Расчет сумм по отфильтрованным заказам (Ваша логика)
         BigDecimal totalOrdersSum = filteredOrdersForStats.stream()
-                .filter(o -> o != null && o.getStatus() != OrderStatus.CANCELLED)
+                .filter(o -> o != null && o.getStatus() != OrderStatus.CANCELLED && o.getType() != OrderType.WRITE_OFF)
                 .map(o -> o.getTotalAmount() != null ? o.getTotalAmount() : BigDecimal.ZERO)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         BigDecimal rawSales = totalOrdersSum;
+
         BigDecimal rawPurchaseCost = filteredOrdersForStats.stream()
-                .filter(o -> o != null && o.getStatus() != OrderStatus.CANCELLED)
+                .filter(o -> o != null && o.getStatus() != OrderStatus.CANCELLED) // Себестоимость списаний учитываем в расходах
                 .map(o -> o.getTotalPurchaseCost() != null ? o.getTotalPurchaseCost() : BigDecimal.ZERO)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 

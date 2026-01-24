@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.Map;
 
 @Entity
@@ -28,6 +29,7 @@ public class Product {
     private Boolean isDeleted = false;  // Флаг мягкого удаления
     private String unit;
     private String hsnCode;
+    private LocalDate expiryDate;
 
 
 }

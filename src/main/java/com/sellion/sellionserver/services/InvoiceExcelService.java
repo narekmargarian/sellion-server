@@ -171,8 +171,8 @@ public class InvoiceExcelService {
         addRow(sheet, rowIdx++, "Անվանում:", seller.get("name"));
         addRow(sheet, rowIdx++, "ՀՎՀՀ:", seller.get("inn"));
         addRow(sheet, rowIdx++, "Իրավաբանական հասցե:", seller.get("address"));
-        addRow(sheet, rowIdx++, "Բանկի անվանում:", seller.get("bank"));
-        addRow(sheet, rowIdx++, "Հաշվեհամար:", seller.get("iban"));
+        addRow(sheet, rowIdx++, "Բանկի անվանում:", seller.get("bankName")); // Было "bank"
+        addRow(sheet, rowIdx++, "Հաշվեհամար:", seller.get("bankAccount"));
         return ++rowIdx;
     }
 }

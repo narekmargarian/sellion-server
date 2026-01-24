@@ -16,7 +16,10 @@ public class ClientWebController {
     private final ClientRepository clientRepository;
 
     @PostMapping("/create")
+    // Используем @ModelAttribute Client client для автоматического связывания полей
     public String createClient(@ModelAttribute Client client) {
+        // Здесь Spring Security автоматически заполнит поля объекта client
+        // если имена полей в HTML совпадают с именами в сущности Client
         clientRepository.save(client);
         return "redirect:/admin?activeTab=tab-clients";
     }
