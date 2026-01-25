@@ -293,7 +293,7 @@ async function openClientDetails(id) {
 
     document.getElementById('client-footer-actions').innerHTML = `
         <button class="btn-primary" style="background:#475569" onclick="printClientStatement(${client.id})">🖨 Печать Акта</button>
-        <button class="btn-primary" style="background:#64748b" onclick="openClientDetails(${client.id})">Изменить данные</button>
+        <button class="btn-primary" style="background:#64748b" onclick="enableClientEdit()">Изменить данные</button>
         <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-client-view')">Закрыть</button>
     `;
 
