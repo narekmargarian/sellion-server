@@ -63,5 +63,13 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
     boolean existsByAndroidId(String androidId);
     List<Order> findByManagerIdAndCreatedAtBetween(String managerId, LocalDateTime start, LocalDateTime end);
+
+    // В OrderRepository.java
+    @Query("SELECT SUM(o.totalAmount) FROM Order o WHERE o.createdAt BETWEEN :start AND :end AND o.status != 'CANCELLED' AND o.type = 'SALE'")
+    BigDecimal sumTotalSales(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+
+    @Query("SELECT SUM(o.totalPurchaseCost) FROM Order o WHERE o.createdAt BETWEEN :start AND :end AND o.status != 'CANCELLED'")
+    BigDecimal sumTotalCost(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+
 }
 

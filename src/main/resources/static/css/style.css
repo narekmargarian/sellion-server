@@ -129,6 +129,8 @@ body {
 .table button {
     padding: 6px 12px;
     font-size: 12px;
+    border: transparent;
+
 }
 
 .badge.bg-primary {
@@ -148,7 +150,7 @@ body {
 .summary-card {
     flex-shrink: 0; /* Не сжимается */
     background: #eff6ff;
-    padding: 15px;
+    padding: 10px;
     border-radius: 12px;
     display: flex;
     gap: 30px;
@@ -1111,4 +1113,27 @@ body {
     border-radius: 12px;
     /* Убраны border и box-shadow, чтобы не дублировать стиль карточек */
     margin-bottom: 10px;
+}
+.add-row-sticky {
+    background: #f8fafc;
+    position: sticky;
+    bottom: 0;
+    z-index: 10; /* Убедитесь, что он выше остальных строк */
+    border-top: 2px solid var(--border);
+}
+.qty-input-active {
+    width: 65px !important; /* Увеличили до 65px, чтобы влезало число 9999 */
+    padding: 6px !important; /* Чуть больше отступов для удобства нажатия */
+    text-align: center;
+    font-size: 13px !important; /* Оптимально для чтения */
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 6px !important; /* Скругленные углы в стиле 2026 */
+    background: #ffffff !important;
+    font-weight: 700 !important; /* Жирный шрифт для количества */
+    outline: none;
+}
+
+.qty-input-active:focus {
+    border-color: #6366f1 !important; /* Подсветка при нажатии */
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1);
 }

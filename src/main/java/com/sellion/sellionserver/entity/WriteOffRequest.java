@@ -6,6 +6,10 @@ import java.util.Map;
 
 @Data
 public class WriteOffRequest {
-    private String comment;
-    private Map<Long, Integer> items;
+    private Long productId;
+    private Integer quantity;
+    private String reason;
+    // Используем Boolean (объект), чтобы избежать ошибки при null,
+    // или принудительно ставим false в конструкторе
+    private Boolean isBroken = false;
 }

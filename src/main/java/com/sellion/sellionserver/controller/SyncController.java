@@ -41,7 +41,6 @@ public class SyncController {
     private static final DateTimeFormatter ANDROID_DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     @PostMapping("/orders/sync")
-    // УДАЛЕНО: @Transactional убран отсюда, так как каждый заказ должен быть отдельной транзакцией
     public ResponseEntity<ApiResponse<Map<String, Object>>> syncOrders(@RequestBody List<Order> orders) {
         if (orders == null || orders.isEmpty()) {
             return ResponseEntity.ok(ApiResponse.ok("Список пуст", Map.of("status", "empty")));
@@ -52,7 +51,7 @@ public class SyncController {
         int errorCount = 0;
         List<String> errorMessages = new ArrayList<>();
 
-        // ОПТИМИЗАЦИЯ: Предварительная загрузка цен (оставляем, это отлично для скорости)
+        // ОПТИМИЗАЦИЯ 2026: Предварительная загрузка цен (Ваша логика сохранена)
         Set<Long> allProductIds = orders.stream()
                 .filter(o -> o.getItems() != null)
                 .flatMap(o -> o.getItems().keySet().stream())
@@ -61,19 +60,20 @@ public class SyncController {
         Map<Long, BigDecimal> purchasePrices = productRepository.findAllById(allProductIds).stream()
                 .collect(Collectors.toMap(
                         Product::getId,
-                        p -> p.getPurchasePrice() != null ? p.getPurchasePrice() : BigDecimal.ZERO
+                        p -> p.getPurchasePrice() != null ? p.getPurchasePrice() : BigDecimal.ZERO,
+                        (existing, replacement) -> existing
                 ));
 
         for (Order order : orders) {
             try {
-                // 1. Валидация входных данных (Базовая)
+                // 1. Валидация входных данных (Ваша логика)
                 if (order.getShopName() == null || order.getItems() == null || order.getItems().isEmpty()) {
                     errorCount++;
                     errorMessages.add("Заказ без данных магазина или товаров (AndroidID: " + order.getAndroidId() + ")");
                     continue;
                 }
 
-                // 2. Проверка на дубликат (Безопасно выносим за транзакцию записи)
+                // 2. Проверка на дубликат (Ваша логика)
                 if (order.getAndroidId() != null && orderRepository.existsByAndroidId(order.getAndroidId())) {
                     duplicateCount++;
                     continue;
@@ -87,12 +87,12 @@ public class SyncController {
                     BigDecimal price = purchasePrices.getOrDefault(item.getKey(), BigDecimal.ZERO);
                     totalOrderPurchaseCost = totalOrderPurchaseCost.add(price.multiply(BigDecimal.valueOf(item.getValue())));
                 }
-                // ИСПРАВЛЕНО: Убедитесь, что в Order.java тип BigDecimal
-                order.setPurchaseCost(totalOrderPurchaseCost.setScale(2, RoundingMode.HALF_UP));
 
-                // 4. ГЛАВНОЕ: Вызов сервиса.
-                // Метод processOrderFromAndroid внутри помечен как @Transactional,
-                // поэтому каждый заказ зафиксируется или откатится ИНДИВИДУАЛЬНО.
+                // Используем BigDecimal для точности (Ваше исправление)
+                order.setPurchaseCost(totalOrderPurchaseCost.setScale(2, RoundingMode.HALF_UP));
+                order.setTotalPurchaseCost(totalOrderPurchaseCost.setScale(2, RoundingMode.HALF_UP));
+
+                // 4. ГЛАВНОЕ: Вызов сервиса (Атомарно)
                 orderSyncService.processOrderFromAndroid(order);
                 savedCount++;
 
@@ -104,7 +104,7 @@ public class SyncController {
             }
         }
 
-        // 5. Уведомление через WebSocket (Используем ApiResponse стиль)
+        // 5. Уведомление через WebSocket
         if (savedCount > 0) {
             Map<String, Object> wsPayload = Map.of(
                     "message", "Новые заказы: " + savedCount,
@@ -114,7 +114,7 @@ public class SyncController {
             messagingTemplate.convertAndSend("/topic/new-order", (Object) wsPayload);
         }
 
-        // 6. Итоговый ответ в едином стандарте ApiResponse
+        // 6. Итоговый ответ
         Map<String, Object> resultData = Map.of(
                 "saved", savedCount,
                 "duplicates", duplicateCount,
@@ -123,9 +123,9 @@ public class SyncController {
         );
 
         String finalStatus = errorCount == 0 ? "success" : (savedCount > 0 ? "partial_success" : "failed");
-
         return ResponseEntity.ok(ApiResponse.ok("Обработка завершена. Статус: " + finalStatus, resultData));
     }
+
 
 
     @PostMapping("/returns/sync")
@@ -135,19 +135,19 @@ public class SyncController {
         int saved = 0;
         for (ReturnOrder ret : returns) {
             try {
-                // Проверка на дубликат возврата
+                // Проверка на дубликат возврата (Ваша логика)
                 if (ret.getAndroidId() != null && returnOrderRepository.existsByAndroidId(ret.getAndroidId())) {
                     continue;
                 }
 
                 ret.setId(null);
-                ret.setStatus(ReturnStatus.DRAFT); // Ставим SENT, так как пришло с телефона
+                ret.setStatus(ReturnStatus.DRAFT);
 
                 if (ret.getCreatedAt() == null) {
                     ret.setCreatedAt(LocalDateTime.now());
                 }
 
-                // Расчет суммы возврата по прайс-листу (безопасность)
+                // Расчет суммы возврата (Ваша логика с исправлением BigDecimal)
                 BigDecimal total = BigDecimal.ZERO;
                 if (ret.getItems() != null) {
                     for (Map.Entry<Long, Integer> entry : ret.getItems().entrySet()) {
@@ -156,7 +156,7 @@ public class SyncController {
                         total = total.add(price.multiply(BigDecimal.valueOf(entry.getValue())));
                     }
                 }
-                ret.setTotalAmount(total.setScale(0, RoundingMode.HALF_UP));
+                ret.setTotalAmount(total.setScale(2, RoundingMode.HALF_UP));
 
                 returnOrderRepository.save(ret);
                 saved++;
@@ -181,7 +181,6 @@ public class SyncController {
         return ResponseEntity.ok(returnOrderRepository.findByManagerIdAndCreatedAtBetween(managerId, start, end));
     }
 
-    // ИСПРАВЛЕНО: Возвращаем BigDecimal вместо double
     private BigDecimal calculatePurchaseCost(Map<Long, Integer> items) {
         if (items == null || items.isEmpty()) return BigDecimal.ZERO;
 
@@ -198,7 +197,6 @@ public class SyncController {
         return totalCost.setScale(2, RoundingMode.HALF_UP);
     }
 
-
     private LocalDateTime parseAndroidDate(String dateStr) {
         if (dateStr == null || dateStr.isEmpty()) return LocalDateTime.now();
         try {
@@ -210,3 +208,5 @@ public class SyncController {
         }
     }
 }
+
+

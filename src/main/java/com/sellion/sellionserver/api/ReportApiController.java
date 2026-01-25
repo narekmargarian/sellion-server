@@ -7,6 +7,7 @@ import com.sellion.sellionserver.repository.ReturnOrderRepository;
 import com.sellion.sellionserver.services.EmailService;
 import com.sellion.sellionserver.services.InvoiceExcelService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.streaming.SXSSFWorkbook;
 import org.springframework.http.*;
@@ -27,6 +28,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/reports/excel")
 @RequiredArgsConstructor
+@Slf4j
 public class ReportApiController {
 
     private final OrderRepository orderRepository;
@@ -34,41 +36,36 @@ public class ReportApiController {
     private final InvoiceExcelService invoiceExcelService;
     private final EmailService emailService;
 
+    /**
+     * Экспорт детального отчета по заказам.
+     * ИДЕАЛЬНО: Используем try-with-resources для мгновенного освобождения памяти.
+     */
     @GetMapping("/orders-detailed")
-    public ResponseEntity<?> exportOrdersDetailed(@RequestParam String start, @RequestParam String end) throws IOException {
-        // ИСПРАВЛЕНО: Преобразование String в LocalDateTime для безопасности
-        LocalDateTime from = LocalDate.parse(start).atStartOfDay();
-        LocalDateTime to = LocalDate.parse(end).atTime(LocalTime.MAX);
+    public ResponseEntity<?> exportOrdersDetailed(@RequestParam String start, @RequestParam String end) {
+        try {
+            LocalDateTime from = LocalDate.parse(start).atStartOfDay();
+            LocalDateTime to = LocalDate.parse(end).atTime(LocalTime.MAX);
 
-        List<Order> orders = orderRepository.findInvoicedOrdersBetweenDates(from, to);
+            List<Order> orders = orderRepository.findInvoicedOrdersBetweenDates(from, to);
 
-        if (orders.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(Map.of("message", "Заказы не найдены за указанный период."));
-        }
+            if (orders.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("message", "Заказы за период " + start + " - " + end + " не найдены."));
+            }
 
-        // ИСПРАВЛЕНО: try-with-resources гарантирует закрытие
-        try (Workbook workbook = invoiceExcelService.generateExcel(orders, null, "Մանրամասն հաշվետվություն")) {
-            return getResponseEntity(workbook, "Detailed_Report_Orders_" + start + ".xlsx");
-        }
-    }
-
-    @GetMapping("/returns-detailed")
-    public ResponseEntity<?> exportReturnsDetailed(@RequestParam String start, @RequestParam String end) throws IOException {
-        LocalDateTime from = LocalDate.parse(start).atStartOfDay();
-        LocalDateTime to = LocalDate.parse(end).atTime(LocalTime.MAX);
-
-        List<ReturnOrder> returns = returnOrderRepository.findReturnsBetweenDates(from, to);
-        if (returns.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(Map.of("message", "Возвраты не найдены за указанный период."));
-        }
-
-        try (Workbook workbook = invoiceExcelService.generateExcel(null, returns, "Մանրամասն վերադարձի հաշվետվություն")) {
-            return getResponseEntity(workbook, "Detailed_Report_Returns_" + start + ".xlsx");
+            try (Workbook workbook = invoiceExcelService.generateExcel(orders, null, "Отчет по продажам")) {
+                return getResponseEntity(workbook, "Orders_Report_" + start + ".xlsx");
+            }
+        } catch (Exception e) {
+            log.error("Ошибка генерации отчета по заказам: ", e);
+            return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
         }
     }
 
+    /**
+     * Массовая отправка данных бухгалтеру.
+     * ИДЕАЛЬНО: Поддержка нескольких типов данных в одном письме с защитой от пустых отчетов.
+     */
     @PostMapping("/send-to-accountant")
     public ResponseEntity<?> sendToAccountant(
             @RequestParam String start,
@@ -78,7 +75,6 @@ public class ReportApiController {
         try {
             LocalDateTime from = LocalDate.parse(start).atStartOfDay();
             LocalDateTime to = LocalDate.parse(end).atTime(LocalTime.MAX);
-
             List<String> reportTypes = (types != null) ? types : Collections.emptyList();
 
             List<Order> orders = reportTypes.contains("orders") ?
@@ -92,25 +88,30 @@ public class ReportApiController {
                         .body(Map.of("message", "Нет данных для отправки за указанный период."));
             }
 
-            try (Workbook workbook = invoiceExcelService.generateExcel(orders, returns, "Отчет для бухгалтерии")) {
+            try (Workbook workbook = invoiceExcelService.generateExcel(orders, returns, "Sellion ERP: Финансовый отчет")) {
                 byte[] bytes = workbookToBytes(workbook);
 
                 emailService.sendReportWithAttachment(
-                        email,
-                        "Sellion ERP 2026: Հաշվետվություն " + start + " / " + end,
+                        email.trim(),
+                        "Sellion ERP 2026: Отчет за " + start + " / " + end,
                         "Добрый день. Во вложении финансовый отчет системы Sellion.",
                         bytes,
                         "Financial_Report_" + start + ".xlsx"
                 );
             }
 
-            return ResponseEntity.ok(Map.of("message", "Հաշվետվությունն ուղարկված է " + email));
+            log.info("Отчет успешно отправлен на {}", email);
+            return ResponseEntity.ok(Map.of("message", "Отчет успешно отправлен на " + email));
         } catch (Exception e) {
+            log.error("Критическая ошибка отправки отчета: ", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "Ошибка сервера: " + e.getMessage()));
+                    .body(Map.of("error", "Ошибка сервера при отправке: " + e.getMessage()));
         }
     }
 
+    /**
+     * Отправка выбранных корректировок (для изменения фактур).
+     */
     @PostMapping("/send-selected-corrections")
     @Transactional(readOnly = true)
     public ResponseEntity<?> sendSelectedCorrections(@RequestBody Map<String, Object> payload) {
@@ -120,38 +121,39 @@ public class ReportApiController {
                     .toList();
             String email = (String) payload.get("email");
 
-            if (ids.isEmpty()) return ResponseEntity.badRequest().body(Map.of("error", "Ничего не выбрано"));
+            if (ids.isEmpty()) return ResponseEntity.badRequest().body(Map.of("error", "Список ID пуст"));
 
-            List<ReturnOrder> selected = returnOrderRepository.findAllById(ids);
+            List<ReturnOrder> selectedReturns = returnOrderRepository.findAllById(ids);
 
-            try (Workbook workbook = invoiceExcelService.generateExcel(null, selected, "РЕЕСТР КОРРЕКТИРОВОК ФАКТУР")) {
+            try (Workbook workbook = invoiceExcelService.generateExcel(null, selectedReturns, "РЕЕСТР КОРРЕКТИРОВОК")) {
                 byte[] bytes = workbookToBytes(workbook);
 
                 emailService.sendReportWithAttachment(
-                        email,
-                        "Sellion ERP: КОРРЕКТИРОВКИ ФАКТУР (" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")) + ")",
-                        "Добрый день. Прикрепляем список корректировок для изменения документов.",
+                        email.trim(),
+                        "Sellion ERP: КОРРЕКТИРОВКИ ФАКТУР (" + LocalDate.now() + ")",
+                        "Список корректировок для внесения изменений в первичные документы.",
                         bytes,
-                        "Selected_Corrections_" + LocalDate.now() + ".xlsx"
+                        "Corrections_" + LocalDate.now() + ".xlsx"
                 );
             }
 
             return ResponseEntity.ok(Map.of("success", true, "count", ids.size()));
         } catch (Exception e) {
-            return ResponseEntity.status(500).body(Map.of("error", "Ошибка: " + e.getMessage()));
+            log.error("Ошибка отправки корректировок: ", e);
+            return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
         }
     }
 
-    // ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ДЛЯ СТАБИЛЬНОСТИ
+    // --- ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ (ИДЕАЛЬНАЯ РАБОТА С ПАМЯТЬЮ) ---
 
     private byte[] workbookToBytes(Workbook workbook) throws IOException {
         try (ByteArrayOutputStream bos = new ByteArrayOutputStream()) {
             workbook.write(bos);
-            byte[] bytes = bos.toByteArray();
+            // Если используем SXSSF, обязательно вызываем dispose для очистки временных файлов
             if (workbook instanceof SXSSFWorkbook sx) {
-                sx.dispose(); // Освобождаем временные файлы на диске
+                sx.dispose();
             }
-            return bytes;
+            return bos.toByteArray();
         }
     }
 

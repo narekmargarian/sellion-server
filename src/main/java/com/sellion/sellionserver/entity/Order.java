@@ -44,7 +44,7 @@ public class Order {
     @Column(name = "payment_method", nullable = false) // База будет знать, что это String
     private PaymentMethod paymentMethod = PaymentMethod.CASH;
 
-    private boolean needsSeparateInvoice;
+    private Boolean needsSeparateInvoice=false;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)

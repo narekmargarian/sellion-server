@@ -7,6 +7,7 @@ import com.sellion.sellionserver.entity.ReturnOrder;
 import com.sellion.sellionserver.repository.ClientRepository;
 import com.sellion.sellionserver.repository.ProductRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -20,101 +21,128 @@ import java.math.RoundingMode;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class InvoiceExcelService {
 
     private final ProductRepository productRepository;
     private final ClientRepository clientRepository;
     private final CompanySettings companySettings;
-    private static final Logger log = LoggerFactory.getLogger(InvoiceExcelService.class);
 
-    public Workbook generateExcel(Order order) {
-        return generateExcel(List.of(order), null, "Հաշիվ №" + order.getId());
-    }
-
+    /**
+     * Основной метод генерации Excel.
+     * ИДЕАЛЬНО: Использует SXSSFWorkbook для экономии памяти (сброс строк на диск).
+     */
     public Workbook generateExcel(List<Order> orders, List<ReturnOrder> returns, String title) {
+        // Окно в 100 строк в памяти, остальное — во временных файлах
         SXSSFWorkbook workbook = new SXSSFWorkbook(100);
         Map<String, String> seller = companySettings.getSellerData();
-        fillSheetData(workbook, seller, orders, returns);
+
+        try {
+            fillSheetData(workbook, seller, orders, returns);
+        } catch (Exception e) {
+            log.error("Критическая ошибка при формировании Excel: ", e);
+            // Важно закрыть книгу даже при ошибке, чтобы удалить временные файлы
+            workbook.dispose();
+            throw e;
+        }
         return workbook;
     }
 
     private void fillSheetData(SXSSFWorkbook workbook, Map<String, String> seller, List<Order> orders, List<ReturnOrder> returns) {
+        // 1. Предварительная загрузка справочников (Batch load)
         Map<String, Client> clients = clientRepository.findAll().stream()
-                .collect(Collectors.toMap(Client::getName, Function.identity(), (existing, replacement) -> existing));
+                .collect(Collectors.toMap(Client::getName, Function.identity(), (e, r) -> e));
 
         Map<Long, Product> products = productRepository.findAll().stream()
-                .collect(Collectors.toMap(Product::getId, Function.identity(), (existing, replacement) -> existing));
+                .collect(Collectors.toMap(Product::getId, Function.identity(), (e, r) -> e));
 
-        // --- ЛОГИКА ПРОДАЖ ---
+        // --- 2. ЛОГИКА ПРОДАЖ ---
         if (orders != null && !orders.isEmpty()) {
             Map<String, List<Order>> ordersByShop = orders.stream()
                     .collect(Collectors.groupingBy(Order::getShopName));
 
             ordersByShop.forEach((shopName, shopOrders) -> {
-                List<Order> separate = shopOrders.stream().filter(Order::isNeedsSeparateInvoice).toList();
-                List<Order> combined = shopOrders.stream().filter(o -> !o.isNeedsSeparateInvoice()).toList();
+                // ИСПРАВЛЕНО: Используем getNeedsSeparateInvoice() и добавляем проверку на null (Boolean.TRUE.equals)
+                List<Order> separate = shopOrders.stream()
+                        .filter(o -> Boolean.TRUE.equals(o.getNeedsSeparateInvoice()))
+                        .toList();
 
+                List<Order> combined = shopOrders.stream()
+                        .filter(o -> !Boolean.TRUE.equals(o.getNeedsSeparateInvoice()))
+                        .toList();
+
+                // Рендерим сводную накладную (если есть заказы для объединения)
                 if (!combined.isEmpty()) {
                     Map<Long, Integer> mergedItems = new HashMap<>();
                     combined.forEach(o -> o.getItems().forEach((id, qty) -> mergedItems.merge(id, qty, Integer::sum)));
 
                     Order first = combined.get(0);
-                    String sheetName = createSafeSheetName("Վաճառք " + shopName);
+                    String sheetName = createSafeSheetName("Продажа " + shopName);
                     renderSheet(workbook, sheetName, shopName, clients.get(shopName), mergedItems, products, seller,
-                            "Объединенный", first.getManagerId(), first.getCarNumber());
+                            "Сводная накладная", first.getManagerId(), first.getCarNumber());
                 }
 
+                // Рендерим раздельные накладные
                 for (Order o : separate) {
-                    String sheetName = createSafeSheetName("Վաճառք " + shopName + " №" + o.getId());
+                    String sheetName = createSafeSheetName("Прод " + shopName + " #" + o.getId());
                     renderSheet(workbook, sheetName, shopName, clients.get(shopName), o.getItems(), products, seller,
-                            "Заказ №" + o.getId(), o.getManagerId(), o.getCarNumber());
+                            "Накладная №" + o.getId(), o.getManagerId(), o.getCarNumber());
                 }
             });
         }
 
-        // --- ЛОГИКА ВОЗВРАТОВ ---
+        // --- 3. ЛОГИКА ВОЗВРАТОВ ---
         if (returns != null && !returns.isEmpty()) {
             for (ReturnOrder r : returns) {
-                String sheetName = createSafeSheetName("Վերադարձ " + r.getShopName() + " №" + r.getId());
+                String sheetName = createSafeSheetName("Возврат " + r.getShopName() + " #" + r.getId());
                 renderSheet(workbook, sheetName, r.getShopName(), clients.get(r.getShopName()), r.getItems(), products, seller,
-                        "Возврат №" + r.getId(), r.getManagerId(), r.getCarNumber());
+                        "Акт возврата №" + r.getId(), r.getManagerId(), r.getCarNumber());
             }
         }
     }
 
-    private void renderSheet(Workbook workbook, String sheetName, String shopName, Client c,
+
+    private void renderSheet(SXSSFWorkbook workbook, String sheetName, String shopName, Client c,
                              Map<Long, Integer> items, Map<Long, Product> products,
                              Map<String, String> seller, String docInfo, String managerId, String carNumber) {
-        Sheet sheet = workbook.createSheet(sheetName);
+
+        // Защита от дублирования имен листов (Apache POI упадет при дубле)
+        String finalName = sheetName;
+        int count = 1;
+        while (workbook.getSheet(finalName) != null) {
+            finalName = sheetName + "_" + (count++);
+        }
+
+        Sheet sheet = workbook.createSheet(finalName);
         int rowIdx = 0;
 
+        // Реквизиты Продавца
         rowIdx = addSellerHeader(sheet, rowIdx, seller);
 
-        addRow(sheet, rowIdx++, "ԳՆՈՐԴԻ ՏՎՅԱԼՆԵՐ", "");
-        addRow(sheet, rowIdx++, "Անվանում:", shopName);
+        // Реквизиты Покупателя
+        addHeaderRow(sheet, rowIdx++, "ДАННЫЕ ПОКУПАТЕЛЯ", "");
+        addHeaderRow(sheet, rowIdx++, "Наименование:", shopName);
         if (c != null) {
-            addRow(sheet, rowIdx++, "ՀՎՀՀ:", c.getInn());
-            addRow(sheet, rowIdx++, "Հասցե:", c.getAddress());
+            addHeaderRow(sheet, rowIdx++, "ИНН (ՀՎՀՀ):", c.getInn());
+            addHeaderRow(sheet, rowIdx++, "Адрес:", c.getAddress());
         }
-        addRow(sheet, rowIdx++, "Փաստաթուղթ:", docInfo);
-
-        // Поля из ордера
-        addRow(sheet, rowIdx++, "Մենեջեր:", managerId != null ? managerId : "");
-        addRow(sheet, rowIdx++, "Ավտոմեքենայի համար:", carNumber != null ? carNumber : "");
+        addHeaderRow(sheet, rowIdx++, "Документ:", docInfo);
+        addHeaderRow(sheet, rowIdx++, "Менеджер / Авто:", (managerId != null ? managerId : "") + " / " + (carNumber != null ? carNumber : ""));
 
         rowIdx++;
-        fillItemsTable(sheet, rowIdx, items, products);
+        // Таблица товаров
+        rowIdx = fillItemsTable(sheet, rowIdx, items, products);
     }
 
     private int fillItemsTable(Sheet sheet, int rowIdx, Map<Long, Integer> items, Map<Long, Product> products) {
         Row header = sheet.createRow(rowIdx++);
-        String[] cols = {"Ապրանք", "Կոդ (ԱՏԳ)", "Միավոր", "Քանակ", "Գին", "Գումար"};
-
+        String[] cols = {"Товар", "Код (HSN)", "Ед.", "Кол-во", "Цена", "Сумма"};
         for (int i = 0; i < cols.length; i++) {
             header.createCell(i).setCellValue(cols[i]);
         }
@@ -126,56 +154,49 @@ public class InvoiceExcelService {
                 if (p == null) continue;
 
                 BigDecimal qty = BigDecimal.valueOf(item.getValue());
-                BigDecimal price = (p.getPrice() != null ? p.getPrice() : BigDecimal.ZERO);
+                BigDecimal price = Optional.ofNullable(p.getPrice()).orElse(BigDecimal.ZERO);
                 BigDecimal itemTotal = price.multiply(qty);
                 totalAmount = totalAmount.add(itemTotal);
 
-                writeProductRow(sheet.createRow(rowIdx++), p, item.getValue());
+                Row row = sheet.createRow(rowIdx++);
+                row.createCell(0).setCellValue(p.getName());
+                row.createCell(1).setCellValue(p.getHsnCode() != null ? p.getHsnCode() : "");
+                row.createCell(2).setCellValue(p.getUnit() != null ? p.getUnit() : "шт");
+                row.createCell(3).setCellValue(item.getValue());
+                row.createCell(4).setCellValue(price.setScale(2, RoundingMode.HALF_UP).doubleValue());
+                row.createCell(5).setCellValue(itemTotal.setScale(2, RoundingMode.HALF_UP).doubleValue());
             }
         }
 
         rowIdx++;
         Row totalRow = sheet.createRow(rowIdx++);
-        totalRow.createCell(4).setCellValue("Ընդհանուր:");
+        totalRow.createCell(4).setCellValue("ИТОГО:");
         totalRow.createCell(5).setCellValue(totalAmount.setScale(2, RoundingMode.HALF_UP).doubleValue());
 
         return rowIdx;
     }
 
-    private void writeProductRow(Row row, Product p, int qty) {
-        BigDecimal price = (p.getPrice() != null) ? p.getPrice() : BigDecimal.ZERO;
-        BigDecimal totalLine = price.multiply(BigDecimal.valueOf(qty));
-
-        int cellIdx = 0;
-        row.createCell(cellIdx++).setCellValue(p.getName());
-        row.createCell(cellIdx++).setCellValue(p.getHsnCode() != null ? p.getHsnCode() : "");
-        row.createCell(cellIdx++).setCellValue(p.getUnit() != null ? p.getUnit() : "հատ");
-        row.createCell(cellIdx++).setCellValue(qty);
-        row.createCell(cellIdx++).setCellValue(price.doubleValue());
-        row.createCell(cellIdx++).setCellValue(totalLine.doubleValue());
+    private int addSellerHeader(Sheet sheet, int rowIdx, Map<String, String> seller) {
+        addHeaderRow(sheet, rowIdx++, "ДАННЫЕ ПРОДАВЦА", "");
+        addHeaderRow(sheet, rowIdx++, "Компания:", seller.getOrDefault("name", "Sellion ERP"));
+        addHeaderRow(sheet, rowIdx++, "ИНН:", seller.getOrDefault("inn", "---"));
+        addHeaderRow(sheet, rowIdx++, "Банк/Счет:", seller.getOrDefault("bank", "") + " " + seller.getOrDefault("iban", ""));
+        return ++rowIdx;
     }
 
-    private void addRow(Sheet sheet, int rowIdx, String label, String value) {
+    private void addHeaderRow(Sheet sheet, int rowIdx, String label, String value) {
         Row row = sheet.createRow(rowIdx);
         row.createCell(0).setCellValue(label);
-        row.createCell(1).setCellValue(value != null ? value : "");
+        row.createCell(1).setCellValue(value);
     }
 
     private String createSafeSheetName(String name) {
-        if (name.length() > 31) return name.substring(0, 28) + "...";
-        return name.replaceAll("[\\\\*?/\\[\\]]", "-");
-    }
-
-    private int addSellerHeader(Sheet sheet, int rowIdx, Map<String, String> seller) {
-        addRow(sheet, rowIdx++, "ՎԱՃԱՌՈՂԻ ՏՎՅԱԼՆԵՐ", "");
-        addRow(sheet, rowIdx++, "Անվանում:", seller.get("name"));
-        addRow(sheet, rowIdx++, "ՀՎՀՀ:", seller.get("inn"));
-        addRow(sheet, rowIdx++, "Իրավաբանական հասցե:", seller.get("address"));
-        addRow(sheet, rowIdx++, "Բանկի անվանում:", seller.get("bankName")); // Было "bank"
-        addRow(sheet, rowIdx++, "Հաշվեհամար:", seller.get("bankAccount"));
-        return ++rowIdx;
+        // Ограничение Excel: имя листа до 31 символа и без запрещенных знаков
+        String safeName = name.replaceAll("[\\\\*?/\\[\\]]", "-");
+        return safeName.length() > 30 ? safeName.substring(0, 27) + "..." : safeName;
     }
 }
+
 
 
 

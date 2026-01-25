@@ -23,6 +23,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+
+
 @RestController
 @RequestMapping("/api/admin")
 @RequiredArgsConstructor
@@ -102,24 +104,28 @@ public class AdminManagementController {
         ));
     }
 
+    // В AdminManagementController.java
     @PostMapping("/orders/{id}/cancel")
     @Transactional(rollbackFor = Exception.class)
     public ResponseEntity<?> cancelOrder(@PathVariable Long id) {
         Order order = orderRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Заказ не найден: " + id));
-        // Если счет уже выставлен, запрещаем удаление (защита бухгалтерии)
-        if (order.getInvoiceId() != null) {
-            return ResponseEntity.badRequest().body(Map.of("error", "Нельзя удалить заказ со счетом!"));
-        }
-        // 1. Возвращаем товар на склад (отменяем резерв)
-        if (order.getItems() != null && !order.getItems().isEmpty()) {
-            stockService.returnItemsToStock(order.getItems(), "Отмена заказа #" + id, "ADMIN");
-        }
-        // 2. Удаляем запись
-        orderRepository.delete(order);
+                .orElseThrow(() -> new RuntimeException("Заказ не найден"));
 
-        return ResponseEntity.ok(Map.of("message", "Заказ полностью удален, товар вернулся на склад"));
+        if (order.getInvoiceId() != null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Нельзя отменить заказ с выставленным счетом!"));
+        }
+
+        // Возвращаем товар
+        stockService.returnItemsToStock(order.getItems(), "Отмена заказа #" + id, "ADMIN");
+
+        // Вместо delete — меняем статус
+        order.setStatus(OrderStatus.CANCELLED);
+        orderRepository.save(order);
+
+        recordAudit(id, "ORDER", "ОТМЕНА", "Заказ переведен в статус CANCELLED");
+        return ResponseEntity.ok(Map.of("message", "Заказ отменен, товар вернулся на склад"));
     }
+
 
     @PutMapping("/products/{id}/edit")
     @Transactional(rollbackFor = Exception.class)
@@ -374,25 +380,32 @@ public class AdminManagementController {
     public ResponseEntity<?> createWriteOff(@RequestBody Order order) {
         try {
             order.setType(OrderType.WRITE_OFF);
-            order.setStatus(OrderStatus.PROCESSED); // Списание сразу проведено
+            order.setStatus(OrderStatus.PROCESSED);
             order.setManagerId("Офис");
             order.setCreatedAt(LocalDateTime.now());
 
-            // 1. Считаем только себестоимость
+            // Гарантируем, что поле не null для базы данных
+            if (order.getNeedsSeparateInvoice() == null) {
+                order.setNeedsSeparateInvoice(false);
+            }
+
+            // Считаем себестоимость
             Map<String, BigDecimal> totals = calculateTotalSaleAndCost(order.getItems());
-            order.setTotalAmount(BigDecimal.ZERO); // Сумма продажи всегда 0
+            order.setTotalAmount(BigDecimal.ZERO);
             order.setTotalPurchaseCost(totals.get("totalCost"));
 
-            // 2. Списываем товар (без резерва, сразу)
-            stockService.deductItemsFromStock(order.getItems(), "Списание: " + order.getComment(), "ADMIN");
+            // Списываем товар
+            stockService.deductItemsFromStock(order.getItems(), "Списание: " + (order.getComment() != null ? order.getComment() : "Без описания"), "ADMIN");
 
             orderRepository.save(order);
             recordAudit(order.getId(), "ORDER", "СПИСАНИЕ", "Списание товара: " + order.getComment());
 
             return ResponseEntity.ok(Map.of("message", "Списание успешно проведено"));
         } catch (Exception e) {
+            log.error("Ошибка при списании: ", e);
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
+
 
 }

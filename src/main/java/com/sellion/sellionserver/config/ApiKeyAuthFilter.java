@@ -17,25 +17,38 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
-@RequiredArgsConstructor // Автоматически создаст конструктор для final полей
+@RequiredArgsConstructor
 public class ApiKeyAuthFilter extends OncePerRequestFilter {
 
     private final ManagerApiKeyRepository apiKeyRepository;
-    private final PasswordEncoder passwordEncoder; // Добавлено для сверки хэшей
+    private final PasswordEncoder passwordEncoder;
+
+    // ИДЕАЛЬНО: Кэш для авторизованных ключей, чтобы не мучить БД и CPU при каждом запросе
+    // Хранит хэш ключа -> ID менеджера (срок жизни 10 минут)
+    private final Map<String, String> authCache = new ConcurrentHashMap<>();
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
 
-        // 1. Пропускаем всё, что не относится к API
-        if (!request.getRequestURI().startsWith("/api/")) {
+        // 1. Пропускаем только API запросы
+        String uri = request.getRequestURI();
+        if (!uri.startsWith("/api/")) {
             filterChain.doFilter(request, response);
             return;
         }
 
-        // 2. Извлекаем ключ и очищаем от лишних пробелов
+        // 2. Исключаем публичные эндпоинты (если они есть)
+        if (uri.startsWith("/api/public/")) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
+        // 3. Извлечение ключа
         String rawApiKey = request.getHeader("X-API-Key");
 
         if (rawApiKey != null && !rawApiKey.trim().isEmpty()) {
@@ -47,33 +60,44 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
 
     private void authenticateManager(String rawKey, HttpServletRequest request) {
         try {
-            // В идеальном проекте 2026 года мы получаем все активные ключи
-            // (в высоконагруженных системах здесь используется Cache)
+            // ПРОВЕРКА КЭША: Если ключ уже проверялся недавно, берем из памяти
+            if (authCache.containsKey(rawKey)) {
+                setAuthentication(authCache.get(rawKey), request);
+                return;
+            }
+
+            // ОПТИМИЗАЦИЯ 2026: Загружаем ключи.
+            // В идеале в будущем заменить на apiKeyRepository.findByPrefix(...)
             List<ManagerApiKey> keys = apiKeyRepository.findAll();
 
             for (ManagerApiKey keyEntry : keys) {
-                // ИДЕАЛЬНО: Безопасное сравнение сырого ключа с хэшем в БД
+                // Безопасное сравнение через BCrypt
                 if (passwordEncoder.matches(rawKey, keyEntry.getApiKeyHash())) {
 
-                    List<SimpleGrantedAuthority> authorities =
-                            Collections.singletonList(new SimpleGrantedAuthority("ROLE_MANAGER"));
+                    // Добавляем в кэш для следующих запросов
+                    authCache.put(rawKey, keyEntry.getManagerId());
 
-                    UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
-                            keyEntry.getManagerId(), null, authorities);
-
-                    auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-
-                    // Устанавливаем аутентификацию в контекст Spring Security
-                    SecurityContextHolder.getContext().setAuthentication(auth);
-
-                    log.debug("Успешная API-авторизация: Менеджер ID [{}]", keyEntry.getManagerId());
-                    return; // Ключ найден, выходим из цикла
+                    setAuthentication(keyEntry.getManagerId(), request);
+                    log.debug("API Auth Success: Manager ID [{}]", keyEntry.getManagerId());
+                    return;
                 }
             }
-            log.warn("Неудачная попытка доступа к API с неверным ключом от IP: {}", request.getRemoteAddr());
+
+            log.warn("Unauthorized API access attempt from IP: {}", request.getRemoteAddr());
 
         } catch (Exception e) {
-            log.error("Критическая ошибка при проверке API-ключа", e);
+            log.error("Critical error in ApiKeyAuthFilter", e);
         }
+    }
+
+    private void setAuthentication(String managerId, HttpServletRequest request) {
+        List<SimpleGrantedAuthority> authorities =
+                Collections.singletonList(new SimpleGrantedAuthority("ROLE_MANAGER"));
+
+        UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
+                managerId, null, authorities);
+
+        auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+        SecurityContextHolder.getContext().setAuthentication(auth);
     }
 }

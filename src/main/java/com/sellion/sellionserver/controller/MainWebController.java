@@ -18,7 +18,6 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 
-
 @Controller
 @RequestMapping("/admin")
 @RequiredArgsConstructor
@@ -57,53 +56,51 @@ public class MainWebController {
         LocalDateTime rEndDT = endR.atTime(LocalTime.MAX);
 
         // --- 2. ЛОГИКА ДЛЯ ЗАКАЗОВ (Полная статистика + Пагинация) ---
-        List<Order> allOrdersForPeriod = Optional.ofNullable(orderRepository.findOrdersBetweenDates(oStartDT, oEndDT))
-                .orElse(new ArrayList<>());
-
-        List<Order> filteredOrdersForStats = (orderManagerId != null && !orderManagerId.isEmpty())
-                ? allOrdersForPeriod.stream().filter(o -> o != null && orderManagerId.equals(o.getManagerId())).toList()
-                : allOrdersForPeriod;
-
-        // Внедрение пагинации
+        // ИДЕАЛЬНО: Используем Pageable прямо в запросе репозитория для производительности 2026 года
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-        int startIdx = (int) pageable.getOffset();
-        int endIdx = Math.min((startIdx + pageable.getPageSize()), filteredOrdersForStats.size());
-        List<Order> pagedOrders = (startIdx <= endIdx) ? filteredOrdersForStats.subList(startIdx, endIdx) : new ArrayList<>();
-        Page<Order> ordersPage = new PageImpl<>(pagedOrders, pageable, filteredOrdersForStats.size());
 
-        // Расчет сумм по отфильтрованным заказам (Ваша логика)
-        BigDecimal totalOrdersSum = filteredOrdersForStats.stream()
+        Page<Order> ordersPage;
+        if (orderManagerId != null && !orderManagerId.isEmpty()) {
+            ordersPage = orderRepository.findOrdersByManagerAndDateRangePaged(orderManagerId, oStartDT, oEndDT, pageable);
+        } else {
+            ordersPage = orderRepository.findOrdersBetweenDatesPaged(oStartDT, oEndDT, pageable);
+        }
+
+        // Для расчета статистики за период все равно нужны агрегированные данные (сохраняем вашу логику фильтрации)
+        List<Order> allOrdersForPeriod = (orderManagerId != null && !orderManagerId.isEmpty())
+                ? orderRepository.findOrdersByManagerAndDateRange(orderManagerId, oStartDT, oEndDT)
+                : orderRepository.findOrdersBetweenDates(oStartDT, oEndDT);
+
+        // Расчет сумм по вашей логике
+        BigDecimal totalOrdersSum = allOrdersForPeriod.stream()
                 .filter(o -> o != null && o.getStatus() != OrderStatus.CANCELLED && o.getType() != OrderType.WRITE_OFF)
                 .map(o -> o.getTotalAmount() != null ? o.getTotalAmount() : BigDecimal.ZERO)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         BigDecimal rawSales = totalOrdersSum;
 
-        BigDecimal rawPurchaseCost = filteredOrdersForStats.stream()
-                .filter(o -> o != null && o.getStatus() != OrderStatus.CANCELLED) // Себестоимость списаний учитываем в расходах
+        BigDecimal rawPurchaseCost = allOrdersForPeriod.stream()
+                .filter(o -> o != null && o.getStatus() != OrderStatus.CANCELLED)
                 .map(o -> o.getTotalPurchaseCost() != null ? o.getTotalPurchaseCost() : BigDecimal.ZERO)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         // --- 3. ЛОГИКА ДЛЯ ВОЗВРАТОВ (Полная) ---
-        List<ReturnOrder> allReturns = Optional.ofNullable(returnOrderRepository.findReturnsBetweenDates(rStartDT, rEndDT))
-                .orElse(new ArrayList<>());
-        List<ReturnOrder> filteredReturns = (returnManagerId != null && !returnManagerId.isEmpty())
-                ? allReturns.stream().filter(r -> r != null && returnManagerId.equals(r.getManagerId())).toList()
-                : allReturns;
+        List<ReturnOrder> allReturns = (returnManagerId != null && !returnManagerId.isEmpty())
+                ? returnOrderRepository.findReturnsByManagerAndDateRange(returnManagerId, rStartDT, rEndDT)
+                : returnOrderRepository.findReturnsBetweenDates(rStartDT, rEndDT);
 
-        BigDecimal totalReturnsSum = filteredReturns.stream()
+        BigDecimal totalReturnsSum = allReturns.stream()
                 .filter(r -> r != null && r.getStatus() == ReturnStatus.CONFIRMED)
                 .map(r -> r.getTotalAmount() != null ? r.getTotalAmount() : BigDecimal.ZERO)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        // Расчет чистой прибыли (Выручка - Себестоимость - Возвраты)
+        // Чистая прибыль
         BigDecimal netProfitBD = rawSales.subtract(rawPurchaseCost)
                 .subtract(totalReturnsSum)
                 .setScale(0, RoundingMode.HALF_UP);
 
         // --- 4. ОБЩАЯ СТАТИСТИКА И СЧЕТА ---
-        List<Invoice> invoices = Optional.ofNullable(invoiceRepository.findAllByOrderByCreatedAtDesc())
-                .orElse(new ArrayList<>());
+        List<Invoice> invoices = Optional.ofNullable(invoiceRepository.findAllByOrderByCreatedAtDesc()).orElse(new ArrayList<>());
 
         BigDecimal totalInvoiceDebt = invoices.stream()
                 .filter(Objects::nonNull)
@@ -119,17 +116,12 @@ public class MainWebController {
                 .map(Invoice::getPaidAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        // Средний чек по активным заказам
+        // Средний чек
         long activeOrdersCount = allOrdersForPeriod.stream().filter(o -> o.getStatus() != OrderStatus.CANCELLED).count();
         BigDecimal avgCheck = (activeOrdersCount == 0) ? BigDecimal.ZERO :
                 rawSales.divide(BigDecimal.valueOf(activeOrdersCount), 2, RoundingMode.HALF_UP);
 
-        // Логи аудита (лимит 15 записей)
-        List<AuditLog> limitedLogs = Optional.ofNullable(auditLogRepository.findAllByOrderByTimestampDesc())
-                .orElse(Collections.emptyList()).stream()
-                .filter(Objects::nonNull)
-                .limit(15)
-                .toList();
+        List<AuditLog> limitedLogs = auditLogRepository.findAllByOrderByTimestampDesc().stream().limit(15).toList();
 
         // --- 5. ЛОГИКА KPI МЕНЕДЖЕРОВ (Полная) ---
         List<String> managersForUI = ManagerId.getAllDisplayNames();
@@ -155,7 +147,16 @@ public class MainWebController {
             managerStats.put(mName, dto);
         }
 
-        // --- 6. ПЕРЕДАЧА В МОДЕЛЬ (Все атрибуты восстановлены) ---
+        // --- 6. ПЕРЕДАЧА В МОДЕЛЬ  ---
+        addModel(page, orderManagerId, returnManagerId, model, ordersPage, totalOrdersSum, rawSales, rawPurchaseCost, netProfitBD, avgCheck, limitedLogs, invoices, totalInvoiceDebt, totalPaidSum, startD, endD, allReturns, totalReturnsSum, startR, endR);
+
+        // Склад и Группировка
+        groupAndWarehouse(activeTab, model, managersForUI, managerStats, invoices);
+
+        return "dashboard";
+    }
+
+    private static void addModel(int page, String orderManagerId, String returnManagerId, Model model, Page<Order> ordersPage, BigDecimal totalOrdersSum, BigDecimal rawSales, BigDecimal rawPurchaseCost, BigDecimal netProfitBD, BigDecimal avgCheck, List<AuditLog> limitedLogs, List<Invoice> invoices, BigDecimal totalInvoiceDebt, BigDecimal totalPaidSum, LocalDate startD, LocalDate endD, List<ReturnOrder> allReturns, BigDecimal totalReturnsSum, LocalDate startR, LocalDate endR) {
         model.addAttribute("orders", ordersPage.getContent());
         model.addAttribute("currentPage", page);
         model.addAttribute("totalPages", ordersPage.getTotalPages());
@@ -176,20 +177,22 @@ public class MainWebController {
         model.addAttribute("orderEndDate", endD.toString());
         model.addAttribute("selectedOrderManager", orderManagerId);
 
-        model.addAttribute("returns", filteredReturns);
-        model.addAttribute("totalReturnsCount", filteredReturns.size());
+        model.addAttribute("returns", allReturns);
+        model.addAttribute("totalReturnsCount", allReturns.size());
         model.addAttribute("totalReturnsSum", totalReturnsSum);
         model.addAttribute("returnStartDate", startR.toString());
         model.addAttribute("returnEndDate", endR.toString());
         model.addAttribute("selectedReturnManager", returnManagerId);
+    }
 
-        // Склад и Группировка
+    private void groupAndWarehouse(String activeTab, Model model, List<String> managersForUI, Map<String, ManagerKpiDTO> managerStats, List<Invoice> invoices) {
         List<Product> activeProducts = Optional.ofNullable(productRepository.findAllActive()).orElse(new ArrayList<>());
         Map<String, List<Product>> groupedProducts = activeProducts.stream()
                 .filter(Objects::nonNull)
                 .collect(Collectors.groupingBy(
                         p -> (p.getCategory() == null || p.getCategory().isBlank()) ? "Без категории" : p.getCategory(),
                         TreeMap::new, Collectors.toList()));
+
         model.addAttribute("groupedProducts", groupedProducts);
         model.addAttribute("products", activeProducts);
 
@@ -217,7 +220,5 @@ public class MainWebController {
         model.addAttribute("paymentMethods", PaymentMethod.values());
         model.addAttribute("returnReasons", ReasonsReturn.values());
         model.addAttribute("activeTab", activeTab);
-
-        return "dashboard";
     }
 }
