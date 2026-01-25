@@ -167,4 +167,33 @@ public class ReportApiController {
 
         return new ResponseEntity<>(bytes, headers, HttpStatus.OK);
     }
+
+    /**
+     * Экспорт детального отчета по возвратам.
+     * ДОБАВЛЕНО: Эндпоинт, который вызывается при нажатии кнопки "Экспорт Возвратов".
+     */
+    @GetMapping("/returns-detailed")
+    public ResponseEntity<?> exportReturnsDetailed(@RequestParam String start, @RequestParam String end) {
+        try {
+            LocalDateTime from = LocalDate.parse(start).atStartOfDay();
+            LocalDateTime to = LocalDate.parse(end).atTime(LocalTime.MAX);
+
+            // Получаем список возвратов за период
+            List<ReturnOrder> returns = returnOrderRepository.findReturnsBetweenDates(from, to);
+
+            if (returns.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("message", "Возвраты за период " + start + " - " + end + " не найдены."));
+            }
+
+            // Генерируем Excel. Передаем null в заказы и наш список в возвраты.
+            try (Workbook workbook = invoiceExcelService.generateExcel(null, returns, "Отчет по возвратам")) {
+                return getResponseEntity(workbook, "Returns_Report_" + start + "_" + end + ".xlsx");
+            }
+        } catch (Exception e) {
+            log.error("Ошибка генерации отчета по возвратам: ", e);
+            return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
+        }
+    }
+
 }

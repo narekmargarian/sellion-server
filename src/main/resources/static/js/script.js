@@ -67,34 +67,6 @@ function translateReturnStatus(status) {
     }
 }
 
-// function showStatus(text, isError = false) {
-//     const container = document.getElementById('order-footer-actions');
-//     const modalContent = document.querySelector('.modal-content');
-//     const old = document.getElementById('status-notify');
-//     if (old) old.remove();
-//     const statusDiv = document.createElement('div');
-//     statusDiv.id = "status-notify";
-//     if (text.includes("Недостаточно товара")) {
-//         let cleanMessage = text.split('\n').pop().split(': ').pop();
-//         statusDiv.className = "stock-error-box";
-//         statusDiv.innerHTML = `
-//             <div style="font-size: 20px; margin-bottom: 5px;">⚠️</div>
-//             <div style="font-weight: 800; text-transform: uppercase;">Ошибка склада</div>
-//             <div style="font-weight: 600;">${cleanMessage}</div>
-//         `;
-//         modalContent.classList.add('shake-it');
-//         setTimeout(() => modalContent.classList.remove('shake-it'), 500);
-//     } else {
-//         statusDiv.style = `color: ${isError ? '#ef4444' : '#10b981'}; font-weight: 700; margin-bottom: 10px; width: 100%; text-align: center;`;
-//         statusDiv.innerText = text;
-//     }
-//
-//     container.prepend(statusDiv);
-//     setTimeout(() => {
-//         if (statusDiv) statusDiv.remove();
-//     }, 6000);
-// }
-
 
 function updateRowInTable(order) {
     // Находим строку заказа
@@ -539,11 +511,10 @@ async function loadManagerIds() {
     }
 }
 
-
 async function openCreateOrderModal() {
     await loadManagerIds();
     tempItems = {};
-    const dates = getSmartDeliveryDates(); // Получаем даты
+    const dates = getSmartDeliveryDates();
 
     document.getElementById('modal-title').innerText = "🛒 Создание нового заказа";
 
@@ -559,8 +530,11 @@ async function openCreateOrderModal() {
         <div class="modal-info-row" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top:10px; background: #f8fafc; padding: 15px; border-radius: 10px;">
             <div>
                 <label>ДОСТАВКА:</label>
-                <!-- Устанавливаем min и default значение -->
-                <input type="date" id="new-op-date" class="form-control" min="${dates.min}" value="${dates.default}">
+                <!-- min="${dates.min}" блокирует выбор прошедших дат в календаре -->
+                <input type="date" id="new-op-date" class="form-control" 
+                       min="${dates.min}" 
+                       value="${dates.default}" 
+                       onchange="if(this.value < '${dates.min}') { alert('Нельзя выбрать прошедшую дату!'); this.value='${dates.default}'; }">
             </div>
             <div><label>ОПЛАТА:</label><select id="new-op-payment" class="form-select"><option value="CASH">Наличный</option><option value="TRANSFER">Перевод</option></select></div>
             <div><label>ФАКТУРА:</label>
@@ -582,10 +556,13 @@ async function openCreateOrderModal() {
 
 
 
+
 async function openCreateReturnModal() {
     await loadManagerIds();
     tempItems = {};
+    // Получаем актуальные даты для 2026 года (min: сегодня, default: завтра/понедельник)
     const dates = getSmartDeliveryDates();
+
     document.getElementById('modal-title').innerText = "🔄 Новый возврат";
 
     let clientOptions = clientsData.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
@@ -601,21 +578,31 @@ async function openCreateReturnModal() {
         <div class="modal-info-row" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top:10px; background: #fff1f2; padding: 15px; border-radius: 10px;">
             <div><label>ПРИЧИНА:</label><select id="new-op-reason" class="form-select">${reasonOptions}</select></div>
             <div>
-                <label>ДОСТАВКА (ДАТА):</label>
-                <!-- Заднее число запрещено, по умолчанию сегодня -->
-                <input type="date" id="new-op-date" class="form-control" min="${dates.min}" value="${dates.min}">
+                <label>ДАТА ВОЗВРАТА:</label>
+                <!-- Запрет заднего числа (min) и установка "дня вперед" по умолчанию -->
+                <input type="date" id="new-op-date" class="form-control" 
+                       min="${dates.min}" 
+                       value="${dates.default}"
+                       onchange="if(this.value < '${dates.min}') { alert('Нельзя выбрать прошедшую дату!'); this.value='${dates.default}'; }">
             </div>
             <div><label>КОММЕНТАРИЙ:</label><input type="text" id="new-op-comment" class="form-control" placeholder="..."></div>
         </div>`;
 
     renderItemsTable(tempItems, true);
+
+    // Сбрасываем итоговую цену (для возвратов она тоже важна при создании)
+    const totalEl = document.getElementById('order-total-price');
+    if (totalEl) {
+        totalEl.style.display = 'block';
+        totalEl.innerText = "Итого: 0 ֏";
+    }
+
     document.getElementById('order-footer-actions').innerHTML = `
         <button class="btn-primary" style="background:#ef4444" onclick="saveNewManualOperation('return')">Создать возврат</button>
         <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-order-view')">Отмена</button>
     `;
     openModal('modal-order-view');
 }
-
 
 
 function toggleSelectAll(className, source) {
@@ -676,7 +663,6 @@ async function cancelOrder(id) {
         }
     });
 }
-
 
 
 async function showOrderHistory(orderId) {
@@ -741,7 +727,6 @@ async function showOrderHistory(orderId) {
         body.innerHTML = '<tr><td colspan="5" style="text-align:center; color:red;">Нет связи с сервером</td></tr>';
     }
 }
-
 
 
 function showTab(tabId) {
@@ -1016,43 +1001,51 @@ window.printOrder = function (id) {
     printAction(url);
 }
 
-window.printReturn = function (id) {
-    console.log("Запуск печати возврата:", id);
-    const url = `/admin/returns/print/${id}`;
-    printAction(url);
-}
-
-function printAction(url) {
+window.printAction = function(url) {
     const frame = document.getElementById('printFrame');
-    if (!frame) {
-        // Если фрейма почему-то нет, создаем его на лету
-        const newFrame = document.createElement('iframe');
-        newFrame.id = 'printFrame';
-        newFrame.style.display = 'none';
-        document.body.appendChild(newFrame);
-        return printAction(url);
-    }
+    if (!frame) return;
 
-    showToast("⏳ Подготовка к печати...", "info");
+    // 1. ПОЛНАЯ ОЧИСТКА: Сбрасываем фрейм и удаляем старые обработчики,
+    // чтобы они не копились и не срабатывали по несколько раз.
+    frame.onload = null;
+    frame.src = "about:blank";
 
-    frame.src = url;
+    showToast("⏳ Подготовка документа...", "info");
 
-    frame.onload = function () {
-        // Даем 500мс на рендеринг стилей внутри фрейма
-        setTimeout(() => {
-            try {
-                frame.contentWindow.focus();
-                frame.contentWindow.print();
-            } catch (e) {
-                console.error("Ошибка печати:", e);
-                showToast("❌ Ошибка печати. Попробуйте еще раз.", "error");
-            }
-        }, 500);
-    };
-}
+    // 2. ЗАДЕРЖКА: Небольшой таймаут гарантирует, что браузер
+    // успеет "забыть" предыдущую задачу печати.
+    setTimeout(() => {
+        frame.src = url;
 
-window.printOrder = (id) => printAction(`/admin/orders/print/${id}`);
-window.printReturn = (id) => printAction(`/admin/returns/print/${id}`);
+        frame.onload = function() {
+            // Пропускаем пустую загрузку
+            if (frame.src.includes("about:blank")) return;
+
+            // 3. ФИНАЛЬНЫЙ РЕНДЕРИНГ: Даем время на подгрузку стилей и картинок
+            setTimeout(() => {
+                try {
+                    frame.contentWindow.focus();
+                    frame.contentWindow.print();
+
+                    // Очищаем событие после успешного вызова,
+                    // чтобы оно не висело в памяти.
+                    frame.onload = null;
+                } catch (e) {
+                    console.error("Ошибка печати:", e);
+                    // Если заблокировано (например, popup-blocker), открываем в новом окне
+                    // window.open(url, '_blank');
+                }
+            }, 500);
+        };
+    }, 100);
+};
+
+// Привязываем функции к глобальному объекту ОДИН РАЗ
+window.printOrder = (id) => window.printAction(`/admin/orders/print/${id}`);
+window.printReturn = (id) => window.printAction(`/admin/returns/print/${id}`);
+
+
+
 window.printOrderList = () => {
     const manager = document.querySelector('select[name="orderManagerId"]').value;
     const start = document.querySelector('input[name="orderStartDate"]').value;
@@ -1157,20 +1150,27 @@ function doInventory() {
 
 
 function toggleCategory(categoryClass) {
+    // Находим все строки, у которых есть этот класс
     const rows = document.getElementsByClassName(categoryClass);
-    const icon = document.getElementById('icon-' + categoryClass);
+    const header = document.querySelector(`[data-target="${categoryClass}"]`);
+    const icon = header.querySelector('.toggle-icon');
 
     if (rows.length === 0) return;
+
+    // Определяем текущее состояние по первой строке
     const isHidden = rows[0].style.display === "none";
 
     for (let i = 0; i < rows.length; i++) {
-        rows[i].style.display = isHidden ? "" : "none";
+        rows[i].style.display = isHidden ? "table-row" : "none";
     }
 
+    // Вращаем иконку
     if (icon) {
-        icon.innerText = isHidden ? "▼" : "▶";
+        icon.style.transform = isHidden ? "rotate(0deg)" : "rotate(-90deg)";
     }
 }
+
+
 
 
 async function submitInventoryAdjustment() {
@@ -1208,48 +1208,63 @@ function downloadExcel(type) {
     const end = document.getElementById('report-end').value;
 
     if (!start || !end) {
-        showToast("Выберите период!", "error");
+        showToast("⚠️ Выберите период!", "error");
         return;
     }
 
+    // 1. Проверка наличия данных в DOM (для визуальной скорости)
     const tableId = type === 'orders' ? 'orders-table-body' : 'returns-table-body';
-    const rowCount = document.querySelectorAll(`#${tableId} tr:not(.no-data)`).length;
+    // Ищем строки, которые не являются заглушками "нет данных"
+    const rows = document.querySelectorAll(`#${tableId} tr`);
+    const hasData = Array.from(rows).some(row => row.cells.length > 1);
 
-    if (rowCount === 0) {
-        showToast(`⚠️ Нет данных (${type}) для скачивания за этот период!`, "error");
+    if (!hasData) {
+        showToast(`⚠️ Нет данных (${type === 'orders' ? 'заказов' : 'возвратов'}) за этот период!`, "error");
         return;
     }
 
-    showToast(`⏳ Подготовка файла: ${rowCount} записей...`, "info");
+    showToast(`⏳ Формирование Excel...`, "info");
 
+    // 2. Формируем URL (убедитесь, что в Java добавлен /returns-detailed)
     const url = type === 'orders' ?
         `/api/reports/excel/orders-detailed?start=${start}&end=${end}` :
         `/api/reports/excel/returns-detailed?start=${start}&end=${end}`;
 
+    // 3. Используем fetch с обработкой Blob
     fetch(url)
-        .then(response => {
+        .then(async response => {
             if (response.ok) {
-                return response.blob().then(blob => {
-                    const downloadUrl = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.style.display = 'none';
-                    a.href = downloadUrl;
-                    a.download = `${type}_report_${start}_to_${end}.xlsx`;
-                    document.body.appendChild(a);
-                    a.click();
+                const blob = await response.blob();
+                const downloadUrl = window.URL.createObjectURL(blob);
+
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = downloadUrl;
+                // Красивое имя файла для 2026 года
+                a.download = `Sellion_${type.toUpperCase()}_${start}_${end}.xlsx`;
+
+                document.body.appendChild(a);
+                a.click();
+
+                // Очистка памяти
+                setTimeout(() => {
+                    document.body.removeChild(a);
                     window.URL.revokeObjectURL(downloadUrl);
-                    showToast(`✅ Отчет (${rowCount} поз.) успешно скачан!`, 'success');
-                });
+                }, 100);
+
+                showToast(`✅ Отчет успешно скачан!`, 'success');
             } else {
-                return response.json().then(data => {
-                    showToast(data.message || 'Ошибка сервера', 'error');
-                });
+                // Пытаемся получить текст ошибки от сервера (JSON)
+                const errorData = await response.json().catch(() => ({ message: "Ошибка сервера (500/404)" }));
+                showToast(errorData.message || 'Не удалось сгенерировать файл', 'error');
             }
         })
         .catch(error => {
+            console.error('Download error:', error);
             showToast('Ошибка сети при скачивании отчета.', 'error');
         });
 }
+
 
 function sendToEmail() {
     const start = document.getElementById('report-start').value;
@@ -1610,15 +1625,25 @@ function applyReportFilters() {
     const start = document.getElementById('report-start').value;
     const end = document.getElementById('report-end').value;
 
-    if (!start || !end) return showToast("Выберите период!", "error");
+    if (!start || !end) {
+        showToast("⚠️ Выберите начало и конец периода!", "error");
+        return;
+    }
 
+    // Показываем пользователю, что данные обновляются
+    showToast("⏳ Загрузка данных за период...", "info");
+
+    // Формируем URL с сохранением активной вкладки и дат
     const url = new URL(window.location.href);
     url.searchParams.set('activeTab', 'tab-reports');
-    url.searchParams.set('reportStart', start); // Используем уникальные имена параметров
-    url.searchParams.set('reportEnd', end);
+    url.searchParams.set('orderStartDate', start); // Используем те же имена, что в контроллере
+    url.searchParams.set('orderEndDate', end);
+    url.searchParams.set('returnStartDate', start);
+    url.searchParams.set('returnEndDate', end);
 
     window.location.href = url.toString();
 }
+
 
 function printCompactOrders() {
     const managerId = document.getElementById('route-manager-select').value;
@@ -2044,7 +2069,6 @@ function openWriteOffModal() {
 }
 
 
-
 // В функции openOrderDetails добавьте проверку на списание
 
 function openOrderDetails(id) {
@@ -2192,6 +2216,9 @@ function enableReturnEdit(id) {
     // 2. Синхронизация состава товаров
     tempItems = syncTempItems(ret.items);
 
+    // ПОЛУЧАЕМ ОГРАНИЧЕНИЯ ДАТ ДЛЯ 2026 ГОДА
+    const dates = getSmartDeliveryDates();
+
     document.getElementById('modal-title').innerText = "✏️ Редактирование возврата #" + id;
 
     // 3. Подготовка списка магазинов
@@ -2202,7 +2229,6 @@ function enableReturnEdit(id) {
     const info = document.getElementById('order-info');
 
     // 4. Отрисовка обновленной сетки
-    // МАГАЗИН теперь занимает 2 колонки из 3 (grid-column: span 2)
     info.innerHTML = `
         <div class="modal-info-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; background: #fff1f2; padding: 15px; border-radius: 10px; border: 1px solid #fecdd3;">
             <div style="grid-column: span 2;">
@@ -2224,8 +2250,12 @@ function enableReturnEdit(id) {
                 </select>
             </div>
             <div style="margin-top:10px;">
-                <label style="font-size:11px; font-weight:800; color:#9f1239;">ДОСТАВКА</label>
-                <input type="date" id="edit-ret-date" class="form-control" value="${convertDateToISO(ret.returnDate || ret.createdAt)}">
+                <label style="font-size:11px; font-weight:800; color:#9f1239;">ДОСТАВКА (ДАТА ВОЗВРАТА)</label>
+                <!-- Добавлена блокировка заднего числа через min и проверка onchange -->
+                <input type="date" id="edit-ret-date" class="form-control" 
+                       min="${dates.min}" 
+                       value="${convertDateToISO(ret.returnDate || ret.createdAt)}"
+                       onchange="if(this.value < '${dates.min}') { alert('Нельзя выбрать прошедшую дату!'); this.value='${dates.min}'; }">
             </div>
             <div style="margin-top:10px;">
                 <label style="font-size:11px; font-weight:800; color:#9f1239;">КОММЕНТАРИЙ</label>
@@ -2292,6 +2322,8 @@ function enableOrderEdit(id) {
     if (!order) return showToast("Ошибка: Заказ не найден", "error");
 
     tempItems = syncTempItems(order.items);
+    const dates = getSmartDeliveryDates(); // Получаем текущие ограничения 2026 года
+
     document.getElementById('modal-title').innerText = "📝 Редактирование заказа #" + id;
 
     const info = document.getElementById('order-info');
@@ -2302,7 +2334,11 @@ function enableOrderEdit(id) {
                     ${clientsData.map(c => `<option value="${c.name}" ${c.name === order.shopName ? 'selected' : ''}>${c.name}</option>`).join('')}
                 </select>
             </div>
-            <div><label>ДОСТАВКА</label><input type="date" id="edit-delivery" class="form-control" value="${convertDateToISO(order.deliveryDate)}"></div>
+            <div><label>ДОСТАВКА</label>
+                <input type="date" id="edit-delivery" class="form-control" 
+                       min="${dates.min}" 
+                       value="${convertDateToISO(order.deliveryDate)}">
+            </div>
             <div><label>АВТО</label><input type="text" id="edit-car-number" class="form-control" value="${order.carNumber || ''}"></div>
             
             <div style="margin-top:10px;"><label>ОПЛАТА</label>
@@ -2325,7 +2361,6 @@ function enableOrderEdit(id) {
         <button class="btn-primary" style="background:#10b981" onclick="saveFullChanges(${id})">💾 Сохранить</button>
         <button class="btn-primary" style="background:#64748b" onclick="openOrderDetails(${id})">Отмена</button>`;
 }
-
 
 
 async function saveClientChanges(id) {
@@ -2591,35 +2626,24 @@ function applySingleQty(pId) {
 
 function getSmartDeliveryDates() {
     const now = new Date();
-
-    // Текущая дата для атрибута min (YYYY-MM-DD)
+    // Сегодня в формате YYYY-MM-DD для атрибута min
     const todayStr = now.toISOString().split('T')[0];
 
-    // Расчет даты доставки (Завтра)
     let deliveryDate = new Date();
     deliveryDate.setDate(now.getDate() + 1);
 
-    // Если завтра воскресенье (0), прибавляем еще один день (понедельник)
+    // Если завтра воскресенье (0), переносим на понедельник
     if (deliveryDate.getDay() === 0) {
         deliveryDate.setDate(deliveryDate.getDate() + 1);
     }
 
-    const deliveryStr = deliveryDate.toISOString().split('T')[0];
+    const defaultStr = deliveryDate.toISOString().split('T')[0];
 
     return {
-        min: todayStr,
-        default: deliveryStr
+        min: todayStr, // Запрет на всё, что раньше сегодня
+        default: defaultStr // Завтра или понедельник
     };
 }
-
-
-
-
-
-
-
-
-
 
 
 
