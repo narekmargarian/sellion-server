@@ -73,8 +73,10 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
             for (ManagerApiKey keyEntry : keys) {
                 // Безопасное сравнение через BCrypt
                 if (passwordEncoder.matches(rawKey, keyEntry.getApiKeyHash())) {
+//                    if (rawKey.equals(keyEntry.getApiKeyHash())){
 
-                    // Добавляем в кэш для следующих запросов
+
+                        // Добавляем в кэш для следующих запросов
                     authCache.put(rawKey, keyEntry.getManagerId());
 
                     setAuthentication(keyEntry.getManagerId(), request);

@@ -13,7 +13,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/admin/manager-keys")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('ADMIN')") // Только администратор может управлять ключами
+@PreAuthorize("hasRole('ADMIN')")
 public class ManagerApiKeyApiController {
 
     private final ManagerApiKeyService apiKeyService;
@@ -23,14 +23,29 @@ public class ManagerApiKeyApiController {
         return apiKeyService.findAllKeys();
     }
 
+
+
+
+
+    /**
+     * Генерирует хэш ключа для менеджера.
+     * Теперь метод просто подтверждает успех, так как ключ стандартный.
+     */
     @PostMapping("/generate")
     public ResponseEntity<?> generateKey(@RequestBody Map<String, String> payload) {
         String managerId = payload.get("managerId");
+
         if (managerId == null || managerId.isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("error", "Требуется ID менеджера"));
         }
-        ManagerApiKey newKey = apiKeyService.generateNewKeyForManager(managerId);
-        return ResponseEntity.ok(newKey);
+
+        // Вызываем обновленный метод сервиса
+        apiKeyService.generateKeyForManager(managerId);
+
+        return ResponseEntity.ok(Map.of(
+                "message", "Ключ для менеджера " + managerId + " успешно создан/обновлен",
+                "format", "sellion.rivento.mg." + managerId
+        ));
     }
 
     @DeleteMapping("/delete/{managerId}")

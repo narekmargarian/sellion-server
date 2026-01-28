@@ -2,6 +2,7 @@ package com.sellion.sellionserver.api;
 
 import com.sellion.sellionserver.dto.ApiResponse;
 import com.sellion.sellionserver.dto.CategoryGroupDto;
+import com.sellion.sellionserver.entity.AuditLog;
 import com.sellion.sellionserver.entity.Product;
 import com.sellion.sellionserver.entity.StockMovement;
 import com.sellion.sellionserver.repository.AuditLogRepository;
@@ -21,6 +22,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -47,91 +49,128 @@ public class ProductApiController {
     }
 
     @PreAuthorize("hasRole('ADMIN')")
-    @PostMapping("/create")
-    public ResponseEntity<ApiResponse<Product>> createProduct(@Valid @RequestBody Product newProduct) {
-        // Убедимся, что все BigDecimal инициализированы нулем, если не указаны
-        newProduct.setPurchasePrice(Optional.ofNullable(newProduct.getPurchasePrice()).orElse(BigDecimal.ZERO));
-        newProduct.setPrice(Optional.ofNullable(newProduct.getPrice()).orElse(BigDecimal.ZERO));
+    @PostMapping("/create") // Итоговый путь: /api/admin/products/create
+    public ResponseEntity<?> createProduct(@RequestBody Product newProduct) {
+        try {
+            // 1. Инициализация финансовых полей
+            if (newProduct.getPurchasePrice() == null) newProduct.setPurchasePrice(BigDecimal.ZERO);
+            if (newProduct.getPrice() == null) newProduct.setPrice(BigDecimal.ZERO);
 
-        // ИДЕАЛЬНОЕ ИСПРАВЛЕНИЕ: Гарантируем, что isDeleted не NULL перед сохранением
-        // Даже если клиент не прислал это поле в JSON, мы установим false.
-        if (newProduct.getIsDeleted() == null) {
-            newProduct.setIsDeleted(false);
+            // 2. Гарантируем статус активности (мягкое удаление)
+            if (newProduct.getIsDeleted() == null) {
+                newProduct.setIsDeleted(false);
+            }
+
+            // 3. Установка дефолтных значений для логистики и склада
+            if (newProduct.getStockQuantity() == null) newProduct.setStockQuantity(0);
+            if (newProduct.getItemsPerBox() == null) newProduct.setItemsPerBox(1);
+
+            // 4. Сохранение в базу данных
+            Product savedProduct = productRepository.save(newProduct);
+
+            log.info("Создан новый продукт: {}", savedProduct.getName());
+
+            // 5. Логирование движения в stockService (если подключен)
+            if (stockService != null) {
+                stockService.logMovement(
+                        savedProduct.getName(),
+                        savedProduct.getStockQuantity(),
+                        "INITIAL",
+                        "Начальный ввод остатков",
+                        "ADMIN"
+                );
+            }
+
+            // 6. Запись в глобальный аудит
+            recordAudit(savedProduct.getId(), "PRODUCT", "СОЗДАНИЕ", "Добавлен товар: " + savedProduct.getName());
+
+            return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "message", "Товар успешно создан",
+                    "data", savedProduct
+            ));
+        } catch (Exception e) {
+            log.error("Ошибка при создании товара: ", e);
+            return ResponseEntity.badRequest().body(Map.of(
+                    "success", false,
+                    "error", "Ошибка сервера: " + e.getMessage()
+            ));
         }
-
-        Product savedProduct = productRepository.save(newProduct);
-        log.info("Создан новый продукт: {}", savedProduct.getName());
-        return ResponseEntity.ok(ApiResponse.ok("Товар успешно создан", savedProduct));
     }
 
 
     @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/import")
-    @Transactional // Транзакция на весь импорт: либо всё, либо ничего
+    @Transactional
     public ResponseEntity<ApiResponse<?>> importProducts(@RequestParam("file") MultipartFile file) {
         int updatedCount = 0;
         DataFormatter dataFormatter = new DataFormatter();
 
+        // 1. ОПТИМИЗАЦИЯ: Загружаем все активные товары в Map (Имя -> Товар) ОДНИМ запросом
+        // Это исключает N+1 проблему и ускоряет импорт в десятки раз
+        Map<String, Product> productCache = productRepository.findAllActive().stream()
+                .collect(Collectors.toMap(Product::getName, p -> p, (existing, replacement) -> existing));
+
         try (InputStream is = file.getInputStream();
              Workbook workbook = new XSSFWorkbook(is)) {
-            // try-with-resources уже был, это отлично
 
             Sheet sheet = workbook.getSheetAt(0);
+
+            // Список для массового сохранения в конце, если вы захотите еще больше скорости
+            // (но сохранение в цикле внутри @Transactional тоже допустимо)
 
             for (Row row : sheet) {
                 if (row.getRowNum() == 0) continue; // Пропускаем заголовок
 
                 Cell nameCell = row.getCell(0);
-                Cell qtyCell = row.getCell(1);
-                Cell purchaseCell = row.getCell(2);
-
                 if (nameCell == null || nameCell.getStringCellValue().trim().isEmpty()) continue;
                 String name = dataFormatter.formatCellValue(nameCell).trim();
 
-                if (qtyCell == null) continue;
+                // 2. Ищем товар в кэше (в памяти), а не в БД
+                Product product = productCache.get(name);
+                if (product == null) continue; // Если товара нет в базе, пропускаем строку
 
-                int incomingQty = 0;
-                try {
-                    String qtyStr = dataFormatter.formatCellValue(qtyCell).replace(",", ".");
-                    incomingQty = (int) Double.parseDouble(qtyStr); // Double.parseDouble используется только для парсинга из Excel
-                } catch (NumberFormatException e) {
-                    log.warn("Некорректное количество в строке {}: {}", row.getRowNum(), dataFormatter.formatCellValue(qtyCell));
-                    continue;
+                Cell qtyCell = row.getCell(1);
+                Cell purchaseCell = row.getCell(2);
+
+                if (qtyCell != null) {
+                    try {
+                        String qtyStr = dataFormatter.formatCellValue(qtyCell).replace(",", ".");
+                        int incomingQty = (int) Double.parseDouble(qtyStr);
+
+                        int currentStock = Optional.ofNullable(product.getStockQuantity()).orElse(0);
+                        product.setStockQuantity(currentStock + incomingQty);
+
+                        // Логируем движение товара
+                        stockService.logMovement(name, incomingQty, "INCOMING", "Импорт через Excel", "ADMIN");
+                    } catch (NumberFormatException e) {
+                        log.warn("Ошибка количества в строке {}: {}", row.getRowNum(), dataFormatter.formatCellValue(qtyCell));
+                    }
                 }
 
-                final int finalQty = incomingQty;
-                // ИДЕАЛЬНО: findByNameAndIsDeletedFalse использует индекс и фильтрует удаленные
-                productRepository.findByNameAndIsDeletedFalse(name).ifPresent(product -> {
-                    int currentStock = Optional.ofNullable(product.getStockQuantity()).orElse(0);
-                    product.setStockQuantity(currentStock + finalQty);
-
-                    if (purchaseCell != null) {
-                        try {
-                            String pPriceStr = dataFormatter.formatCellValue(purchaseCell).replace(",", ".");
-                            // ИДЕАЛЬНО: парсим сразу в BigDecimal
-                            BigDecimal pPrice = new BigDecimal(pPriceStr);
-                            product.setPurchasePrice(pPrice);
-                        } catch (Exception ignored) {
-                            // ИДЕАЛЬНО: используем log.debug вместо ignored catch block
-                            log.debug("Не удалось распарсить себестоимость для товара {}", name);
-                        }
+                if (purchaseCell != null) {
+                    try {
+                        String pPriceStr = dataFormatter.formatCellValue(purchaseCell).replace(",", ".");
+                        product.setPurchasePrice(new BigDecimal(pPriceStr));
+                    } catch (Exception e) {
+                        log.debug("Не удалось распарсить цену в строке {}: {}", row.getRowNum(), name);
                     }
+                }
 
-                    productRepository.save(product);
-                    stockService.logMovement(name, finalQty, "INCOMING", "Импорт через Excel", "ADMIN");
-                });
+                productRepository.save(product);
                 updatedCount++;
             }
 
-            log.info("Импорт завершен. Обновлено товаров: {}", updatedCount);
-
+            log.info("Импорт завершен успешно. Обновлено товаров: {}", updatedCount);
             return ResponseEntity.ok(ApiResponse.ok("Импортировано " + updatedCount + " товаров", Map.of("updatedCount", updatedCount)));
 
         } catch (Exception e) {
-            log.error("Критические ошибка импорта Excel", e);
+            log.error("Критическая ошибка импорта Excel", e);
+            // Транзакция откатится автоматически
             throw new RuntimeException("Ошибка импорта: " + e.getMessage());
         }
     }
+
 
     @GetMapping("/{name}/history")
     public ResponseEntity<ApiResponse<List<StockMovement>>> getProductHistory(@PathVariable String name) {
@@ -163,5 +202,16 @@ public class ProductApiController {
                 .collect(Collectors.toList());
 
         return ResponseEntity.ok(ApiResponse.ok("Каталог товаров для Android", result));
+    }
+
+    private void recordAudit(Long entityId, String type, String action, String details) {
+        AuditLog auditLog = new AuditLog();
+        auditLog.setUsername("ADMIN");
+        auditLog.setEntityId(entityId);
+        auditLog.setEntityType(type);
+        auditLog.setAction(action);
+        auditLog.setDetails(details);
+        auditLog.setTimestamp(LocalDateTime.now());
+        auditLogRepository.save(auditLog);
     }
 }

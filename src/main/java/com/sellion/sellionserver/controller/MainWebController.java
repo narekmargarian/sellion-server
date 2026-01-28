@@ -35,6 +35,11 @@ public class MainWebController {
     public String showDashboard(
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "size", defaultValue = "50") int size,
+            // НОВЫЕ ПАРАМЕТРЫ ДЛЯ КЛИЕНТОВ
+            @RequestParam(value = "clientPage", defaultValue = "0") int clientPage,
+            @RequestParam(value = "clientCategory", required = false) String clientCategory,
+            @RequestParam(value = "clientSearch", required = false) String clientSearch,
+
             @RequestParam(value = "orderManagerId", required = false) String orderManagerId,
             @RequestParam(value = "returnManagerId", required = false) String returnManagerId,
             @RequestParam(value = "orderStartDate", required = false) String orderStartDate,
@@ -55,10 +60,8 @@ public class MainWebController {
         LocalDateTime rStartDT = startR.atStartOfDay();
         LocalDateTime rEndDT = endR.atTime(LocalTime.MAX);
 
-        // --- 2. ЛОГИКА ДЛЯ ЗАКАЗОВ (Полная статистика + Пагинация) ---
-        // ИДЕАЛЬНО: Используем Pageable прямо в запросе репозитория для производительности 2026 года
+        // --- 2. ЛОГИКА ДЛЯ ЗАКАЗОВ ---
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-
         Page<Order> ordersPage;
         if (orderManagerId != null && !orderManagerId.isEmpty()) {
             ordersPage = orderRepository.findOrdersByManagerAndDateRangePaged(orderManagerId, oStartDT, oEndDT, pageable);
@@ -66,25 +69,22 @@ public class MainWebController {
             ordersPage = orderRepository.findOrdersBetweenDatesPaged(oStartDT, oEndDT, pageable);
         }
 
-        // Для расчета статистики за период все равно нужны агрегированные данные (сохраняем вашу логику фильтрации)
         List<Order> allOrdersForPeriod = (orderManagerId != null && !orderManagerId.isEmpty())
                 ? orderRepository.findOrdersByManagerAndDateRange(orderManagerId, oStartDT, oEndDT)
                 : orderRepository.findOrdersBetweenDates(oStartDT, oEndDT);
 
-        // Расчет сумм по вашей логике
         BigDecimal totalOrdersSum = allOrdersForPeriod.stream()
                 .filter(o -> o != null && o.getStatus() != OrderStatus.CANCELLED && o.getType() != OrderType.WRITE_OFF)
                 .map(o -> o.getTotalAmount() != null ? o.getTotalAmount() : BigDecimal.ZERO)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         BigDecimal rawSales = totalOrdersSum;
-
         BigDecimal rawPurchaseCost = allOrdersForPeriod.stream()
                 .filter(o -> o != null && o.getStatus() != OrderStatus.CANCELLED)
                 .map(o -> o.getTotalPurchaseCost() != null ? o.getTotalPurchaseCost() : BigDecimal.ZERO)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        // --- 3. ЛОГИКА ДЛЯ ВОЗВРАТОВ (Полная) ---
+        // --- 3. ЛОГИКА ДЛЯ ВОЗВРАТОВ ---
         List<ReturnOrder> allReturns = (returnManagerId != null && !returnManagerId.isEmpty())
                 ? returnOrderRepository.findReturnsByManagerAndDateRange(returnManagerId, rStartDT, rEndDT)
                 : returnOrderRepository.findReturnsBetweenDates(rStartDT, rEndDT);
@@ -94,67 +94,40 @@ public class MainWebController {
                 .map(r -> r.getTotalAmount() != null ? r.getTotalAmount() : BigDecimal.ZERO)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        // Чистая прибыль
-        BigDecimal netProfitBD = rawSales.subtract(rawPurchaseCost)
-                .subtract(totalReturnsSum)
-                .setScale(0, RoundingMode.HALF_UP);
+        BigDecimal netProfitBD = rawSales.subtract(rawPurchaseCost).subtract(totalReturnsSum).setScale(0, RoundingMode.HALF_UP);
 
         // --- 4. ОБЩАЯ СТАТИСТИКА И СЧЕТА ---
         List<Invoice> invoices = Optional.ofNullable(invoiceRepository.findAllByOrderByCreatedAtDesc()).orElse(new ArrayList<>());
+        BigDecimal totalInvoiceDebt = invoices.stream().filter(Objects::nonNull).map(i -> (i.getTotalAmount() != null ? i.getTotalAmount() : BigDecimal.ZERO).subtract(i.getPaidAmount() != null ? i.getPaidAmount() : BigDecimal.ZERO)).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal totalPaidSum = invoices.stream().filter(i -> i != null && i.getPaidAmount() != null).map(Invoice::getPaidAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        BigDecimal totalInvoiceDebt = invoices.stream()
-                .filter(Objects::nonNull)
-                .map(i -> {
-                    BigDecimal total = (i.getTotalAmount() != null ? i.getTotalAmount() : BigDecimal.ZERO);
-                    BigDecimal paid = (i.getPaidAmount() != null ? i.getPaidAmount() : BigDecimal.ZERO);
-                    return total.subtract(paid);
-                })
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        BigDecimal totalPaidSum = invoices.stream()
-                .filter(i -> i != null && i.getPaidAmount() != null)
-                .map(Invoice::getPaidAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        // Средний чек
         long activeOrdersCount = allOrdersForPeriod.stream().filter(o -> o.getStatus() != OrderStatus.CANCELLED).count();
-        BigDecimal avgCheck = (activeOrdersCount == 0) ? BigDecimal.ZERO :
-                rawSales.divide(BigDecimal.valueOf(activeOrdersCount), 2, RoundingMode.HALF_UP);
-
+        BigDecimal avgCheck = (activeOrdersCount == 0) ? BigDecimal.ZERO : rawSales.divide(BigDecimal.valueOf(activeOrdersCount), 2, RoundingMode.HALF_UP);
         List<AuditLog> limitedLogs = auditLogRepository.findAllByOrderByTimestampDesc().stream().limit(15).toList();
 
-        // --- 5. ЛОГИКА KPI МЕНЕДЖЕРОВ (Полная) ---
+        // --- 5. ЛОГИКА KPI МЕНЕДЖЕРОВ ---
         List<String> managersForUI = ManagerId.getAllDisplayNames();
         Map<String, ManagerKpiDTO> managerStats = new HashMap<>();
         LocalDate now = LocalDate.now();
-        Month currentMonth = now.getMonth();
-        Year currentYear = Year.of(now.getYear());
-
         for (String mName : managersForUI) {
-            BigDecimal mSales = orderRepository.findByManagerId(mName).stream()
-                    .filter(o -> o != null && o.getStatus() != OrderStatus.CANCELLED)
-                    .map(o -> o.getTotalAmount() != null ? o.getTotalAmount() : BigDecimal.ZERO)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-            BigDecimal mReturns = returnOrderRepository.findByManagerId(mName).stream()
-                    .filter(r -> r != null && r.getStatus() == ReturnStatus.CONFIRMED)
-                    .map(r -> r.getTotalAmount() != null ? r.getTotalAmount() : BigDecimal.ZERO)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
-
+            BigDecimal mSales = orderRepository.findByManagerId(mName).stream().filter(o -> o.getStatus() != OrderStatus.CANCELLED).map(o -> o.getTotalAmount() != null ? o.getTotalAmount() : BigDecimal.ZERO).reduce(BigDecimal.ZERO, BigDecimal::add);
+            BigDecimal mReturns = returnOrderRepository.findByManagerId(mName).stream().filter(r -> r.getStatus() == ReturnStatus.CONFIRMED).map(r -> r.getTotalAmount() != null ? r.getTotalAmount() : BigDecimal.ZERO).reduce(BigDecimal.ZERO, BigDecimal::add);
             ManagerKpiDTO dto = new ManagerKpiDTO(mSales, mReturns);
-            ManagerTarget target = managerTargetRepository.findByManagerIdAndMonthAndYear(mName, currentMonth, currentYear);
+            ManagerTarget target = managerTargetRepository.findByManagerIdAndMonthAndYear(mName, now.getMonth(), Year.of(now.getYear()));
             dto.setTargetAmount(target != null ? target.getTargetAmount() : BigDecimal.ZERO);
             managerStats.put(mName, dto);
         }
 
-        // --- 6. ПЕРЕДАЧА В МОДЕЛЬ  ---
+        // --- 6. ПЕРЕДАЧА В МОДЕЛЬ ---
         addModel(page, orderManagerId, returnManagerId, model, ordersPage, totalOrdersSum, rawSales, rawPurchaseCost, netProfitBD, avgCheck, limitedLogs, invoices, totalInvoiceDebt, totalPaidSum, startD, endD, allReturns, totalReturnsSum, startR, endR);
 
-        // Склад и Группировка
-        groupAndWarehouse(activeTab, model, managersForUI, managerStats, invoices);
+        // ИСПРАВЛЕННЫЙ ВЫЗОВ (Передаем 7 аргументов)
+
+        groupAndWarehouse(activeTab, clientPage, clientCategory, clientSearch, model, managersForUI, managerStats, invoices);
 
         return "dashboard";
     }
+
 
     private static void addModel(int page, String orderManagerId, String returnManagerId, Model model, Page<Order> ordersPage, BigDecimal totalOrdersSum, BigDecimal rawSales, BigDecimal rawPurchaseCost, BigDecimal netProfitBD, BigDecimal avgCheck, List<AuditLog> limitedLogs, List<Invoice> invoices, BigDecimal totalInvoiceDebt, BigDecimal totalPaidSum, LocalDate startD, LocalDate endD, List<ReturnOrder> allReturns, BigDecimal totalReturnsSum, LocalDate startR, LocalDate endR) {
         model.addAttribute("orders", ordersPage.getContent());
@@ -185,40 +158,86 @@ public class MainWebController {
         model.addAttribute("selectedReturnManager", returnManagerId);
     }
 
-    private void groupAndWarehouse(String activeTab, Model model, List<String> managersForUI, Map<String, ManagerKpiDTO> managerStats, List<Invoice> invoices) {
-        List<Product> activeProducts = Optional.ofNullable(productRepository.findAllActive()).orElse(new ArrayList<>());
+
+    private void groupAndWarehouse(String activeTab, int clientPage, String clientCategory, String clientSearch, Model model, List<String> managersForUI, Map<String, ManagerKpiDTO> managerStats, List<Invoice> invoices) {
+        // 1. Склад: Получаем активные товары с сортировкой
+        List<Product> activeProducts = Optional.ofNullable(productRepository.findAllByIsDeletedFalse()).orElse(new ArrayList<>());
+
         Map<String, List<Product>> groupedProducts = activeProducts.stream()
                 .filter(Objects::nonNull)
+                .peek(p -> {
+                    if (p.getCategory() == null || p.getCategory().isBlank()) p.setCategory("Без категории");
+                })
                 .collect(Collectors.groupingBy(
-                        p -> (p.getCategory() == null || p.getCategory().isBlank()) ? "Без категории" : p.getCategory(),
-                        TreeMap::new, Collectors.toList()));
+                        Product::getCategory,
+                        TreeMap::new,
+                        Collectors.collectingAndThen(Collectors.toList(), list -> {
+                            list.sort(Comparator.comparing(Product::getName));
+                            return list;
+                        })
+                ));
 
         model.addAttribute("groupedProducts", groupedProducts);
         model.addAttribute("products", activeProducts);
 
-        List<Client> activeClients = Optional.ofNullable(clientRepository.findAllActive()).orElse(new ArrayList<>());
-        model.addAttribute("clients", activeClients);
+        // 2. Логика PAGE + SEARCH для Клиентов (Исправлено)
+        int pageSize = 50;
+        Pageable pageable = PageRequest.of(clientPage, pageSize, Sort.by("name").ascending());
+        Page<Client> clientsPage;
+
+        // Очистка параметров для поиска
+        String searchKeyword = (clientSearch != null && !clientSearch.trim().isEmpty()) ? clientSearch.trim() : null;
+        String categoryFilter = (clientCategory != null && !clientCategory.trim().isEmpty()) ? clientCategory.trim() : null;
+
+        // Глобальный поиск по базе через репозиторий
+        if (searchKeyword != null || categoryFilter != null) {
+            // Вызываем новый метод поиска, который ищет по имени И адресу И категории
+            clientsPage = clientRepository.searchClients(searchKeyword, categoryFilter, pageable);
+        } else {
+            clientsPage = clientRepository.findAllByIsDeletedFalse(pageable);
+        }
+
+        model.addAttribute("clients", clientsPage.getContent());
+        model.addAttribute("clientCurrentPage", clientPage);
+        model.addAttribute("clientTotalPages", clientsPage.getTotalPages());
+        model.addAttribute("clientTotalElements", clientsPage.getTotalElements());
+        model.addAttribute("selectedCategory", clientCategory);
+        model.addAttribute("clientSearch", clientSearch); // Чтобы значение осталось в инпуте
+        model.addAttribute("clientCategories", clientRepository.findUniqueCategories());
+
+        // 3. Персонал и KPI
         model.addAttribute("users", Optional.ofNullable(userRepository.findAll()).orElse(new ArrayList<>()));
         model.addAttribute("managers", managersForUI);
         model.addAttribute("managersKPI", managersForUI);
         model.addAttribute("managerStats", managerStats);
 
-        // Логика просрочки
+        // 4. Логика просрочки
         LocalDateTime limitDate = LocalDateTime.now().minusDays(30);
         Set<String> overdueClients = invoices.stream()
                 .filter(inv -> inv != null && !"PAID".equals(inv.getStatus()))
                 .filter(inv -> inv.getCreatedAt() != null && inv.getCreatedAt().isBefore(limitDate))
-                .map(Invoice::getShopName).filter(Objects::nonNull).collect(Collectors.toSet());
+                .map(Invoice::getShopName)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
         model.addAttribute("overdueClients", overdueClients);
 
-        // Карта долгов для JS
-        Map<String, BigDecimal> clientDebts = activeClients.stream()
+        // 5. Карта долгов для JS
+        List<Client> allActiveForMap = clientRepository.findAllByIsDeletedFalse();
+        Map<String, BigDecimal> clientDebts = allActiveForMap.stream()
                 .filter(c -> c != null && c.getName() != null)
-                .collect(Collectors.toMap(Client::getName, c -> c.getDebt() != null ? c.getDebt() : BigDecimal.ZERO, (ex, rep) -> ex));
-        model.addAttribute("clientDebts", clientDebts);
+                .collect(Collectors.toMap(
+                        Client::getName,
+                        c -> c.getDebt() != null ? c.getDebt() : BigDecimal.ZERO,
+                        (existing, replacement) -> existing
+                ));
 
+        model.addAttribute("clientDebts", clientDebts);
         model.addAttribute("paymentMethods", PaymentMethod.values());
         model.addAttribute("returnReasons", ReasonsReturn.values());
         model.addAttribute("activeTab", activeTab);
     }
+
+
+
+
 }

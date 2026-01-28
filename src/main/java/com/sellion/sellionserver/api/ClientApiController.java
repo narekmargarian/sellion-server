@@ -16,7 +16,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-
 @RestController
 @RequestMapping("/api/clients")
 @RequiredArgsConstructor
@@ -25,15 +24,13 @@ public class ClientApiController {
     private final ClientRepository clientRepository;
     private final TransactionRepository transactionRepository;
 
-
     @GetMapping
-    public List<Client> getAllClients() {
-        return clientRepository.findAll()
+    public List<Client> getAllClients(@RequestParam String managerId) {
+        // Выдает всех активных клиентов только для того менеджера, который сделал запрос
+        return clientRepository.findAllByManagerIdAndIsDeletedFalse(managerId)
                 .stream()
                 .sorted(Comparator.comparing(Client::getName))
                 .toList();
-
-
     }
 
     @DeleteMapping("/{id}")
@@ -70,5 +67,4 @@ public class ClientApiController {
     public List<Transaction> getClientTransactions(@PathVariable Long id) {
         return transactionRepository.findAllByClientIdOrderByTimestampAsc(id);
     }
-
 }

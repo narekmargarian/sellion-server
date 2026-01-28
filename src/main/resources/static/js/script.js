@@ -5,6 +5,7 @@ if (typeof returnsData === 'undefined') window.returnsData = [];
 
 
 let tempItems = {};
+let managerIdList = [];
 
 // --- 1. Навигация и Утилиты ---
 function openModal(id) {
@@ -132,7 +133,7 @@ function printSelectedOperations(type) {
     const selectedIds = Array.from(document.querySelectorAll(`${checkboxClass}:checked`)).map(cb => cb.value);
 
     if (selectedIds.length === 0) {
-        showToast("⚠️ Сначала выберите записи галочкой!", "error");
+        showToast("Сначала выберите записи галочкой!", "error");
         return;
     }
 
@@ -391,40 +392,43 @@ function enableClientEdit() {
 }
 
 
-function enableProductEdit() {
-    const id = window.currentProductId;
-    const product = productsData.find(p => p.id == id);
-    if (!product) return;
+// function enableProductEdit() {
+//     const id = window.currentProductId;
+//     const product = productsData.find(p => p.id == id);
+//     if (!product) return;
+//
+//
+//     document.getElementById('modal-product-title').innerText = "Редактирование товара";
+//     const info = document.getElementById('product-info');
+//     // info.style.gridTemplateColumns = '1fr';
+//     info.innerHTML = `
+//          <div class="modal-info-row">
+//             <div><label>Название</label><input type="text" id="edit-product-name" value="${product.name}"></div>
+//             <div><label>Цена</label><input type="number" id="edit-product-price" value="${product.price}"></div>
+//             <div><label>Категория</label><input type="text" id="edit-product-category" value="${product.category || ''}"></div>
+//             <div><label>Код SKU (для 1С)</label><input type="text" id="edit-product-hsn" value="${product.hsnCode || ''}"></div>
+//
+//         </div>
+//         <div class="modal-info-row">
+//             <div><label>Остаток</label><input type="number" id="edit-product-qty" value="${product.stockQuantity || 0}"></div>
+//             <div><label>Штрих-код</label><input type="text" id="edit-product-barcode" value="${product.barcode || ''}"></div>
+//             <div><label>Упаковка</label><input type="number" id="edit-product-perbox" value="${product.itemsPerBox || 0}"></div>
+//             <div><label>Ед. измерения (шт/кг/кор)</label><input type="text" id="edit-product-unit" value="${product.unit || 'шт'}"></div>
+//
+//         </div>
+//     `;
+//
+//     const footer = document.getElementById('product-footer-actions');
+//     footer.innerHTML = `
+//         <button class="btn-primary" style="background:#10b981" onclick="saveProductChanges(${product.id})">Сохранить</button>
+//         <button class="btn-primary" style="background:#64748b" onclick="openProductDetails(${product.id})">Отмена</button>
+//
+//
+// `;
+// }
 
 
-    document.getElementById('modal-product-title').innerText = "Редактирование товара";
-    const info = document.getElementById('product-info');
-    // info.style.gridTemplateColumns = '1fr';
-    info.innerHTML = `
-         <div class="modal-info-row">
-            <div><label>Название</label><input type="text" id="edit-product-name" value="${product.name}"></div>
-            <div><label>Цена</label><input type="number" id="edit-product-price" value="${product.price}"></div>
-            <div><label>Категория</label><input type="text" id="edit-product-category" value="${product.category || ''}"></div>
-            <div><label>Код SKU (для 1С)</label><input type="text" id="edit-product-hsn" value="${product.hsnCode || ''}"></div>
 
-        </div>
-        <div class="modal-info-row">
-            <div><label>Остаток</label><input type="number" id="edit-product-qty" value="${product.stockQuantity || 0}"></div>
-            <div><label>Штрих-код</label><input type="text" id="edit-product-barcode" value="${product.barcode || ''}"></div>
-            <div><label>Упаковка</label><input type="number" id="edit-product-perbox" value="${product.itemsPerBox || 0}"></div>
-            <div><label>Ед. измерения (шт/кг/кор)</label><input type="text" id="edit-product-unit" value="${product.unit || 'шт'}"></div>
-
-        </div>
-    `;
-
-    const footer = document.getElementById('product-footer-actions');
-    footer.innerHTML = `
-        <button class="btn-primary" style="background:#10b981" onclick="saveProductChanges(${product.id})">Сохранить</button>
-        <button class="btn-primary" style="background:#64748b" onclick="openProductDetails(${product.id})">Отмена</button>
-
-
-`;
-}
 
 
 async function submitPayment() {
@@ -450,67 +454,138 @@ async function submitPayment() {
 
 
 // Функция отправки нового товара на сервер
+// async function submitCreateProduct() {
+//     const data = {
+//         name: document.getElementById('new-p-name').value,
+//         price: parseFloat(document.getElementById('new-p-price').value) || 0,
+//         stockQuantity: parseInt(document.getElementById('new-p-qty').value) || 0,
+//         itemsPerBox: parseInt(document.getElementById('new-p-box').value) || 1,
+//         barcode: document.getElementById('new-p-code').value,
+//         category: document.getElementById('new-p-cat').value
+//     };
+//
+//     if (!data.name) {
+//         showToast("Введите название товара!");
+//         return;
+//     }
+//
+//     try {
+//         const response = await fetch('/api/admin/products/create', {
+//             method: 'POST',
+//             headers: {'Content-Type': 'application/json'},
+//             body: JSON.stringify(data)
+//         });
+//         if (response.ok) {
+//             location.reload(); // Обновляем страницу после создания
+//         } else {
+//             showToast("Ошибка при сохранении товара");
+//         }
+//     } catch (e) {
+//         console.error(e);
+//         showToast("Ошибка сети");
+//     }
+// }
+
+
+
 async function submitCreateProduct() {
     const data = {
-        name: document.getElementById('new-p-name').value,
+        category: document.getElementById('new-p-cat').value,
         price: parseFloat(document.getElementById('new-p-price').value) || 0,
+        hsnCode: document.getElementById('new-p-hsn').value,
+        expiryDate: document.getElementById('new-p-expiry').value,
+        name: document.getElementById('new-p-name').value,
         stockQuantity: parseInt(document.getElementById('new-p-qty').value) || 0,
-        itemsPerBox: parseInt(document.getElementById('new-p-box').value) || 1,
         barcode: document.getElementById('new-p-code').value,
-        category: document.getElementById('new-p-cat').value
+        itemsPerBox: parseInt(document.getElementById('new-p-box').value) || 1,
+        unit: document.getElementById('new-p-unit').value
     };
 
-    if (!data.name) {
-        showToast("Введите название товара!");
+    if (!data.name) return showToast("Укажите название товара!", "error");
+
+    const response = await fetch('/api/products/create', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': document.querySelector('meta[name="_csrf"]')?.content
+        },
+        body: JSON.stringify(data)
+    });
+
+    if (response.ok) {
+        showToast("Товар успешно создан", "success");
+        location.reload();
+    } else {
+        const err = await response.json();
+        showToast("Ошибка: " + (err.error || "Не удалось сохранить"), "error");
+    }
+}
+
+
+async function openCreateClientModal() {
+    // Сначала открываем окно
+    openModal('modal-client');
+
+    // Находим select
+    const select = document.getElementById('new-client-manager-id');
+    if (!select) {
+        console.error("Критическая ошибка: Select #new-client-manager-id не найден!");
         return;
     }
 
-    try {
-        const response = await fetch('/api/admin/products/create', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(data)
-        });
-        if (response.ok) {
-            location.reload(); // Обновляем страницу после создания
-        } else {
-            showToast("Ошибка при сохранении товара");
-        }
-    } catch (e) {
-        console.error(e);
-        showToast("Ошибка сети");
+    // Если список пуст, ждем загрузки
+    if (!window.managerIdList || window.managerIdList.length === 0) {
+        select.innerHTML = '<option value="">⏳ Загрузка...</option>';
+        await loadManagerIds();
     }
-}
 
-function openCreateClientModal() {
-    openModal('modal-client');
-    // Заполняем select managerIdList данными из Enum
-    const select = document.getElementById('new-client-manager-id');
-    if (select && managerIdList.length > 0) {
-        select.innerHTML = managerIdList.map(m => `<option value="${m}">${m}</option>`).join('');
-    } else if (select) {
-        select.innerHTML = `<option value="OFFICE">OFFICE (по умолчанию)</option>`;
+    // Финальное заполнение
+    const finalList = window.managerIdList || [];
+    if (finalList.length > 0) {
+        select.innerHTML = finalList.map(m => `<option value="${m}">${m}</option>`).join('');
+    } else {
+        select.innerHTML = '<option value="OFFICE">OFFICE (дефолт)</option>';
     }
 }
 
 
-let managerIdList = []; // Глобальный массив для хранения списка из Enum
+function applyClientFilters() {
+    const searchVal = document.getElementById('search-clients').value;
+    const categoryVal = document.getElementById('filter-client-category').value;
+
+    const url = new URL(window.location.href);
+    url.searchParams.set('activeTab', 'tab-clients');
+    url.searchParams.set('clientSearch', searchVal);
+    url.searchParams.set('clientCategory', categoryVal);
+    url.searchParams.set('clientPage', '0'); // Сброс на 1 страницу
+
+    window.location.href = url.toString();
+}
+
+
+
+ // Глобальный массив для хранения списка из Enum
 
 // Функция для загрузки списка менеджеров с сервера (асинхронно)
 async function loadManagerIds() {
     try {
-        const response = await fetch('/api/public/managers'); // Вызываем наш API
+        const response = await fetch('/api/public/managers');
         if (response.ok) {
-            managerIdList = await response.json();
-            console.log("Список менеджеров из Enum загружен:", managerIdList);
+            const data = await response.json();
+            // Сохраняем глобально, чтобы было доступно везде
+            window.managerIdList = data;
+            managerIdList = data;
+            console.log("Список менеджеров из Enum загружен:", window.managerIdList);
+            return data;
         } else {
             console.error("Не удалось загрузить список менеджеров из Enum.");
+            return [];
         }
     } catch (e) {
         console.error("Ошибка сети при загрузке Enum менеджеров.");
+        return [];
     }
 }
-
 async function openCreateOrderModal() {
     await loadManagerIds();
     tempItems = {};
@@ -967,7 +1042,7 @@ async function submitCreateUser() {
             body: JSON.stringify(data)
         });
         if (response.ok) {
-            showToast("✅ Сотрудник успешно добавлен", "success");
+            showToast("Сотрудник успешно добавлен", "success");
             location.reload(); // Обновляем страницу, чтобы увидеть нового пользователя в таблице
         } else {
             const error = await response.json();
@@ -1074,7 +1149,7 @@ function connectWebSocket() {
     stompClient.debug = null; // Отключаем лог в консоли для чистоты
 
     stompClient.connect({}, function (frame) {
-        console.log('✅ Sellion Realtime Connected [2026]');
+        console.log('Sellion Realtime Connected [2026]');
 
         stompClient.subscribe('/topic/new-order', function (notification) {
             const data = JSON.parse(notification.body);
@@ -1149,27 +1224,55 @@ function doInventory() {
 }
 
 
-function toggleCategory(categoryClass) {
-    // Находим все строки, у которых есть этот класс
-    const rows = document.getElementsByClassName(categoryClass);
-    const header = document.querySelector(`[data-target="${categoryClass}"]`);
-    const icon = header.querySelector('.toggle-icon');
+// function toggleCategory(categoryClass) {
+//     // Находим все строки, у которых есть этот класс
+//     const rows = document.getElementsByClassName(categoryClass);
+//     const header = document.querySelector(`[data-target="${categoryClass}"]`);
+//     const icon = header.querySelector('.toggle-icon');
+//
+//     if (rows.length === 0) return;
+//
+//     // Определяем текущее состояние по первой строке
+//     const isHidden = rows[0].style.display === "none";
+//
+//     for (let i = 0; i < rows.length; i++) {
+//         rows[i].style.display = isHidden ? "table-row" : "none";
+//     }
+//
+//     // Вращаем иконку
+//     if (icon) {
+//         icon.style.transform = isHidden ? "rotate(0deg)" : "rotate(-90deg)";
+//     }
+// }
 
-    if (rows.length === 0) return;
-
-    // Определяем текущее состояние по первой строке
-    const isHidden = rows[0].style.display === "none";
-
-    for (let i = 0; i < rows.length; i++) {
-        rows[i].style.display = isHidden ? "table-row" : "none";
-    }
-
-    // Вращаем иконку
-    if (icon) {
-        icon.style.transform = isHidden ? "rotate(0deg)" : "rotate(-90deg)";
-    }
-}
-
+// function toggleCategory(targetId) {
+//     // Находим все строки товаров данной категории по классу
+//     const rows = document.querySelectorAll('.' + targetId);
+//     // Находим строку-заголовок, по которой кликнули
+//     const header = document.querySelector(`[data-target="${targetId}"]`);
+//     const icon = header.querySelector('.toggle-icon');
+//
+//     if (rows.length === 0) return;
+//
+//     // Проверяем текущее состояние (скрыто или нет) по первой строке
+//     const isHidden = rows[0].style.display === "none";
+//
+//     rows.forEach(row => {
+//         // Переключаем: если было скрыто — показываем (table-row), иначе скрываем
+//         row.style.display = isHidden ? "table-row" : "none";
+//     });
+//
+//     // Анимация стрелочки
+//     if (icon) {
+//         if (isHidden) {
+//             icon.style.transform = "rotate(0deg)";
+//             icon.innerText = "▼";
+//         } else {
+//             icon.style.transform = "rotate(-90deg)";
+//             icon.innerText = "▶";
+//         }
+//     }
+// }
 
 
 
@@ -1191,7 +1294,7 @@ async function submitInventoryAdjustment() {
         });
 
         if (response.ok) {
-            showToast("Склад скорректирован ✅", "success");
+            showToast("Склад скорректирован", "success");
             location.reload();
         } else {
             const error = await response.json();
@@ -1208,7 +1311,7 @@ function downloadExcel(type) {
     const end = document.getElementById('report-end').value;
 
     if (!start || !end) {
-        showToast("⚠️ Выберите период!", "error");
+        showToast("Выберите период!", "error");
         return;
     }
 
@@ -1219,7 +1322,7 @@ function downloadExcel(type) {
     const hasData = Array.from(rows).some(row => row.cells.length > 1);
 
     if (!hasData) {
-        showToast(`⚠️ Нет данных (${type === 'orders' ? 'заказов' : 'возвратов'}) за этот период!`, "error");
+        showToast(`Нет данных (${type === 'orders' ? 'заказов' : 'возвратов'}) за этот период!`, "error");
         return;
     }
 
@@ -1252,7 +1355,7 @@ function downloadExcel(type) {
                     window.URL.revokeObjectURL(downloadUrl);
                 }, 100);
 
-                showToast(`✅ Отчет успешно скачан!`, 'success');
+                showToast(`Отчет успешно скачан!`, 'success');
             } else {
                 // Пытаемся получить текст ошибки от сервера (JSON)
                 const errorData = await response.json().catch(() => ({ message: "Ошибка сервера (500/404)" }));
@@ -1272,7 +1375,7 @@ function sendToEmail() {
     const email = document.getElementById('report-email').value;
 
     if (!start || !end || !email) {
-        showToast("⚠️ Выберите период и введите email!", "error");
+        showToast("Выберите период и введите email!", "error");
         return;
     }
 
@@ -1315,11 +1418,11 @@ function sendToEmail() {
             return response.json();
         })
         .then(data => {
-            showToast(`✅ ${data.message || 'Отчет успешно отправлен!'}`, 'success');
+            showToast(`${data.message || 'Отчет успешно отправлен!'}`, 'success');
         })
         .catch(error => {
             console.error('Email error:', error);
-            showToast('❌ ' + error.message, 'error');
+            showToast( error.message, 'error');
         });
 }
 
@@ -1377,7 +1480,7 @@ async function saveTargetSales() {
         });
 
         if (response.ok) {
-            showToast("✅ Цель успешно сохранена", "success");
+            showToast("Цель успешно сохранена", "success");
             closeModal('modal-set-target');
             location.reload();
         } else {
@@ -1511,18 +1614,18 @@ function executeSendingCorrections(selectedIds, email) {
         })
         .then(data => {
             if (data.success) {
-                showToast("✅ Реестр успешно отправлен бухгалтеру", "success");
+                showToast("Реестр успешно отправлен бухгалтеру", "success");
                 document.querySelectorAll('.correction-checkbox').forEach(cb => cb.checked = false);
                 const selectAll = document.getElementById('select-all-corrections');
                 if (selectAll) selectAll.checked = false;
                 document.getElementById('selected-count').innerText = "0";
             } else {
-                showToast("❌ Ошибка: " + (data.error || "Не удалось отправить"), "danger");
+                showToast("Ошибка: " + (data.error || "Не удалось отправить"), "danger");
             }
         })
         .catch(err => {
             console.error('Error:', err);
-            showToast("❌ Ошибка соединения с сервером", "danger");
+            showToast("Ошибка соединения с сервером", "danger");
         });
 }
 
@@ -1626,7 +1729,7 @@ function applyReportFilters() {
     const end = document.getElementById('report-end').value;
 
     if (!start || !end) {
-        showToast("⚠️ Выберите начало и конец периода!", "error");
+        showToast("Выберите начало и конец периода!", "error");
         return;
     }
 
@@ -1782,10 +1885,10 @@ function saveAllSettings() {
     })
         .then(res => {
             if (res.ok) {
-                showToast("✅ Настройки сохранены", "success");
+                showToast("Настройки сохранены", "success");
                 setTimeout(() => location.reload(), 1000);
             } else {
-                showToast("❌ Ошибка сохранения", "danger");
+                showToast("Ошибка сохранения", "danger");
             }
         });
 }
@@ -1809,12 +1912,11 @@ function filterInvoices() {
 }
 
 
-// TODO 25.01.26 20:37 IDEALAN DARCNELU SKIZB
 
 function printManagerDebts() {
     const managerId = document.getElementById('filter-invoice-manager').value;
     if (!managerId) {
-        showToast("⚠️ Сначала выберите менеджера из списка!", "info");
+        showToast("Сначала выберите менеджера из списка!", "info");
         return;
     }
 
@@ -1891,7 +1993,7 @@ async function saveNewManualOperation(type) {
         if (val > 0) tempItems[pId] = val; else delete tempItems[pId];
     });
 
-    if (Object.keys(tempItems).length === 0) return showToast("⚠️ Состав пуст!", "danger");
+    if (Object.keys(tempItems).length === 0) return showToast("Состав пуст!", "danger");
 
     const shopName = document.getElementById('new-op-shop').value;
     const dateVal = document.getElementById('new-op-date').value;
@@ -1899,7 +2001,7 @@ async function saveNewManualOperation(type) {
     const carNumber = document.getElementById('new-op-car')?.value || "";
     const comment = document.getElementById('new-op-comment')?.value || "";
 
-    if (!shopName || !dateVal) return showToast("⚠️ Заполните магазин и дату!", "danger");
+    if (!shopName || !dateVal) return showToast("Заполните магазин и дату!", "danger");
 
     const data = {
         shopName,
@@ -1931,7 +2033,7 @@ async function saveNewManualOperation(type) {
             body: payload
         });
 
-        showToast("✅ Операция успешно сохранена", "success");
+        showToast("Операция успешно сохранена", "success");
         setTimeout(() => location.reload(), 800);
     } catch (e) {
         // Ошибка уже обработана внутри secureFetch (через showToast)
@@ -1969,7 +2071,7 @@ function addItemToEdit() {
     const qtyInput = document.getElementById('add-item-qty');
     const pId = select.value;
 
-    if (!pId) return showToast("⚠️ Сначала выберите товар", "error");
+    if (!pId) return showToast("Сначала выберите товар", "error");
 
     const qty = parseInt(qtyInput.value) || 1;
     const product = productsData.find(p => p.id == pId);
@@ -2000,7 +2102,7 @@ function renderItemsTable(itemsMap, isEdit) {
 
         const total = p.price * qty;
 
-        // Кнопка ✅ без фона
+
         const qtyDisplay = isEdit ?
             `<div class="qty-edit-box" style="display: flex; align-items: center; gap: 3px;">
                 <input type="number" id="input-qty-${pId}" class="qty-input-active" value="${qty}" onchange="applySingleQty('${pId}')">
@@ -2173,7 +2275,7 @@ async function saveFullChanges(id) {
 
 async function saveReturnChanges(id) {
     if (Object.keys(tempItems).length === 0) {
-        return showToast("⚠️ Состав возврата пуст", "danger");
+        return showToast("Состав возврата пуст", "danger");
     }
 
     // Находим оригинальный объект возврата, чтобы сохранить ID менеджера
@@ -2396,7 +2498,7 @@ async function saveClientChanges(id) {
             }
         }
 
-        showToast("✅ Данные клиента обновлены", "success");
+        showToast("Данные клиента обновлены", "success");
         openClientDetails(id); // Возвращаемся в режим просмотра
     } catch (e) {
         console.error(e);
@@ -2404,93 +2506,351 @@ async function saveClientChanges(id) {
 }
 
 async function openProductDetails(id) {
-    window.currentProductId = id;
     const p = productsData.find(prod => prod.id == id);
     if (!p) return;
+    window.currentProductId = id;
 
-    document.getElementById('modal-product-title').innerHTML = `ДЕТАЛИ: ${p.name}`;
+    document.getElementById('modal-product-title').innerHTML = `ТОВАР: <span class="badge" style="background:var(--accent)">${p.name}</span>`;
+
     const info = document.getElementById('product-info');
-
-    // Чистый шаблон без лишнего мусора
     info.innerHTML = `
-        <div class="modal-info-grid">
-            <div><small>ЦЕНА:</small><br><b class="price-up">${p.price.toLocaleString()} ֏</b></div>
-            <div><small>СКЛАД:</small><br><b>${p.stockQuantity} шт.</b></div>
-            <div><small>ШТРИХ-КОД:</small><br><b>${p.barcode || '---'}</b></div>
-            <div><small>КАТЕГОРИЯ:</small><br><b>${p.category || '---'}</b></div>
-        </div>
-        <div id="product-history-box" style="margin-top:20px;">
-            <label class="label-small">📜 ИСТОРИЯ ДВИЖЕНИЯ (2026)</label>
-            <div class="table-scroll-mini">
-                <table class="table table-sm">
-                    <tbody id="product-history-body"><tr><td>Загрузка...</td></tr></tbody>
-                </table>
+        <div class="modal-info-container" style="margin-top:15px;">
+            <div class="modal-info-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; background: #f8fafc; padding: 15px; border-radius: 10px; border: 1px solid #e2e8f0; margin-bottom: 10px;">
+                <div><small style="color: #64748b; font-weight: 700;">КАТЕГОРИЯ:</small><br><b>${p.category || '---'}</b></div>
+                <div><small style="color: #64748b; font-weight: 700;">ЦЕНА:</small><br><b class="price-up">${(p.price || 0).toLocaleString()} ֏</b></div>
+                <div><small style="color: #64748b; font-weight: 700;">КОД SKU (1С):</small><br><b style="font-family: monospace;">${p.hsnCode || '---'}</b></div>
+                <div><small style="color: #64748b; font-weight: 700;">СРОК ГОДНОСТИ:</small><br><b>${p.expiryDate ? formatDate(p.expiryDate) : '---'}</b></div>
+            </div>
+            <div class="modal-info-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; background: #fff; padding: 15px; border-radius: 10px; border: 1px solid #e2e8f0;">
+                <div><small style="color: #64748b; font-weight: 700;">ОСТАТОК:</small><br><span class="badge ${p.stockQuantity > 10 ? 'bg-light text-dark' : 'bg-danger text-white'}">${p.stockQuantity || 0} шт.</span></div>
+                <div><small style="color: #64748b; font-weight: 700;">ШТРИХ-КОД:</small><br><b style="font-family: monospace;">${p.barcode || '---'}</b></div>
+                <div><small style="color: #64748b; font-weight: 700;">УПАКОВКА:</small><br><b>${p.itemsPerBox || 1} шт.</b></div>
+                <div><small style="color: #64748b; font-weight: 700;">ЕД. ИЗМЕРЕНИЯ:</small><br><b class="text-primary">${p.unit || 'шт'}</b></div>
             </div>
         </div>
     `;
 
-    // Загрузка истории
-    try {
-        const history = await secureFetch(`/api/products/${encodeURIComponent(p.name)}/history`);
-        const tbody = document.getElementById('product-history-body');
-        if (tbody) {
-            tbody.innerHTML = history.map(h => `
-                <tr>
-                    <td>${formatDate(h.timestamp)}</td>
-                    <td><span class="badge ${h.type === 'WRITE_OFF' ? 'bg-danger' : 'bg-info'}">${h.type}</span></td>
-                    <td style="color:${h.quantityChange > 0 ? '#10b981' : '#ef4444'}"><b>${h.quantityChange > 0 ? '+' : ''}${h.quantityChange}</b></td>
-                </tr>`).join('') || '<tr><td colspan="3">Движений нет</td></tr>';
-        }
-    } catch (e) {
-        console.warn("История недоступна");
-    }
-
     document.getElementById('product-footer-actions').innerHTML = `
         <button class="btn-primary" style="background:#f59e0b" onclick="doInventory()">⚖️ Инвентарь</button>
         <button class="btn-primary" onclick="enableProductEdit()">✏️ Изменить</button>
-        <button class="btn-danger" onclick="deleteProduct(${p.id})">🗑 Удалить</button>
+        <button class="btn-primary" style="background:#ef4444;" onclick="deleteProduct(${p.id})">🗑 Удалить</button>
         <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-product-view')">Закрыть</button>
     `;
     openModal('modal-product-view');
 }
 
+
+
+
+function enableProductEdit() {
+    const p = productsData.find(prod => prod.id == window.currentProductId);
+    const info = document.getElementById('product-info');
+
+    info.innerHTML = `
+        <div class="modal-info-container" style="margin-top:15px;">
+            <div class="modal-info-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; background: #f1f5f9; padding: 15px; border-radius: 10px; margin-bottom: 10px;">
+                <div><label class="label-small">КАТЕГОРИЯ</label><input type="text" id="edit-product-category" class="form-control" value="${p.category || ''}"></div>
+                <div><label class="label-small">ЦЕНА</label><input type="number" id="edit-product-price" class="form-control" value="${p.price}"></div>
+                <div><label class="label-small">КОД SKU</label><input type="text" id="edit-product-hsn" class="form-control" value="${p.hsnCode || ''}"></div>
+                <div><label class="label-small">СРОК ГОДНОСТИ</label><input type="date" id="edit-product-expiry" class="form-control" value="${convertDateToISO(p.expiryDate)}"></div>
+            </div>
+            <div class="modal-info-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; background: #fff; padding: 15px; border-radius: 10px; border: 1px solid #e2e8f0;">
+                <div><label class="label-small">НАЗВАНИЕ</label><input type="text" id="edit-product-name" class="form-control" value="${p.name}"></div>
+                <div><label class="label-small">ОСТАТОК</label><input type="number" id="edit-product-qty" class="form-control" value="${p.stockQuantity}"></div>
+                <div><label class="label-small">ШТРИХ-КОД</label><input type="text" id="edit-product-barcode" class="form-control" value="${p.barcode || ''}"></div>
+                <div style="display: flex; gap: 5px;">
+                    <div style="flex:1"><label class="label-small">УПАКОВКА</label><input type="number" id="edit-product-perbox" class="form-control" value="${p.itemsPerBox}"></div>
+                    <div style="flex:1"><label class="label-small">ЕД. ИЗМ.</label>
+                        <select id="edit-product-unit" class="form-select">
+                            <option value="шт" ${p.unit === 'шт' ? 'selected' : ''}>шт</option>
+                            <option value="кг" ${p.unit === 'кг' ? 'selected' : ''}>кг</option>
+                            <option value="кор" ${p.unit === 'кор' ? 'selected' : ''}>кор</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.getElementById('product-footer-actions').innerHTML = `
+        <button class="btn-primary" style="background:#10b981" onclick="saveProductChanges(${p.id})">💾 Сохранить</button>
+        <button class="btn-primary" style="background:#64748b" onclick="openProductDetails(${p.id})">Отмена</button>
+    `;
+}
+
+function applyClientCategoryFilter(category) {
+    // Получаем текущие параметры URL
+    const url = new URL(window.location.href);
+
+    // Устанавливаем нужные параметры
+    url.searchParams.set('activeTab', 'tab-clients');
+    url.searchParams.set('clientCategory', category);
+    url.searchParams.set('clientPage', '0'); // Сбрасываем на первую страницу при смене фильтра
+
+    // Переходим по новой ссылке
+    window.location.href = url.toString();
+}
+
+
+
+// async function openProductDetails(id) {
+//     window.currentProductId = id;
+//     const p = productsData.find(prod => prod.id == id);
+//     if (!p) return;
+//
+//     document.getElementById('modal-product-title').innerHTML = `📦 ${p.name}`;
+//     const info = document.getElementById('product-info');
+//
+//     // Наполняем данными в 2 ряда, используя стили из tab-orders
+//     info.innerHTML = `
+//         <div class="container-fluid p-0">
+//             <!-- РЯД 1: ЦЕНА, КАТЕГОРИЯ, СКЛАД, КОД АТГ -->
+//             <div class="row g-2 mb-3">
+//                 <div class="col-md-3">
+//                     <small class="text-muted d-block mb-1">ЦЕНА:</small>
+//                     <b class="price-up" style="font-size: 16px;">${p.price.toLocaleString()} ֏</b>
+//                 </div>
+//                 <div class="col-md-3">
+//                     <small class="text-muted d-block mb-1">КАТЕГОРИЯ:</small>
+//                     <b class="text-dark">${p.category || '---'}</b>
+//                 </div>
+//                 <div class="col-md-3">
+//                     <small class="text-muted d-block mb-1">СКЛАД:</small>
+//                     <b class="text-success">Основной</b> <!-- Вернул как заглушку -->
+//                 </div>
+//                 <div class="col-md-3">
+//                     <small class="text-muted d-block mb-1">КОД АТГ (SKU):</small>
+//                     <b class="text-dark" style="font-family: monospace;">${p.hsnCode || '---'}</b>
+//                 </div>
+//             </div>
+//
+//             <!-- РЯД 2: Остаток, Штрих-код, Упаковка/Ед.изм, Срок -->
+//             <div class="row g-2 mb-3">
+//                 <div class="col-md-2">
+//                     <small class="text-muted d-block mb-1">Остаток:</small>
+//                     <span class="badge ${p.stockQuantity > 10 ? 'bg-light text-dark' : 'bg-danger text-white'}" style="padding: 6px;">${p.stockQuantity} шт.</span>
+//                 </div>
+//                 <div class="col-md-3">
+//                     <small class="text-muted d-block mb-1">ШТРИХ-КОД:</small>
+//                     <span style="font-size: 12px; font-family: monospace;">${p.barcode || '---'}</span>
+//                 </div>
+//                 <div class="col-md-4">
+//                     <small class="text-muted d-block mb-1">Упак. / Ед. изм.</small>
+//                     <div class="d-flex align-items-center">
+//                         <span class="fw-bold pe-1 border-end w-50 text-end">${p.itemsPerBox || 0}</span>
+//                         <span class="ps-1 text-primary fw-bold w-50 text-start">${p.unit || 'шт'}</span>
+//                     </div>
+//                 </div>
+//                 <div class="col-md-3">
+//                     <small class="text-muted d-block mb-1">СРОК:</small>
+//                     <span class="fw-bold">${p.expiryDate ? formatDate(p.expiryDate) : '---'}</span>
+//                 </div>
+//             </div>
+//
+//             <!-- История (стиль сохранен) -->
+//             <div id="product-history-box" style="margin-top:20px;">
+//                 <label class="label-small text-muted mb-2">📜 ИСТОРИЯ ДВИЖЕНИЯ (2026)</label>
+//                 <div class="table-scroll-mini" style="max-height: 150px; overflow-y: auto;">
+//                     <table class="table table-sm">
+//                         <tbody id="product-history-body"><tr><td>Загрузка...</td></tr></tbody>
+//                     </table>
+//                 </div>
+//             </div>
+//         </div>
+//     `;
+//
+//     // Загрузка истории (без изменений)
+//     try {
+//         const history = await secureFetch(`/api/products/${encodeURIComponent(p.name)}/history`);
+//         const tbody = document.getElementById('product-history-body');
+//         if (tbody) {
+//             tbody.innerHTML = history.map(h => `
+//                 <tr>
+//                     <td class="ps-2">${formatDate(h.timestamp)}</td>
+//                     <td><span class="badge ${h.type === 'WRITE_OFF' ? 'bg-danger' : 'bg-info'}" style="font-size:10px;">${h.type}</span></td>
+//                     <td class="text-end pe-2" style="color:${h.quantityChange > 0 ? '#10b981' : '#ef4444'}">
+//                         <b>${h.quantityChange > 0 ? '+' : ''}${h.quantityChange}</b>
+//                     </td>
+//                 </tr>`).join('') || '<tr><td colspan="3" class="text-center p-3">Движений нет</td></tr>';
+//         }
+//     } catch (e) { console.warn("История недоступна"); }
+//
+//     // Кнопки управления в футере: Итого слева, кнопки справа (Как на скриншоте заказа)
+//     document.getElementById('product-footer-actions').innerHTML = `
+//         <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+//             <!-- Итоговая сумма слева -->
+//             <b class="price-up" style="font-size: 1.2rem;">Итого: ${p.price.toLocaleString()} ֏</b>
+//
+//             <!-- Кнопки справа -->
+//             <div style="display: flex; gap: 10px;">
+//                 <button class="btn-primary" style="background:#f59e0b" onclick="doInventory()">⚖️ Инвентарь</button>
+//                 <button class="btn-primary" onclick="enableProductEdit()">✏️ Изменить</button>
+//                 <button class="btn-primary" style="background:#ef4444;" onclick="deleteProduct(${p.id})">🗑 Удалить</button>
+//                 <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-product-view')">Закрыть</button>
+//             </div>
+//         </div>
+//     `;
+//
+//     openModal('modal-product-view');
+// }
+
+
+
+// Универсальный переключатель режима Редактировать/Просмотр
+function toggleProductEdit(isEdit) {
+    const view = document.getElementById('product-view-mode');
+    const edit = document.getElementById('product-edit-mode');
+    if (view && edit) {
+        view.style.display = isEdit ? 'none' : 'block';
+        edit.style.display = isEdit ? 'block' : 'none';
+    }
+}
+
+
+
+
+
+
+// async function saveProductChanges(id) {
+//     // 1. Собираем данные из новых компактных полей
+//     const data = {
+//         name: document.getElementById('edit-product-name').value,
+//         price: parseFloat(document.getElementById('edit-product-price').value) || 0,
+//         stockQuantity: parseInt(document.getElementById('edit-product-qty').value) || 0,
+//         barcode: document.getElementById('edit-product-barcode').value,
+//         itemsPerBox: parseInt(document.getElementById('edit-product-perbox').value) || 0,
+//         category: document.getElementById('edit-product-category').value,
+//         hsnCode: document.getElementById('edit-product-hsn').value,
+//         unit: document.getElementById('edit-product-unit').value,
+//         expiryDate: document.getElementById('edit-product-expiry').value
+//     };
+//
+//     try {
+//         // 2. Отправка на сервер через PUT
+//         await secureFetch(`/api/admin/products/${id}/edit`, {
+//             method: 'PUT',
+//             body: data
+//         });
+//
+//         // 3. Обновляем локальный массив данных
+//         const idx = productsData.findIndex(p => p.id == id);
+//         if (idx !== -1) {
+//             productsData[idx] = {...productsData[idx], ...data};
+//
+//             // 4. Умное обновление строки в таблице (без перезагрузки)
+//             // Ищем строку по ID товара в атрибуте onclick
+//             const row = document.querySelector(`tr[onclick*="openProductDetails(${id})"]`);
+//             if (row) {
+//                 // Название
+//                 if (row.cells[0].querySelector('div')) row.cells[0].querySelector('div').innerText = data.name;
+//                 // Цена
+//                 row.cells[1].innerText = data.price.toLocaleString() + ' ֏';
+//                 // Остаток (с сохранением стиля badge)
+//                 const qtyBadge = row.cells[2].querySelector('span');
+//                 if (qtyBadge) {
+//                     qtyBadge.innerText = data.stockQuantity + ' шт.';
+//                     // Динамическая смена цвета если остаток мал
+//                     qtyBadge.className = data.stockQuantity > 10 ? 'badge bg-light text-dark' : 'badge bg-danger text-white';
+//                 }
+//                 // Упаковка
+//                 row.cells[3].innerText = `${data.itemsPerBox} шт/уп`;
+//                 // Штрих-код
+//                 row.cells[4].innerText = data.barcode || '---';
+//                 // Срок годности (форматируем перед вставкой)
+//                 if (row.cells[5] && typeof formatDate === 'function') {
+//                     row.cells[5].innerText = data.expiryDate ? formatDate(data.expiryDate) : '---';
+//                 }
+//             }
+//         }
+//
+//         if (typeof showToast === 'function') showToast("Товар обновлен", "success");
+//
+//         // 5. Возвращаемся в режим просмотра деталей
+//         openProductDetails(id);
+//
+//     } catch (e) {
+//         console.error("Ошибка сохранения:", e);
+//         if (typeof showToast === 'function') showToast("Ошибка при сохранении", "danger");
+//     }
+// }
+
+
+
+
 async function saveProductChanges(id) {
+    // 1. Собираем данные (ID полей теперь соответствуют новой форме 4x2)
     const data = {
-        name: document.getElementById('edit-product-name').value,
+        category: document.getElementById('edit-product-category').value,
         price: parseFloat(document.getElementById('edit-product-price').value) || 0,
+        hsnCode: document.getElementById('edit-product-hsn').value,
+        expiryDate: document.getElementById('edit-product-expiry').value,
+
+        name: document.getElementById('edit-product-name').value,
         stockQuantity: parseInt(document.getElementById('edit-product-qty').value) || 0,
         barcode: document.getElementById('edit-product-barcode').value,
         itemsPerBox: parseInt(document.getElementById('edit-product-perbox').value) || 0,
-        category: document.getElementById('edit-product-category').value,
-        hsnCode: document.getElementById('edit-product-hsn').value,
         unit: document.getElementById('edit-product-unit').value
     };
 
     try {
+        // 2. Отправка на сервер через PUT
         await secureFetch(`/api/admin/products/${id}/edit`, {
             method: 'PUT',
             body: data
         });
 
+        // 3. Обновляем локальный массив данных Sellion 2026
         const idx = productsData.findIndex(p => p.id == id);
         if (idx !== -1) {
             productsData[idx] = {...productsData[idx], ...data};
 
-            // Обновляем строку таблицы
+            // 4. Умное обновление строки в основной таблице склада
             const row = document.querySelector(`tr[onclick*="openProductDetails(${id})"]`);
             if (row) {
-                row.cells[0].querySelector('div').innerText = data.name;
+                // Название (внутри div для стиля)
+                const nameDiv = row.cells[0].querySelector('div');
+                if (nameDiv) nameDiv.innerText = data.name;
+
+                // Цена
                 row.cells[1].innerText = data.price.toLocaleString() + ' ֏';
-                row.cells[2].querySelector('span').innerText = data.stockQuantity + ' шт.';
-                row.cells[4].innerText = data.barcode;
+
+                // Остаток (Badge-стиль)
+                const qtyBadge = row.cells[2].querySelector('span');
+                if (qtyBadge) {
+                    qtyBadge.innerText = data.stockQuantity + ' шт.';
+                    qtyBadge.className = data.stockQuantity > 10 ? 'badge bg-light text-dark' : 'badge bg-danger text-white';
+                }
+
+                // Упаковка + Единица измерения
+                row.cells[3].innerText = `${data.itemsPerBox} ${data.unit}/уп`;
+
+                // Штрих-код
+                row.cells[4].innerText = data.barcode || '---';
+
+                // Срок годности
+                if (row.cells[5]) {
+                    row.cells[5].innerText = data.expiryDate ? formatDate(data.expiryDate) : '---';
+                    // Подсветка красным, если срок истекает
+                    const isExpired = data.expiryDate && new Date(data.expiryDate) < new Date(new Date().getTime() + 30 * 24 * 60 * 60 * 1000);
+                    row.cells[5].className = isExpired ? 'text-danger fw-bold' : '';
+                }
             }
         }
-        showToast("✅ Товар обновлен", "success");
+
+        showToast("Товар успешно обновлен", "success");
+
+        // 5. Возвращаемся в режим просмотра деталей с новыми данными
         openProductDetails(id);
+
     } catch (e) {
-        console.error(e);
+        console.error("Ошибка сохранения продукта:", e);
+        showToast("Не удалось сохранить изменения", "error");
     }
 }
+
+
+
+
 
 
 function filterTable(inputId, tableBodyId) {
@@ -2570,7 +2930,7 @@ function showStatus(text, isError = false) {
     } else {
         // Для успеха используем простой текст "Добавлено"
         statusDiv.style = `color: #10b981; font-weight: 700; margin-right: 15px;`;
-        statusDiv.innerText = "✅ Добавлено"; // Просто "Добавлено"
+        statusDiv.innerText = "Добавлено";
     }
 
     container.prepend(statusDiv);
@@ -2602,7 +2962,7 @@ function applySingleQty(pId) {
     // Проверка остатков
     const modalTitle = document.getElementById('modal-title').innerText.toLowerCase();
     if (modalTitle.includes("заказ") && !modalTitle.includes("списание") && product && newVal > product.stockQuantity) {
-        showToast(`⚠️ На складе только: ${product.stockQuantity}`, "error");
+        showToast(`На складе только: ${product.stockQuantity}`, "error");
         newVal = product.stockQuantity;
         input.value = newVal;
     }
@@ -2621,7 +2981,7 @@ function applySingleQty(pId) {
     }
 
     calculateCurrentTempTotal();
-    showStatus("✅ Обновлено");
+    showStatus("Обновлено");
 }
 
 function getSmartDeliveryDates() {
@@ -2673,7 +3033,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (typeof loadApiKeys === 'function') promises.push(loadApiKeys());
             await Promise.all(promises);
         } catch (e) {
-            console.error("⚠️ Ошибка загрузки начальных данных:", e);
+            console.error("Ошибка загрузки начальных данных:", e);
         }
     };
     initData();
@@ -2721,30 +3081,32 @@ document.addEventListener("DOMContentLoaded", async () => {
             requestAnimationFrame(() => setTimeout(runFormatting, 100));
         }
 
-        // --- ИСПРАВЛЕННАЯ ЛОГИКА АККОРДЕОНА (СКЛАД) ---
+        // --- ЛОГИКА АККОРДЕОНА (СКЛАД) ---
         const categoryHeader = e.target.closest('.js-category-toggle');
         if (categoryHeader) {
             const targetClass = categoryHeader.getAttribute('data-target');
-            // Находим все строки этой категории
             const rows = document.querySelectorAll(`.${targetClass}`);
             const icon = categoryHeader.querySelector('.toggle-icon');
 
-            if (rows.length > 0) {
-                // Проверяем состояние первой строки
-                const isCurrentlyHidden = rows[0].style.display === "none";
+            // Определяем текущее состояние.
+            // ВАЖНО: Если style.display пустой, значит строка видна (table-row)
+            const firstRow = rows[0];
+            const isCurrentlyHidden = firstRow ? (firstRow.style.display === 'none') : false;
 
-                rows.forEach(row => {
-                    row.style.display = isCurrentlyHidden ? "table-row" : "none";
-                });
+            rows.forEach(row => {
+                // Если было скрыто — показываем, если было видно — скрываем
+                row.style.display = isCurrentlyHidden ? 'table-row' : 'none';
+            });
 
-                // Поворот иконки
-                if (icon) {
-                    icon.style.transform = isCurrentlyHidden ? "rotate(0deg)" : "rotate(-90deg)";
-                    icon.innerText = isCurrentlyHidden ? "▼" : "▶";
-                }
+            // Анимация иконки
+            if (icon) {
+                icon.style.transform = isCurrentlyHidden ? "rotate(0deg)" : "rotate(-90deg)";
+                icon.innerText = isCurrentlyHidden ? "▼" : "▶";
             }
         }
     });
 
-    console.log("✅ Sellion ERP 2026: Система полностью готова к работе.");
+
+    console.log("Sellion ERP 2026: Система полностью готова к работе.");
 });
+

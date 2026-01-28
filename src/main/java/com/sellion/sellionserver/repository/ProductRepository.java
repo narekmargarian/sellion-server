@@ -70,4 +70,14 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     void addStockById(@Param("id") Long id, @Param("qty") Integer qty);
 
 
+    // Добавьте этот метод для получения всех не удаленных товаров
+    List<Product> findAllByIsDeletedFalse();
+
+    // Если вам нужна группировка по категориям в алфавитном порядке, можно использовать этот:
+    List<Product> findAllByIsDeletedFalseOrderByCategoryAscNameAsc();
+
+
+
+
+
 }
