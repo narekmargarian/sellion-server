@@ -938,45 +938,50 @@ function showToast(text, type = 'info') {
 
 
 function openUserDetailsModal(id) {
+    // ВАЖНО: usersData должен быть доступен глобально (как clientsData)
     const user = usersData.find(u => u.id == id);
     if (!user) return;
 
-    // Используем модальное окно, которое уже есть для клиентов
+    window.currentEditingUserId = id;
     const modalId = 'modal-client-view';
 
-    // Заголовок модалки
     document.getElementById('modal-client-title').innerHTML = `
-        Профиль сотрудника <span class="badge">${user.fullName}</span>
+        Редактирование сотрудника <span class="badge">${user.username}</span>
     `;
 
-    // Основная информация (используем существующий контейнер client-info)
     const info = document.getElementById('client-info');
     info.innerHTML = `
-        <div class="modal-info-row">
-            <div><small>Логин:</small><br><b>${user.username}</b></div>
-            <div><small>ФИО:</small><br><b>${user.fullName}</b></div>
-            <div><small>Роль:</small><br><b>${user.role}</b></div>
+        <div class="modal-info-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+            <div>
+                <label>Логин (Username)</label>
+                <input type="text" id="edit-u-username" value="${user.username}">
+            </div>
+            <div>
+                <label>Полное ФИО</label>
+                <input type="text" id="edit-u-fullname" value="${user.fullName}">
+            </div>
         </div>
-        <!-- Если у пользователя есть телефон или другие детали, добавьте их здесь -->
-        <div class="modal-info-row">
-             <div><small>Телефон:</small><br><b>${user.phone || '---'}</b></div>
-             <div><small>Email:</small><br><b>${user.email || '---'}</b></div>
+        <div class="modal-info-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 10px;">
+            <div>
+                <label>Роль</label>
+                <select id="edit-u-role" class="form-select">
+                    <option value="OPERATOR" ${user.role === 'OPERATOR' ? 'selected' : ''}>Оператор</option>
+                    <option value="ACCOUNTANT" ${user.role === 'ACCOUNTANT' ? 'selected' : ''}>Бухгалтер</option>
+                    <option value="ADMIN" ${user.role === 'ADMIN' ? 'selected' : ''}>Админ</option>
+                </select>
+            </div>
+            <div>
+                <label>Новый пароль (оставьте пустым, чтобы не менять)</label>
+                <input type="password" id="edit-u-password" placeholder="********">
+            </div>
         </div>
     `;
 
-
     document.getElementById('client-footer-actions').innerHTML = `
-    <button class="btn-danger" style="background:#ef4444" onclick="event.stopPropagation(); deleteUser(${user.id})">
-        🗑 Удалить сотрудника
-    </button>
-    <button class="btn-warning" onclick="event.stopPropagation(); resetPassword(${user.id})">
-        🔑 Сброс пароля
-    </button>
-    <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-client-view')">
-        Закрыть
-    </button>
-`;
-
+        <button class="btn-primary" style="background:#10b981" onclick="submitEditUser(${user.id})">Сохранить изменения</button>
+        <button class="btn-danger" style="background:#ef4444" onclick="deleteUser(${user.id})">Удалить</button>
+        <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-client-view')">Отмена</button>
+    `;
 
     openModal(modalId);
 }
@@ -995,6 +1000,41 @@ async function deleteUser(id) {
             showToast("Ошибка сети", "error");
         }
     });
+}
+
+
+async function submitEditUser(id) {
+    const passwordValue = document.getElementById('edit-u-password').value;
+
+    const data = {
+        id: id,
+        username: document.getElementById('edit-u-username').value,
+        fullName: document.getElementById('edit-u-fullname').value,
+        role: document.getElementById('edit-u-role').value
+    };
+
+    // Добавляем пароль в объект только если он был введен
+    if (passwordValue && passwordValue.trim() !== "") {
+        data.password = passwordValue;
+    }
+
+    try {
+        const response = await fetch(`/api/admin/users/edit/${id}`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data)
+        });
+
+        if (response.ok) {
+            showToast("Данные сотрудника обновлены", "success");
+            location.reload();
+        } else {
+            showToast("Ошибка при сохранении", "error");
+        }
+    } catch (e) {
+        console.error(e);
+        showToast("Ошибка сети", "error");
+    }
 }
 
 
@@ -1026,34 +1066,44 @@ function openCreateUserModal() {
 }
 
 async function submitCreateUser() {
-    const data = {
-        username: document.getElementById('new-u-username').value,
-        fullName: document.getElementById('new-u-fullname').value,
-        role: document.getElementById('new-u-role').value,
-        password: document.getElementById('new-u-password').value
-    };
+    const username = document.getElementById('new-u-username').value.trim();
+    const fullName = document.getElementById('new-u-fullname').value.trim();
+    const role = document.getElementById('new-u-role').value;
+    const password = document.getElementById('new-u-password').value;
 
-    if (!data.username || !data.fullName) {
-        showToast("Заполните все обязательные поля!");
+    // Валидация на стороне фронтенда
+    if (!username || !fullName || !password) {
+        showToast("Заполните все поля, включая пароль!", "error");
         return;
     }
 
+    const data = {
+        username: username,
+        fullName: fullName,
+        role: role,
+        password: password // Сервер зашифрует этот пароль сам через BCrypt
+    };
+
     try {
-        const response = await fetch('/api/admin/users/create', { // Убедись, что этот API существует
+        const response = await fetch('/api/admin/users/create', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify(data)
         });
+
         if (response.ok) {
             showToast("Сотрудник успешно добавлен", "success");
-            location.reload(); // Обновляем страницу, чтобы увидеть нового пользователя в таблице
+            // Вместо полной перезагрузки можно просто закрыть модалку,
+            // но location.reload() — самый надежный способ обновить таблицу пользователей
+            location.reload();
         } else {
-            const error = await response.json();
-            showToast(error.error || "Ошибка при сохранении пользователя", "error");
+            // Пытаемся прочитать текст ошибки от сервера
+            const errorData = await response.json().catch(() => ({}));
+            showToast(errorData.message || "Ошибка при сохранении пользователя", "error");
         }
     } catch (e) {
-        console.error(e);
-        showToast("Ошибка сети", "error");
+        console.error("Ошибка при создании пользователя:", e);
+        showToast("Ошибка сети или сервера", "error");
     }
 }
 
@@ -1072,6 +1122,8 @@ async function resetPassword(userId) {
         }
     });
 }
+
+
 
 window.printOrder = function (id) {
     console.log("Запуск печати заказа:", id);

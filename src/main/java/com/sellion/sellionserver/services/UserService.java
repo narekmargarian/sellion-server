@@ -27,12 +27,27 @@ public class UserService {
 
     @Transactional
     public User saveUser(User user) {
-        // Проверяем, не зашифрован ли уже пароль (длина BCrypt обычно 60 символов)
-        if (user.getPassword() != null && user.getPassword().length() < 30) {
+        // 1. Проверка на дубликат логина (только для новых пользователей или при смене логина)
+        if (user.getId() == null) { // Если создаем нового
+            if (userRepository.existsByUsername(user.getUsername())) {
+                throw new RuntimeException("Пользователь с логином '" + user.getUsername() + "' уже существует!");
+            }
+        } else { // Если редактируем существующего
+            userRepository.findByUsername(user.getUsername()).ifPresent(existingUser -> {
+                if (!existingUser.getId().equals(user.getId())) {
+                    throw new RuntimeException("Логин '" + user.getUsername() + "' уже занят другим сотрудником!");
+                }
+            });
+        }
+
+        // 2. Шифрование пароля
+        if (user.getPassword() != null && !user.getPassword().isEmpty()) {
             user.setPassword(passwordEncoder.encode(user.getPassword()));
         }
+
         return userRepository.save(user);
     }
+
 
     @Transactional
     public void resetPassword(Long id, String newPassword) {
