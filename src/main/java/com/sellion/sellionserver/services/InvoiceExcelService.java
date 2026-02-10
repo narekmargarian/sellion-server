@@ -25,6 +25,7 @@ import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -131,6 +132,8 @@ public class InvoiceExcelService {
         if (c != null) {
             addHeaderRow(sheet, rowIdx++, "ИНН (ՀՎՀՀ):", c.getInn());
             addHeaderRow(sheet, rowIdx++, "Адрес:", c.getAddress());
+            String bankInfo = (c.getBankName() != null ? c.getBankName() : "") + " " + (c.getBankAccount() != null ? c.getBankAccount() : "");
+            addHeaderRow(sheet, rowIdx++, "Банк/Счет:", bankInfo.trim());
         }
         addHeaderRow(sheet, rowIdx++, "Документ:", docInfo);
         addHeaderRow(sheet, rowIdx++, "Менеджер / Авто:", (managerId != null ? managerId : "") + " / " + (carNumber != null ? carNumber : ""));
@@ -142,7 +145,7 @@ public class InvoiceExcelService {
 
     private int fillItemsTable(Sheet sheet, int rowIdx, Map<Long, Integer> items, Map<Long, Product> products) {
         Row header = sheet.createRow(rowIdx++);
-        String[] cols = {"Товар", "Код (HSN)", "Ед.", "Кол-во", "Цена", "Сумма"};
+        String[] cols = {"Товар", "Код (ԱՏԳ)", "Ед.", "Кол-во", "Цена", "Сумма"};
         for (int i = 0; i < cols.length; i++) {
             header.createCell(i).setCellValue(cols[i]);
         }

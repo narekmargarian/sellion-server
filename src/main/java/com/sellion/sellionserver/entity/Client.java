@@ -29,6 +29,7 @@ public class Client {
     private String managerId;
     private boolean isDeleted = false; // Флаг мягкого удаления
     private String bankAccount;
+    private String bankName;
     private String category;
 
 }

@@ -215,6 +215,13 @@ public class AdminManagementController {
             c.setName((String) payload.get("name"));
             c.setAddress((String) payload.get("address"));
 
+            // ЧИТАЕМ КАТЕГОРИЮ (которая у вас пропадала)
+            c.setCategory((String) payload.get("category"));
+
+            // ЧИТАЕМ МЕНЕДЖЕРА И МАРШРУТ
+            c.setManagerId((String) payload.get("managerId"));
+            c.setRouteDay((String) payload.get("routeDay"));
+
             Object debtVal = payload.get("debt");
             c.setDebt(debtVal != null ? new BigDecimal(debtVal.toString()) : BigDecimal.ZERO);
 
@@ -222,12 +229,15 @@ public class AdminManagementController {
             c.setInn((String) payload.get("inn"));
             c.setPhone((String) payload.get("phone"));
             c.setBankAccount((String) payload.get("bankAccount"));
+            c.setBankName((String) payload.get("bankName"));
+
             clientRepository.save(c);
 
             recordAudit(id, "CLIENT", "ИЗМЕНЕНИЕ КЛИЕНТА", "Обновлены реквизиты: " + c.getName());
             return ResponseEntity.ok(Map.of("message", "Данные клиента обновлены"));
         }).orElse(ResponseEntity.notFound().build());
     }
+
 
     @PostMapping("/orders/create-manual")
     @Transactional(rollbackFor = Exception.class)

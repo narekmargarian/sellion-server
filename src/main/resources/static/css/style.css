@@ -700,14 +700,11 @@ body {
     left: 0;
     top: 0;
     padding-bottom: 15px;
+    overflow-y: auto;
+
 }
 
-/* Этот контейнер поможет кнопке выхода всегда прилипать к низу */
-.sidebar form {
-    margin-top: auto !important; /* Выталкивает кнопку максимально вниз */
-    padding: 10px;
-    background: rgba(0,0,0,0.1);
-}
+
 
 .main { flex-grow: 1; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
 .scroll-area { padding: 25px; display: flex; flex-direction: column; height: 100%; box-sizing: border-box; overflow: hidden; }

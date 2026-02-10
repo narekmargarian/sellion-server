@@ -1,5 +1,6 @@
 package com.sellion.sellionserver.controller;
 
+import com.sellion.sellionserver.dto.DailySummaryDto;
 import com.sellion.sellionserver.entity.*;
 import com.sellion.sellionserver.repository.*;
 import lombok.RequiredArgsConstructor;
@@ -14,10 +15,8 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.time.format.DateTimeFormatter;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Controller
@@ -265,4 +264,49 @@ public class PrintController {
         }
         return dtoList;
     }
+
+
+
+    @PostMapping("/orders/print-daily-summary") // Заменили на PostMapping
+    @Transactional(readOnly = true)
+    public String printDailySummary(
+            @RequestParam("ids") List<Long> ids,
+            Model model) {
+
+        List<Order> orders = orderRepository.findAllById(ids);
+
+
+        Map<Long, Integer> totals = new HashMap<>();
+        orders.stream()
+                .filter(o -> o.getStatus() != OrderStatus.CANCELLED)
+                .forEach(o -> o.getItems().forEach((id, qty) -> totals.merge(id, qty, Integer::sum)));
+
+        List<DailySummaryDto> summary = new ArrayList<>();
+        if (!totals.isEmpty()) {
+            Map<Long, Product> products = productRepository.findAllById(totals.keySet())
+                    .stream().collect(Collectors.toMap(Product::getId, p -> p));
+
+            totals.forEach((id, qty) -> {
+                Product p = products.get(id);
+                DailySummaryDto dto = new DailySummaryDto();
+                dto.setProductName(p != null ? p.getName() : "Удален #" + id);
+                dto.setCategory(p != null ? p.getCategory() : "Без категории");
+                dto.setTotalQuantity(qty);
+                summary.add(dto);
+            });
+        }
+
+        summary.sort(Comparator.comparing(DailySummaryDto::getCategory).thenComparing(DailySummaryDto::getProductName));
+
+        model.addAttribute("summary", summary);
+        model.addAttribute("date", "Сводка по выбранным заказам (" + ids.size() + " шт.)");
+        model.addAttribute("title", "СВОДНАЯ ВЕДОМОСТЬ");
+
+        return "print_daily_summary_template";
+    }
+
+
+
+
+
 }

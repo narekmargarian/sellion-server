@@ -102,6 +102,11 @@
                     </button>
                 </form>
                 <button class="btn-primary" onclick="openCreateOrderModal()" title="Новый заказ">+</button>
+                <button type="button" class="btn-primary"
+                        onclick="printDailySummary()"
+                        title="Сводка товаров за день">
+                    📋
+                </button>
             </div>
 
             <div class="table-container">
@@ -183,7 +188,8 @@
             </div>
 
             <div class="pagination-wrapper" th:if="${totalPages > 1}"
-                 style="margin-top: 20px; display: flex; gap: 10px; justify-content: center;">
+                 style="
+                 margin-top: 20px; display: flex; gap: 10px; justify-content: center;">
                 <a th:href="@{/admin(activeTab='tab-orders', page=${currentPage - 1}, orderStartDate=${orderStartDate}, orderEndDate=${orderEndDate})}"
                    th:if="${currentPage > 0}" class="btn-ghost">← Назад</a>
                 <span style="align-self: center; font-weight: 700;">
@@ -383,48 +389,6 @@
         </div>
 
 
-        <!--        <div id="tab-clients" class="tab-pane">-->
-        <!--            <div class="filter-bar">-->
-        <!--                <input type="text" id="search-clients" onkeyup="filterTable('search-clients', 'clients-table-body')"-->
-        <!--                       placeholder="Поиск клиента или адреса..." class="form-control w-25">-->
-
-        <!--                <select id="filter-client-day" onchange="filterTable('filter-client-day', 'clients-table-body')"-->
-        <!--                        class="form-select w-25">-->
-        <!--                    <option value="">Все дни маршрута</option>-->
-        <!--                    <option value="Понедельник">Понедельник</option>-->
-        <!--                    <option value="Вторник">Вторник</option>-->
-        <!--                    <option value="Среда">Среда</option>-->
-        <!--                    <option value="Четверг">Четверг</option>-->
-        <!--                    <option value="Пятница">Пятница</option>-->
-        <!--                    <option value="Суббота">Суббота</option>-->
-        <!--                </select>-->
-
-
-        <!--                <button class="btn-primary" onclick="openModal('modal-client')">+ Добвить-->
-        <!--                </button>-->
-        <!--            </div>-->
-        <!--            <div class="table-container">-->
-        <!--                <table class="table">-->
-        <!--                    <thead>-->
-        <!--                    <tr>-->
-        <!--                        <th>Магазин</th>-->
-        <!--                        <th>Адрес</th>-->
-        <!--                        <th>Долг</th>-->
-        <!--                    </tr>-->
-        <!--                    </thead>-->
-        <!--                    <tbody id="clients-table-body">-->
-        <!--                    <tr th:each="c : ${clients}" th:onclick="'openClientDetails(' + ${c.id} + ')'"-->
-        <!--                        style="cursor:pointer;">-->
-        <!--                        <td th:text="${c.name}" style="font-weight:700;"></td>-->
-        <!--                        <td th:text="${c.address}"></td>-->
-        <!--                        <td class="price-down" th:text="${#numbers.formatInteger(c.debt, 1, 'WHITESPACE') + ' ֏'}"></td>-->
-        <!--                    </tr>-->
-        <!--                    </tbody>-->
-        <!--                </table>-->
-        <!--            </div>-->
-        <!--        </div>-->
-
-
         <div id="tab-clients" class="tab-pane">
 
             <div class="filter-bar">
@@ -470,7 +434,7 @@
 
             <!-- ПАГИНАЦИЯ ДЛЯ 5000+ КЛИЕНТОВ -->
             <div class="pagination-wrapper" th:if="${clientTotalPages > 1}"
-                 style="margin-top: 20px; display: flex; flex-direction: column; align-items: center; gap: 10px; padding-bottom: 20px;">
+                 style="display: flex; flex-direction: column; align-items: center; gap: 5px;">
 
                 <!-- Инфо о количестве -->
                 <small class="text-muted" style="font-size: 11px;">
@@ -495,7 +459,7 @@
 
         </div>
 
-            <div id="tab-products" class="tab-pane">
+        <div id="tab-products" class="tab-pane">
             <div class="filter-bar">
                 <input type="text" id="search-products" onkeyup="filterTable('search-products', 'products-table-body')"
                        placeholder="Поиск по складу..." class="form-control w-25">
@@ -694,8 +658,9 @@
                     </div>
                     <div class="mb-4">
                         <label class="label-small">ДАТА ДОСТАВКИ</label>
-                        <input type="date" id="route-date-select" class="form-control"
-                               th:value="${#temporals.format(#temporals.createNow(), 'yyyy-MM-dd')}">
+
+
+
                     </div>
                     <button class="btn-primary"
                             style="width: 100%; background: #0369a1; height: 45px; font-weight: 700;"
@@ -1157,10 +1122,15 @@
                 <div class="row">
                     <div class="col-md-6">
                         <label style="font-size: 11px; font-weight: 800; color: #64748b;">МАГАЗИН</label>
-                        <select id="new-order-client-id" class="form-select">
-                            <option value="">Выберите магазин...</option>
-                            <option th:each="c : ${clients}" th:value="${c.id}" th:text="${c.name}"></option>
-                        </select>
+                        <!-- Вместо select используем input + datalist -->
+                        <input type="text" id="new-order-client-name"
+                               class="form-control"
+                               list="clients-list"
+                               placeholder="Вводите название ...">
+
+                        <datalist id="clients-list">
+                            <option th:each="name : ${allClientNames}" th:value="${name}" th:text="${name}"></option>
+                        </datalist>
                     </div>
                     <div class="col-md-6">
                         <label style="font-size: 11px; font-weight: 800; color: #64748b;">МЕНЕДЖЕР</label>
@@ -1249,42 +1219,67 @@
 
 
         <div id="modal-client" class="modal">
-            <div class="modal-content" style="width: 550px;">
+            <div class="modal-content" style="width: 650px;">
                 <h2 style="margin-bottom:20px;">👤 Добавление нового клиента</h2>
                 <form th:action="@{/admin/clients/create}" method="post">
-                    <div class="modal-info-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-                        <div>
-                            <label class="label-small">НАЗВАНИЕ МАГАЗИНА</label>
-                            <input type="text" name="name" class="form-control" required placeholder="ЗОВК Папазян">
+                    <div class="modal-info-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
 
-                            <label class="label-small" style="margin-top:10px;">ВЛАДЕЛЕЦ / ИП</label>
-                            <input type="text" name="ownerName" class="form-control" placeholder="ФИО">
-
-                            <label class="label-small" style="margin-top:10px;">КАТЕГОРИЯ КЛИЕНТА</label>
-                            <!-- ДОБАВЛЕНО ПОЛЕ КАТЕГОРИЯ -->
-                            <input type="text" name="category" class="form-control" placeholder="Напр: Сеть, Розница">
+                        <!-- ЛЕВЫЙ РЯД (5 пунктов) -->
+                        <div style="display: flex; flex-direction: column; gap: 10px;">
+                            <div>
+                                <label class="label-small">НАЗВАНИЕ МАГАЗИНА</label>
+                                <input type="text" name="name" class="form-control" required placeholder="ЗОВК Папазян">
+                            </div>
+                            <div>
+                                <label class="label-small">ВЛАДЕЛЕЦ / ИП</label>
+                                <input type="text" name="ownerName" class="form-control" placeholder="ФИО">
+                            </div>
+                            <div>
+                                <label class="label-small">ИНН</label>
+                                <input type="text" name="inn" class="form-control" placeholder="ИНН">
+                            </div>
+                            <div>
+                                <label class="label-small">КАТЕГОРИЯ КЛИЕНТА</label>
+                                <input type="text" name="category" class="form-control" placeholder="Напр: Сеть, Розница">
+                            </div>
+                            <div>
+                                <label class="label-small">ТЕЛЕФОН</label>
+                                <input type="text" name="phone" class="form-control" placeholder="+374...">
+                            </div>
                         </div>
-                        <div>
-                            <label class="label-small">ИНН</label>
-                            <input type="text" name="inn" class="form-control" placeholder="ИНН">
 
-                            <label class="label-small" style="margin-top:10px;">МЕНЕДЖЕР</label>
-                            <select name="managerId" id="new-client-manager-id" class="form-select" required>
-                                <option value="">Ожидание...</option>
-                            </select>
-
-
-                            <label class="label-small" style="margin-top:10px;">ТЕЛЕФОН</label>
-                            <input type="text" name="phone" class="form-control" placeholder="+374...">
+                        <!-- ПРАВЫЙ РЯД (5 пунктов) -->
+                        <div style="display: flex; flex-direction: column; gap: 10px;">
+                            <div>
+                                <label class="label-small">МЕНЕДЖЕР</label>
+                                <select name="managerId" id="new-client-manager-id" class="form-select" required>
+                                    <!-- Если список менеджеров передается из модели -->
+                                    <option th:each="m : ${managerIdList}" th:value="${m}" th:text="${m}"></option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="label-small">ДОЛГ (֏)</label>
+                                <input type="number" name="debt" class="form-control" value="0" step="0.01">
+                            </div>
+                            <div>
+                                <label class="label-small">ДЕНЬ МАРШРУТА</label>
+                                <input type="text" name="routeDay" class="form-control" placeholder="Вторник">
+                            </div>
+                            <div>
+                                <label class="label-small">НАЗВАНИЕ БАНКА</label>
+                                <input type="text" name="bankName" class="form-control" placeholder="Америа Банк">
+                            </div>
+                            <div>
+                                <label class="label-small">РАСЧЕТНЫЙ СЧЕТ</label>
+                                <input type="text" name="bankAccount" class="form-control" placeholder="15700...">
+                            </div>
                         </div>
                     </div>
 
-                    <div style="margin-top:15px;">
+                    <!-- НИЖНИЙ РЯД (Адрес отдельно) -->
+                    <div style="margin-top:20px;">
                         <label class="label-small">АДРЕС ДОСТАВКИ</label>
                         <input type="text" name="address" class="form-control" placeholder="Улица, дом...">
-
-                        <label class="label-small" style="margin-top:10px;">ДЕНЬ МАРШРУТА</label>
-                        <input type="text" name="routeDay" class="form-control" placeholder="Вторник">
                     </div>
 
                     <div style="display: flex; gap: 10px; margin-top: 25px; justify-content: flex-end;">
@@ -1362,43 +1357,6 @@
             </div>
         </div>
 
-
-        <!--        <div id="modal-product-create-new" class="modal">-->
-        <!--            <div class="modal-content" style="width: 500px;">-->
-        <!--                <h2 style="margin-bottom:20px;">📦 Добавление нового товара</h2>-->
-        <!--                <div class="modal-info-row">-->
-        <!--                    <div style="flex:1">-->
-        <!--                        <label>Название</label><input type="text" id="new-p-name" placeholder="Название товара">-->
-        <!--                        <label>Цена (֏)</label><input type="number" id="new-p-price" placeholder="0">-->
-        <!--                        <label>Категория</label><input type="text" id="new-p-cat" placeholder="Напитки, Еда...">-->
-        <!--                        <label>Ед. измерения</label>-->
-        <!--                        <select id="new-p-unit">-->
-        <!--                            <option value="шт">шт</option>-->
-        <!--                            <option value="кг">кг</option>-->
-        <!--                            <option value="кор">кор</option>-->
-        <!--                        </select>-->
-        <!--                    </div>-->
-        <!--                </div>-->
-        <!--                <div class="modal-info-row" style="margin-top:10px;">-->
-        <!--                    <div style="flex:1">-->
-        <!--                        <label>Остаток</label><input type="number" id="new-p-qty" value="0">-->
-        <!--                        <label>Штрих-код</label><input type="text" id="new-p-code" placeholder="000000">-->
-        <!--                        <label>В коробке</label><input type="number" id="new-p-box" value="1">-->
-        <!--                        <label>Срок годности</label>-->
-        <!--                        <input type="date" id="new-p-expiry">-->
-        <!--                    </div>-->
-        <!--                </div>-->
-        <!--                <div style="display: flex; gap: 10px; margin-top: 25px; justify-content: flex-end;">-->
-        <!--                    <button class="btn-primary" onclick="submitCreateProduct()" style="background:#10b981">Создать-->
-        <!--                        товар-->
-        <!--                    </button>-->
-        <!--                    <button class="btn-primary" style="background:#64748b"-->
-        <!--                            onclick="closeModal('modal-product-create-new')">-->
-        <!--                        Отмена-->
-        <!--                    </button>-->
-        <!--                </div>-->
-        <!--            </div>-->
-        <!--        </div>-->
 
 
         <div id="modal-product-create-new" class="modal">

@@ -12,6 +12,17 @@
         .total-row { font-weight: bold; background: #f9f9f9; }
         .text-right { text-align: right; }
         .col-id { width: 40px; text-align: center; } /* Новый класс для центрирования номера */
+
+
+        @media print {
+    @page {
+        margin: 0; /* Убирает отступы, где печатаются колонтитулы */
+    }
+    body {
+        margin: 1.5cm; /* Добавляет отступ уже самому контенту, чтобы текст не прилипал к краю листа */
+    }
+}
+
     </style>
 </head>
 <body>

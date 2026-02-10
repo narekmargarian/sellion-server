@@ -71,5 +71,10 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     @Query("SELECT SUM(o.totalPurchaseCost) FROM Order o WHERE o.createdAt BETWEEN :start AND :end AND o.status != 'CANCELLED'")
     BigDecimal sumTotalCost(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 
+    // Новый метод специально для точной выборки по датам
+    @Query("SELECT o FROM Order o WHERE o.createdAt >= :start AND o.createdAt <= :end AND o.status != 'CANCELLED'")
+    List<Order> findOrdersForPrintSummary(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+
+
 }
 

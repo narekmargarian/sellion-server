@@ -6,6 +6,11 @@ import com.sellion.sellionserver.repository.ClientRepository;
 import com.sellion.sellionserver.repository.TransactionRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -16,6 +21,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+
+
+
 @RestController
 @RequestMapping("/api/clients")
 @RequiredArgsConstructor
@@ -32,6 +40,10 @@ public class ClientApiController {
                 .sorted(Comparator.comparing(Client::getName))
                 .toList();
     }
+
+
+
+
 
     @DeleteMapping("/{id}")
     @Transactional
@@ -67,4 +79,15 @@ public class ClientApiController {
     public List<Transaction> getClientTransactions(@PathVariable Long id) {
         return transactionRepository.findAllByClientIdOrderByTimestampAsc(id);
     }
+
+
+    @GetMapping("/search-fast")
+    public List<Client> searchFast(@RequestParam String keyword) {
+        // Увеличиваем размер страницы до 100 совпадений
+        return clientRepository.searchClients(keyword, null, PageRequest.of(0, 100)).getContent();
+    }
+
+
+
+
 }

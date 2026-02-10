@@ -34,7 +34,7 @@ public class CompanySettings {
         data.put("inn", getSetting("COMPANY_INN", "01234567"));
         data.put("address", getSetting("COMPANY_ADDRESS", "ՀՀ, ք. Երևան"));
         data.put("bank", getSetting("COMPANY_BANK", "Ամերիա Բանկ"));
-        data.put("iban", getSetting("COMPANY_IBAN", "AM0000..."));
+        data.put("iban", getSetting("COMPANY_BANK_ACCOUNT", "157000..."));
         return data;
     }
 

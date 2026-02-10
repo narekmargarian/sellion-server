@@ -140,36 +140,23 @@ function printSelectedOperations(type) {
     const frame = document.getElementById('printFrame');
     const url = type === 'order' ? '/admin/orders/print-batch' : '/admin/returns/print-batch';
 
-    if (!frame) {
-        submitAsPost(url, selectedIds, '_blank');
-        return;
-    }
+    // Очищаем предыдущие обработчики, создавая клон фрейма (самый надежный метод)
+    const newFrame = frame.cloneNode(true);
+    frame.parentNode.replaceChild(newFrame, frame);
 
-    // 1. Очищаем фрейм перед использованием
-    frame.src = "about:blank";
-
-    // 2. Настраиваем печать при загрузке данных во фрейм
-    const printHandler = function () {
-        if (frame.contentWindow.location.href === "about:blank") return;
+    // Вешаем событие ОДИН раз
+    newFrame.addEventListener('load', function() {
+        if (newFrame.contentWindow.location.href === "about:blank") return;
 
         setTimeout(() => {
-            try {
-                frame.contentWindow.focus();
-                frame.contentWindow.print();
-            } catch (e) {
-                console.error("Ошибка печати:", e);
-            }
+            newFrame.contentWindow.focus();
+            newFrame.contentWindow.print();
         }, 300);
+    }, { once: true });
 
-        // Снимаем обработчик, чтобы он не висел в памяти
-        frame.removeEventListener('load', printHandler);
-    };
-
-    frame.addEventListener('load', printHandler);
-
-    // 3. Отправляем POST во фрейм
     submitAsPost(url, selectedIds, 'printFrame');
 }
+
 
 function submitAsPost(url, ids, targetName) {
     const form = document.createElement('form');
@@ -240,29 +227,41 @@ async function openClientDetails(id) {
 
     document.getElementById('modal-client-title').innerHTML = `Детали клиента <span class="badge">${client.name}</span>`;
 
-    // Установка дат по умолчанию (с 1-го числа текущего месяца по сегодня 2026 года)
     const now = new Date();
     const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
     const today = now.toISOString().split('T')[0];
 
     const info = document.getElementById('client-info');
+    // Стили для рядов сетки
+    const rowStyle = 'display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 15px;';
+
     info.innerHTML = `
-       <div class="modal-info-row">
-            <div><small>Название магазина:</small><br><b>${client.name}</b></div>
-            <div><small>Владелец / ИП:</small><br><b>${client.ownerName || '---'}</b></div>
+        <!-- РЯД 1 -->
+        <div style="${rowStyle}">
+            <div><small>Название:</small><br><b>${client.name}</b></div>
+            <div><small>Владелец:</small><br><b>${client.ownerName || '---'}</b></div>
             <div><small>ИНН:</small><br><b>${client.inn || '---'}</b></div>
-            <!-- ДОБАВЛЕНО: Менеджер -->
-            <div><small>Менеджер:</small><br><b>${client.managerId || '---'}</b></div>
-        </div>
-        <div class="modal-info-row">
-            <div><small>Телефон:</small><br><b>${client.phone || '---'}</b></div>
-            <div><small>Адрес:</small><br><b>${client.address || '---'}</b></div>
-            <div><small>День маршрута:</small><br><b>${client.routeDay || '---'}</b></div>
-            <div><small>Текущий долг:</small><br><b class="price-down">${(client.debt || 0).toLocaleString()} ֏</b></div>
+            <div><small>Категория:</small><br><b>${client.category || '---'}</b></div>
         </div>
 
-        <!-- БЛОК ВЫБОРА ПЕРИОДА (Как в 1С) -->
-        <div style="margin-top:20px; background: #f1f5f9; padding: 12px; border-radius: 12px; border: 1px solid #cbd5e1;">
+        <!-- РЯД 2 -->
+        <div style="${rowStyle}">
+            <div><small>Адрес:</small><br><b>${client.address || '---'}</b></div>
+            <div><small>Менеджер:</small><br><b>${client.managerId || '---'}</b></div>
+            <div><small>Текущий долг:</small><br><b class="price-down">${(client.debt || 0).toLocaleString()} ֏</b></div>
+            <div><small>День маршрута:</small><br><b>${client.routeDay || '---'}</b></div>
+        </div>
+
+        <!-- РЯД 3 -->
+        <div style="${rowStyle}">
+            <div><small>Название банка:</small><br><b>${client.bankName || '---'}</b></div>
+            <div><small>Расчетный счет:</small><br><b>${client.bankAccount || '---'}</b></div>
+            <div><small>Телефон:</small><br><b>${client.phone || '---'}</b></div>
+            <div></div> <!-- Пустое место -->
+        </div>
+
+        <!-- БЛОК ВЫБОРА ПЕРИОДА -->
+        <div style="margin-top:10px; background: #f1f5f9; padding: 12px; border-radius: 12px; border: 1px solid #cbd5e1;">
             <label style="font-size: 11px; font-weight: 800; color: var(--text-muted); display:block; margin-bottom:5px;">📅 ПЕРИОД АКТА СВЕРКИ</label>
             <div style="display: flex; gap: 10px; align-items: center;">
                 <input type="date" id="statement-start" class="form-control" style="font-size: 12px; height: 30px;" value="${firstDay}">
@@ -299,7 +298,6 @@ async function openClientDetails(id) {
     `;
 
     openModal('modal-client-view');
-
     loadClientStatement(id);
 }
 
@@ -368,21 +366,32 @@ function enableClientEdit() {
         `<option value="${m}" ${m === client.managerId ? 'selected' : ''}>${m}</option>`
     ).join('');
 
+    // Стили для обеспечения сетки 4 колонки
+    const rowStyle = 'display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 15px;';
+
     info.innerHTML = `
-         <div class="modal-info-row">
+         <!-- Ряд 1: Название, Владелец, ИНН, Категория -->
+         <div style="${rowStyle}">
             <div><label>Название</label><input type="text" id="edit-client-name" value="${client.name}"></div>
-            <div><label>Расчетный счет (IBAN)</label><input type="text" id="edit-client-bank" value="${client.bankAccount || ''}"></div>
             <div><label>Владелец</label><input type="text" id="edit-client-owner" value="${client.ownerName || ''}"></div>
             <div><label>ИНН</label><input type="text" id="edit-client-inn" value="${client.inn || ''}"></div>
+            <div><label>Категория</label><input type="text" id="edit-client-category" value="${client.category || ''}"></div>
         </div>
-        <div class="modal-info-row">
-            <div><label>Телефон</label><input type="text" id="edit-client-phone" value="${client.phone || ''}"></div>
+
+        <!-- Ряд 2: Адрес, Менеджер, Долг, День маршрута -->
+        <div style="${rowStyle}">
             <div><label>Адрес</label><input type="text" id="edit-client-address" value="${client.address || ''}"></div>
-            <!-- ДОБАВЛЕНО: Редактирование менеджера -->
-            <div><label>Менеджер</label><select id="edit-client-manager">${managerOptions}</select></div>
-            <!-- ДОБАВЛЕНО: Редактирование дня маршрута -->
+            <div><label>Менеджер</label><select id="edit-client-manager" class="form-select">${managerOptions}</select></div>
+            <div><label>Долг (֏)</label><input type="number" id="edit-client-debt" value="${client.debt || 0}"></div>
             <div><label>День маршрута</label><input type="text" id="edit-client-route-day" value="${client.routeDay || ''}"></div>
-            <div><label>Долг</label><input type="number" id="edit-client-debt" value="${client.debt || 0}"></div>
+        </div>
+
+        <!-- Ряд 3: Название банка, Расчетный счет, Телефон -->
+        <div style="${rowStyle}">
+            <div><label>Название банка</label><input type="text" id="edit-client-bank-name" value="${client.bankName || ''}"></div>
+            <div><label>Расчетный счет</label><input type="text" id="edit-client-bank" value="${client.bankAccount || ''}"></div>
+            <div><label>Телефон</label><input type="text" id="edit-client-phone" value="${client.phone || ''}"></div>
+            <div></div> <!-- Пусто для выравнивания -->
         </div>
     `;
 
@@ -390,43 +399,6 @@ function enableClientEdit() {
         <button class="btn-primary" style="background:#10b981" onclick="saveClientChanges(${client.id})">Сохранить</button>
         <button class="btn-primary" style="background:#64748b" onclick="openClientDetails(${client.id})">Отмена</button>`;
 }
-
-
-// function enableProductEdit() {
-//     const id = window.currentProductId;
-//     const product = productsData.find(p => p.id == id);
-//     if (!product) return;
-//
-//
-//     document.getElementById('modal-product-title').innerText = "Редактирование товара";
-//     const info = document.getElementById('product-info');
-//     // info.style.gridTemplateColumns = '1fr';
-//     info.innerHTML = `
-//          <div class="modal-info-row">
-//             <div><label>Название</label><input type="text" id="edit-product-name" value="${product.name}"></div>
-//             <div><label>Цена</label><input type="number" id="edit-product-price" value="${product.price}"></div>
-//             <div><label>Категория</label><input type="text" id="edit-product-category" value="${product.category || ''}"></div>
-//             <div><label>Код SKU (для 1С)</label><input type="text" id="edit-product-hsn" value="${product.hsnCode || ''}"></div>
-//
-//         </div>
-//         <div class="modal-info-row">
-//             <div><label>Остаток</label><input type="number" id="edit-product-qty" value="${product.stockQuantity || 0}"></div>
-//             <div><label>Штрих-код</label><input type="text" id="edit-product-barcode" value="${product.barcode || ''}"></div>
-//             <div><label>Упаковка</label><input type="number" id="edit-product-perbox" value="${product.itemsPerBox || 0}"></div>
-//             <div><label>Ед. измерения (шт/кг/кор)</label><input type="text" id="edit-product-unit" value="${product.unit || 'шт'}"></div>
-//
-//         </div>
-//     `;
-//
-//     const footer = document.getElementById('product-footer-actions');
-//     footer.innerHTML = `
-//         <button class="btn-primary" style="background:#10b981" onclick="saveProductChanges(${product.id})">Сохранить</button>
-//         <button class="btn-primary" style="background:#64748b" onclick="openProductDetails(${product.id})">Отмена</button>
-//
-//
-// `;
-// }
-
 
 
 
@@ -586,30 +558,29 @@ async function loadManagerIds() {
         return [];
     }
 }
+
 async function openCreateOrderModal() {
     await loadManagerIds();
     tempItems = {};
     const dates = getSmartDeliveryDates();
 
     document.getElementById('modal-title').innerText = "🛒 Создание нового заказа";
-
-    let clientOptions = clientsData.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
     let managerOptions = getManagerOptionsHTML();
 
     document.getElementById('order-info').innerHTML = `
         <div class="modal-info-row" style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 10px; background: #f8fafc; padding: 15px; border-radius: 10px;">
-            <div style="grid-column: span 1;"><label>МАГАЗИН:</label><select id="new-op-shop" class="form-select">${clientOptions}</select></div>
+            <div style="grid-column: span 1;">
+                <label>МАГАЗИН (Поиск):</label>
+                <input type="text" id="new-op-shop" class="form-control" list="clients-datalist" placeholder="Введите название...">
+                <datalist id="clients-datalist"></datalist>
+            </div>
             <div><label>МЕНЕДЖЕР:</label><select id="new-op-manager" class="form-select">${managerOptions}</select></div>
             <div><label>НОМЕР АВТО:</label><input type="text" id="new-op-car" class="form-control" placeholder="35XX000"></div>
         </div>
         <div class="modal-info-row" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top:10px; background: #f8fafc; padding: 15px; border-radius: 10px;">
             <div>
                 <label>ДОСТАВКА:</label>
-                <!-- min="${dates.min}" блокирует выбор прошедших дат в календаре -->
-                <input type="date" id="new-op-date" class="form-control" 
-                       min="${dates.min}" 
-                       value="${dates.default}" 
-                       onchange="if(this.value < '${dates.min}') { alert('Нельзя выбрать прошедшую дату!'); this.value='${dates.default}'; }">
+                <input type="date" id="new-op-date" class="form-control" min="${dates.min}" value="${dates.default}">
             </div>
             <div><label>ОПЛАТА:</label><select id="new-op-payment" class="form-select"><option value="CASH">Наличный</option><option value="TRANSFER">Перевод</option></select></div>
             <div><label>ФАКТУРА:</label>
@@ -620,6 +591,7 @@ async function openCreateOrderModal() {
             <div><label>КОММЕНТАРИЙ:</label><input type="text" id="new-op-comment" class="form-control" placeholder="..."></div>
         </div>`;
 
+    initSmartClientSearch('new-op-shop', 'clients-datalist'); // Активируем живой поиск
     renderItemsTable(tempItems, true);
     document.getElementById('order-total-price').innerText = "Итого: 0 ֏";
     document.getElementById('order-footer-actions').innerHTML = `
@@ -632,45 +604,37 @@ async function openCreateOrderModal() {
 
 
 
+
 async function openCreateReturnModal() {
     await loadManagerIds();
     tempItems = {};
-    // Получаем актуальные даты для 2026 года (min: сегодня, default: завтра/понедельник)
     const dates = getSmartDeliveryDates();
 
     document.getElementById('modal-title').innerText = "🔄 Новый возврат";
-
-    let clientOptions = clientsData.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
-    let reasonOptions = returnReasons.map(r => `<option value="${r.name || r}">${translateReason(r)}</option>`).join('');
     let managerOptions = getManagerOptionsHTML();
+    let reasonOptions = returnReasons.map(r => `<option value="${r.name || r}">${translateReason(r)}</option>`).join('');
 
     document.getElementById('order-info').innerHTML = `
         <div class="modal-info-row" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; background: #fff1f2; padding: 15px; border-radius: 10px;">
-            <div><label>МАГАЗИН:</label><select id="new-op-shop" class="form-select">${clientOptions}</select></div>
+            <div>
+                <label>МАГАЗИН (Поиск):</label>
+                <input type="text" id="new-op-shop" class="form-control" list="returns-clients-datalist" placeholder="Введите название...">
+                <datalist id="returns-clients-datalist"></datalist>
+            </div>
             <div><label>МЕНЕДЖЕР:</label><select id="new-op-manager" class="form-select">${managerOptions}</select></div>
-            <div><label>НОМЕР АВТО:</label><input type="text" id="new-op-car" class="form-control" placeholder="🚚"></div>
+            <div><label>НОМЕР АВТО:</label><input type="text" id="new-op-car" class="form-control" placeholder="111xx11"></div>
         </div>
         <div class="modal-info-row" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top:10px; background: #fff1f2; padding: 15px; border-radius: 10px;">
             <div><label>ПРИЧИНА:</label><select id="new-op-reason" class="form-select">${reasonOptions}</select></div>
-            <div>
-                <label>ДАТА ВОЗВРАТА:</label>
-                <!-- Запрет заднего числа (min) и установка "дня вперед" по умолчанию -->
-                <input type="date" id="new-op-date" class="form-control" 
-                       min="${dates.min}" 
-                       value="${dates.default}"
-                       onchange="if(this.value < '${dates.min}') { alert('Нельзя выбрать прошедшую дату!'); this.value='${dates.default}'; }">
-            </div>
+            <div><label>ДАТА ВОЗВРАТА:</label><input type="date" id="new-op-date" class="form-control" min="${dates.min}" value="${dates.default}"></div>
             <div><label>КОММЕНТАРИЙ:</label><input type="text" id="new-op-comment" class="form-control" placeholder="..."></div>
         </div>`;
 
+    initSmartClientSearch('new-op-shop', 'returns-clients-datalist'); // Активируем живой поиск
     renderItemsTable(tempItems, true);
 
-    // Сбрасываем итоговую цену (для возвратов она тоже важна при создании)
     const totalEl = document.getElementById('order-total-price');
-    if (totalEl) {
-        totalEl.style.display = 'block';
-        totalEl.innerText = "Итого: 0 ֏";
-    }
+    if (totalEl) { totalEl.innerText = "Итого: 0 ֏"; }
 
     document.getElementById('order-footer-actions').innerHTML = `
         <button class="btn-primary" style="background:#ef4444" onclick="saveNewManualOperation('return')">Создать возврат</button>
@@ -678,6 +642,45 @@ async function openCreateReturnModal() {
     `;
     openModal('modal-order-view');
 }
+
+
+
+function initSmartClientSearch(inputId, datalistId) {
+    const input = document.getElementById(inputId);
+    const datalist = document.getElementById(datalistId);
+    let validClients = []; // Здесь будем хранить имена для проверки
+
+    const updateSearch = async () => {
+        const query = input.value.trim();
+        try {
+            const response = await fetch(`/api/clients/search-fast?keyword=${encodeURIComponent(query)}`);
+            const clients = await response.json();
+
+            validClients = clients.map(c => c.name); // Сохраняем список имен
+            datalist.innerHTML = clients.map(c => `<option value="${c.name}">`).join('');
+        } catch (err) { console.error("Ошибка:", err); }
+    };
+
+    input.addEventListener('input', updateSearch);
+    input.addEventListener('focus', updateSearch);
+
+    // ПРОВЕРКА НА ОШИБКУ: когда оператор закончил ввод
+    input.addEventListener('blur', () => {
+        const val = input.value.trim();
+        if (val === "") return;
+
+        // Если введенного текста нет в списке валидных имен
+        if (!validClients.includes(val)) {
+            showToast("Ошибка: Выберите магазин из предложенного списка!", "error");
+            input.value = ""; // Очищаем поле, так как значение неверное
+            input.style.border = "2px solid red";
+        } else {
+            input.style.border = ""; // Всё ок
+        }
+    });
+}
+
+
 
 
 function toggleSelectAll(className, source) {
@@ -1986,22 +1989,45 @@ const formatOrderDate = formatDate;
 
 
 async function saveNewManualOperation(type) {
-    // Собираем актуальные данные из инпутов в tempItems
+    const shopInput = document.getElementById('new-op-shop');
+    const shopName = shopInput.value.trim();
+    const dateVal = document.getElementById('new-op-date').value;
+
+    // 1. Первичная проверка заполнения
+    if (!shopName || !dateVal) {
+        return showToast("Заполните магазин и дату!", "error");
+    }
+
+    // 2. ВАЛИДАЦИЯ МАГАЗИНА (для работы с 5000+ записей)
+    // Проверяем, существует ли введенный магазин в БД перед созданием заказа
+    try {
+        const checkRes = await fetch(`/api/clients/search-fast?keyword=${encodeURIComponent(shopName)}`);
+        const clients = await checkRes.json();
+        // Ищем точное совпадение (без учета регистра)
+        const exists = clients.some(c => c.name.toLowerCase() === shopName.toLowerCase());
+
+        if (!exists) {
+            shopInput.style.border = "2px solid #ef4444";
+            return showToast(`Магазин "${shopName}" не найден! Выберите из списка.`, "danger");
+        }
+        shopInput.style.border = ""; // Сбрасываем рамку, если всё ок
+    } catch (e) {
+        console.error("Ошибка проверки клиента:", e);
+    }
+
+    // 3. Сбор товаров из таблицы
     document.querySelectorAll('.qty-input-active').forEach(input => {
         const pId = input.id.replace('input-qty-', '');
         const val = parseInt(input.value);
         if (val > 0) tempItems[pId] = val; else delete tempItems[pId];
     });
 
-    if (Object.keys(tempItems).length === 0) return showToast("Состав пуст!", "danger");
+    if (Object.keys(tempItems).length === 0) return showToast("Состав пуст!", "error");
 
-    const shopName = document.getElementById('new-op-shop').value;
-    const dateVal = document.getElementById('new-op-date').value;
+    // 4. Сбор остальных данных
     const managerId = document.getElementById('new-op-manager').value;
     const carNumber = document.getElementById('new-op-car')?.value || "";
     const comment = document.getElementById('new-op-comment')?.value || "";
-
-    if (!shopName || !dateVal) return showToast("Заполните магазин и дату!", "danger");
 
     const data = {
         shopName,
@@ -2013,6 +2039,7 @@ async function saveNewManualOperation(type) {
         androidId: `MANUAL-${Date.now()}`
     };
 
+    // 5. Определение URL и специфических полей
     let url = '';
     if (type === 'order') {
         url = '/api/admin/orders/create-manual';
@@ -2025,8 +2052,8 @@ async function saveNewManualOperation(type) {
         data.returnDate = dateVal;
     }
 
+    // 6. Отправка данных
     try {
-        // Используем универсальный массив для возвратов, как требует ваш SyncController
         const payload = type === 'order' ? data : [data];
         const result = await secureFetch(url, {
             method: 'POST',
@@ -2036,10 +2063,10 @@ async function saveNewManualOperation(type) {
         showToast("Операция успешно сохранена", "success");
         setTimeout(() => location.reload(), 800);
     } catch (e) {
-        // Ошибка уже обработана внутри secureFetch (через showToast)
         console.error("Save error:", e);
     }
 }
+
 
 // 1. Расчет итоговой суммы (Ваша функция, оставляем и используем)
 function calculateCurrentTempTotal() {
@@ -2466,42 +2493,52 @@ function enableOrderEdit(id) {
 
 
 async function saveClientChanges(id) {
+    // 1. Собираем все данные из полей ввода
     const data = {
         name: document.getElementById('edit-client-name').value,
+        category: document.getElementById('edit-client-category').value,
         ownerName: document.getElementById('edit-client-owner').value,
         inn: document.getElementById('edit-client-inn').value,
         phone: document.getElementById('edit-client-phone').value,
         address: document.getElementById('edit-client-address').value,
         debt: parseFloat(document.getElementById('edit-client-debt').value) || 0,
-        bankAccount: document.getElementById('edit-client-bank').value,
+        bankName: document.getElementById('edit-client-bank-name').value, // Название банка
+        bankAccount: document.getElementById('edit-client-bank').value, // IBAN
         managerId: document.getElementById('edit-client-manager').value,
         routeDay: document.getElementById('edit-client-route-day').value
     };
 
     try {
+        // 2. Отправляем на сервер (убедитесь, что в Java Controller добавлены новые поля)
         await secureFetch(`/api/admin/clients/${id}/edit`, {
             method: 'PUT',
             body: data
         });
 
-        // Синхронизация локального массива 2026
+        // 3. Синхронизируем локальный массив данных
         const idx = clientsData.findIndex(c => c.id == id);
         if (idx !== -1) {
+            // Обновляем все поля в локальной переменной
             clientsData[idx] = {...clientsData[idx], ...data};
 
-            // Обновляем строку в таблице мгновенно
+            // 4. Обновляем ячейки в основной таблице (Web-интерфейс)
             const row = document.querySelector(`tr[onclick*="openClientDetails(${id})"]`);
             if (row) {
                 row.cells[0].innerText = data.name;
                 row.cells[1].innerText = data.address;
-                row.cells[2].innerText = data.debt.toLocaleString() + ' ֏';
+                row.cells[2].innerText = data.category || '---';
+                row.cells[3].innerText = data.debt.toLocaleString() + ' ֏';
+
+                // Исправлено: применяем класс цвета к ячейке с долгом
+                row.cells[3].className = data.debt > 0 ? 'price-down' : '';
             }
         }
 
         showToast("Данные клиента обновлены", "success");
-        openClientDetails(id); // Возвращаемся в режим просмотра
+        openClientDetails(id); // Возвращаемся к просмотру деталей (они подтянутся из обновленного clientsData)
     } catch (e) {
-        console.error(e);
+        console.error("Ошибка сохранения клиента:", e);
+        showToast("Не удалось сохранить изменения", "error");
     }
 }
 
@@ -2888,6 +2925,39 @@ function openPaymentModal(invoiceId) {
 }
 
 
+
+function printDailySummary() {
+    const tab = document.getElementById('tab-orders');
+    const selectedIds = Array.from(tab.querySelectorAll('.order-print-check:checked')).map(cb => cb.value);
+
+    if (selectedIds.length === 0) {
+        showToast("Выберите заказы для сводки!", "error");
+        return;
+    }
+
+    const frame = document.getElementById('printFrame');
+    const url = '/admin/orders/print-daily-summary';
+
+    const newFrame = frame.cloneNode(true);
+    frame.parentNode.replaceChild(newFrame, frame);
+
+    newFrame.addEventListener('load', function() {
+        if (newFrame.contentWindow.location.href === "about:blank") return;
+        setTimeout(() => {
+            newFrame.contentWindow.focus();
+            newFrame.contentWindow.print();
+        }, 300);
+    }, { once: true });
+
+    submitAsPost(url, selectedIds, 'printFrame');
+}
+
+
+
+
+
+
+
 function convertDateToISO(dateVal) {
     if (!dateVal || dateVal === '---') return "";
 
@@ -3006,6 +3076,42 @@ function getSmartDeliveryDates() {
 }
 
 
+// --- НОВАЯ ФУНКЦИЯ ДЛЯ ЛОГИСТИКИ ---
+function initDeliveryDateLogic() {
+    const dateInput = document.getElementById('route-date-select');
+    if (!dateInput) return;
+
+    // 1. Вычисляем "Логистическое завтра"
+    let deliveryDate = new Date();
+    deliveryDate.setDate(deliveryDate.getDate() + 1); // +1 день
+
+    // Если завтра воскресенье (0), переносим на понедельник
+    if (deliveryDate.getDay() === 0) {
+        deliveryDate.setDate(deliveryDate.getDate() + 1);
+    }
+
+    const toISODate = (date) => {
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+    };
+
+    const finalDateStr = toISODate(deliveryDate);
+
+    // 2. Устанавливаем значение и ограничение (минимум - сегодня)
+    dateInput.value = finalDateStr;
+    dateInput.min = toISODate(new Date());
+
+    // 3. Защита от ручного выбора воскресенья
+    dateInput.addEventListener('change', function() {
+        const selected = new Date(this.value);
+        if (selected.getDay() === 0) {
+            alert("⚠️ Воскресенье — выходной. Пожалуйста, выберите рабочий день.");
+            this.value = finalDateStr;
+        }
+    });
+}
 
 
 
@@ -3032,6 +3138,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (typeof loadManagerIds === 'function') promises.push(loadManagerIds());
             if (typeof loadApiKeys === 'function') promises.push(loadApiKeys());
             await Promise.all(promises);
+
+              initDeliveryDateLogic();
         } catch (e) {
             console.error("Ошибка загрузки начальных данных:", e);
         }

@@ -71,6 +71,17 @@
             body { padding: 0; }
             @page { margin: 1cm; size: A4 portrait; }
         }
+
+
+        @media print {
+    @page {
+        margin: 0; /* Убирает отступы, где печатаются колонтитулы */
+    }
+    body {
+        margin: 1.5cm; /* Добавляет отступ уже самому контенту, чтобы текст не прилипал к краю листа */
+    }
+}
+
     </style>
 </head>
 <body>

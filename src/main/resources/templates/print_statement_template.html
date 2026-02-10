@@ -12,6 +12,16 @@
         .sum-row { font-weight: bold; background: #fafafa; }
         .footer { margin-top: 50px; display: flex; justify-content: space-between; }
         .sign { border-top: 1px solid #000; width: 200px; text-align: center; padding-top: 5px; }
+
+        @media print {
+    @page {
+        margin: 0; /* Убирает отступы, где печатаются колонтитулы */
+    }
+    body {
+        margin: 1.5cm; /* Добавляет отступ уже самому контенту, чтобы текст не прилипал к краю листа */
+    }
+}
+
     </style>
 </head>
 <body>
