@@ -611,6 +611,257 @@ async function openCreateOrderModal() {
 }
 
 
+async function cancelOrder(id) {
+    // Используем ваше модальное окно подтверждения
+    showConfirmModal("Отменить заказ?", "Товар вернется на склад, суммы заказа будут обнулены.", async () => {
+        try {
+            // 1. Отправляем запрос на сервер
+            const response = await fetch(`/api/admin/orders/${id}/cancel`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            // 2. Пытаемся получить JSON с сервера (там может быть текст ошибки)
+            const result = await response.json().catch(() => ({}));
+
+            if (response.ok) {
+                // Успех: уведомляем и обновляем страницу
+                showToast(result.message || "Заказ успешно отменен", "success");
+
+                // Небольшая задержка, чтобы пользователь успел увидеть сообщение
+                setTimeout(() => {
+                    location.reload();
+                }, 800);
+            } else {
+                // Ошибка со стороны сервера (например: "Нельзя отменить заказ с выставленным счетом!")
+                const errorMessage = result.error || result.message || "Ошибка при отмене";
+                showToast(errorMessage, "error");
+
+                // Если ошибка критическая (например, данные устарели), можно обновить страницу через время
+                if (response.status === 400) {
+                    console.warn("Отмена отклонена сервером:", errorMessage);
+                }
+            }
+        } catch (e) {
+            // Ошибка сети или выполнения скрипта
+            console.error("Network error during order cancellation:", e);
+            showToast("Ошибка сети: не удалось связаться с сервером", "error");
+        }
+    });
+}
+
+async function showOrderHistory(orderId) {
+    const body = document.getElementById('order-items-body');
+    const footer = document.getElementById('order-footer-actions');
+    const title = document.getElementById('modal-title');
+    const totalEl = document.getElementById('order-total-price');
+
+    try {
+        // Визуальная индикация загрузки
+        body.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px;">⌛ Загрузка истории...</td></tr>';
+
+        const response = await fetch(`/api/admin/audit/order/${orderId}`);
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            showToast(`Ошибка: ${response.status}`, "error");
+            body.innerHTML = `<tr><td colspan="5" style="color:red; text-align:center; padding:20px;">Не удалось загрузить данные</td></tr>`;
+            return;
+        }
+
+        const logs = await response.json();
+
+        // Меняем заголовок модального окна
+        title.innerHTML = `📜 ИСТОРИЯ ИЗМЕНЕНИЙ #${orderId}`;
+
+        if (logs.length === 0) {
+            body.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:40px; color:#94a3b8;">История изменений для этой операции пуста</td></tr>';
+        } else {
+            // Формируем строки таблицы истории
+            body.innerHTML = logs.map(log => `
+                <tr style="border-bottom: 1px solid #f1f5f9;">
+                    <td style="white-space: nowrap; color: #64748b; font-size: 12px;">
+                        ${formatDate(log.timestamp)}
+                    </td>
+                    <td>
+                        <span class="badge" style="background:#e0f2fe; color:#0369a1;">${log.username}</span>
+                    </td>
+                    <td style="font-weight: 600; color: #1e293b;">
+                        ${log.action}
+                    </td>
+                    <td colspan="2" style="font-size: 13px; color: #475569; font-style: italic;">
+                        ${log.details || '---'}
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // Скрываем общую сумму, так как мы смотрим логи
+        if (totalEl) totalEl.style.display = 'none';
+
+        // Обновляем футер (только кнопка Назад)
+        footer.innerHTML = `
+            <button class="btn-primary" style="background:#64748b; width: 100%; padding: 10px;" onclick="openOrderDetails(${orderId})">
+                🔙 ВЕРНУТЬСЯ К ДЕТАЛЯМ
+            </button>
+        `;
+
+    } catch (e) {
+        console.error("Audit load error:", e);
+        showToast("Критическая ошибка сети", "error");
+        body.innerHTML = '<tr><td colspan="5" style="text-align:center; color:red;">Нет связи с сервером</td></tr>';
+    }
+}
+
+function openOrderDetails(id) {
+    const order = ordersData.find(o => o.id == id);
+    if (!order) return showToast("Данные не найдены", "error");
+
+    tempItems = syncTempItems(order.items);
+    // Проверка на списание (по названию магазина или типу)
+    const isWriteOff = order.shopName === 'СПИСАНИЕ' || order.type === 'WRITE_OFF';
+    const discountPercent = order.discountPercent || 0;
+
+    // 1. Заголовок
+    document.getElementById('modal-title').innerHTML = isWriteOff
+        ? `<span style="color: #ef4444;">📉 СПИСАНИЕ №${order.id}</span>`
+        : `ЗАКАЗ №${order.id} <span class="badge" style="background: #6366f1; margin-left: 10px;">${discountPercent}%</span>`;
+
+    const info = document.getElementById('order-info');
+
+    if (isWriteOff) {
+        // РЕЖИМ СПИСАНИЯ: Оставляем только Менеджера, Дату и Комментарий
+        info.innerHTML = `
+            <div class="modal-info-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; background: #f8fafc; padding: 15px; border-radius: 10px; margin-top: 15px; border: 1px solid #e2e8f0;">
+                <div><small style="color: #94a3b8; font-weight: 700;">МАГАЗИН:</small><br><b style="color: #cbd5e1;">null</b></div>
+                <div><small style="color: #64748b; font-weight: 700;">МЕНЕДЖЕР:</small><br><b>${order.managerId || 'Офис'}</b></div>
+                <div><small style="color: #64748b; font-weight: 700;">ДАТА СОЗДАНИЯ:</small><br><b>${formatDate(order.createdAt)}</b></div>
+
+                <div style="border-top: 1px solid #e2e8f0; padding-top: 8px;"><small style="color: #94a3b8; font-weight: 700;">ДОСТАВКА:</small><br><b style="color: #cbd5e1;">---</b></div>
+                <div style="border-top: 1px solid #e2e8f0; padding-top: 8px;"><small style="color: #94a3b8; font-weight: 700;">АВТО:</small><br><b style="color: #cbd5e1;">---</b></div>
+                <div style="border-top: 1px solid #e2e8f0; padding-top: 8px;"><small style="color: #94a3b8; font-weight: 700;">ПРОЦЕНТ МАГАЗИНА:</small><br><b style="color: #cbd5e1;">0%</b></div>
+
+                <div style="border-top: 1px solid #e2e8f0; padding-top: 8px;"><small style="color: #94a3b8; font-weight: 700;">ОПЛАТА:</small><br><b style="color: #cbd5e1;">---</b></div>
+                <div style="border-top: 1px solid #e2e8f0; padding-top: 8px;"><small style="color: #94a3b8; font-weight: 700;">ФАКТУРА:</small><br><b style="color: #1e293b;">Общая</b></div>
+                <div style="border-top: 1px solid #e2e8f0; padding-top: 8px;"><small style="color: #64748b; font-weight: 700;">КОММЕНТАРИЙ:</small><br><b>${order.comment || '---'}</b></div>
+            </div>
+            <input type="hidden" id="order-discount-percent" value="0">`;
+    } else {
+        // РЕЖИМ ОБЫЧНОГО ЗАКАЗА
+        info.innerHTML = `
+            <div class="modal-info-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; background: #f8fafc; padding: 15px; border-radius: 10px; margin-top: 15px; border: 1px solid #e2e8f0;">
+                <div><small style="color: #64748b; font-weight: 700;">МАГАЗИН:</small><br><b style="color: #1e293b;">${order.shopName}</b></div>
+                <div><small style="color: #64748b; font-weight: 700;">МЕНЕДЖЕР:</small><br><b>${order.managerId}</b></div>
+                <div><small style="color: #64748b; font-weight: 700;">ДАТА СОЗДАНИЯ:</small><br><b>${formatDate(order.createdAt)}</b></div>
+
+                <div style="border-top: 1px solid #e2e8f0; padding-top: 8px;"><small style="color: #64748b; font-weight: 700;">ДОСТАВКА:</small><br><b>${formatDate(order.deliveryDate).split(' ')[0]}</b></div>
+                <div style="border-top: 1px solid #e2e8f0; padding-top: 8px;"><small style="color: #64748b; font-weight: 700;">АВТО:</small><br><b>${order.carNumber || '---'}</b></div>
+                <div style="border-top: 1px solid #e2e8f0; padding-top: 8px;"><small style="color: #6366f1; font-weight: 800;">ПРОЦЕНТ МАГАЗИНА:</small><br><b style="color:#6366f1;">${discountPercent}%</b></div>
+
+                <div style="border-top: 1px solid #e2e8f0; padding-top: 8px;"><small style="color: #64748b; font-weight: 700;">ОПЛАТА:</small><br><b>${translatePayment(order.paymentMethod)}</b></div>
+                <div style="border-top: 1px solid #e2e8f0; padding-top: 8px;"><small style="color: #64748b; font-weight: 700;">ФАКТУРА:</small><br><b>${order.needsSeparateInvoice ? 'Раздельная' : 'Общая'}</b></div>
+                <div style="border-top: 1px solid #e2e8f0; padding-top: 8px;"><small style="color: #64748b; font-weight: 700;">КОММЕНТАРИЙ:</small><br><i style="font-size: 11px;">${order.comment || '---'}</i></div>
+            </div>
+            <input type="hidden" id="order-discount-percent" value="${discountPercent}">`;
+    }
+
+    renderItemsTable(tempItems, false);
+
+    const footer = document.getElementById('order-footer-actions');
+    let btnsHtml = `<button class="btn-primary" style="background:#6366f1" onclick="showOrderHistory(${order.id})">📜 История</button>`;
+
+    if (isWriteOff) {
+        btnsHtml += `<button class="btn-primary" style="background:#475569" onclick="printOrder(${order.id})">🖨 Печать</button>`;
+        btnsHtml += `<button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-order-view')">Закрыть</button>`;
+    } else {
+        btnsHtml += `<button class="btn-primary" style="background:#475569" onclick="printOrder(${order.id})">🖨 Печать</button>`;
+        if (!order.invoiceId) {
+            btnsHtml += `
+                <button class="btn-primary" onclick="enableOrderEdit(${order.id})">✏️ Изменить</button>
+                <button class="btn-primary" style="background:#ef4444" onclick="cancelOrder(${order.id})">🗑 Отмена</button>`;
+        } else {
+            btnsHtml += `<div style="color:#15803d; font-weight:700; padding: 0 10px;">✅ ПРОВЕРЕНО</div>`;
+        }
+        btnsHtml += `<button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-order-view')">Закрыть</button>`;
+    }
+
+    footer.innerHTML = btnsHtml;
+
+    const totalEl = document.getElementById('order-total-price');
+    if (totalEl) totalEl.style.display = isWriteOff ? 'none' : 'block';
+
+    openModal('modal-order-view');
+}
+
+function enableOrderEdit(id) {
+    const order = ordersData.find(o => o.id == id);
+    if (!order) return showToast("Ошибка: Заказ не найден", "error");
+
+    tempItems = syncTempItems(order.items);
+    const dates = getSmartDeliveryDates();
+
+    document.getElementById('modal-title').innerText = "📝 Редактирование заказа #" + id;
+
+    const currentPercent = order.discountPercent || 0;
+
+    const info = document.getElementById('order-info');
+    info.innerHTML = `
+        <div class="modal-info-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; background: #f1f5f9; padding: 15px; border-radius: 10px;">
+            <div>
+                <label>МАГАЗИН (Поиск):</label>
+                <!-- ИСПРАВЛЕНО: input + datalist вместо простого select -->
+                <input type="text" id="edit-shop" class="form-control"
+                       list="edit-order-clients-datalist"
+                       value="${order.shopName}"
+                       placeholder="Введите название...">
+                <datalist id="edit-order-clients-datalist"></datalist>
+            </div>
+            <div><label>ДОСТАВКА</label>
+                <input type="date" id="edit-delivery" class="form-control"
+                       min="${dates.min}"
+                       value="${convertDateToISO(order.deliveryDate)}">
+            </div>
+            <div><label>АВТО</label><input type="text" id="edit-car-number" class="form-control" value="${order.carNumber || ''}"></div>
+
+            <div style="margin-top:10px;"><label>ОПЛАТА</label>
+                <select id="edit-payment" class="form-select">
+                    <option value="CASH" ${order.paymentMethod === 'CASH' ? 'selected' : ''}>Наличный</option>
+                    <option value="TRANSFER" ${order.paymentMethod === 'TRANSFER' ? 'selected' : ''}>Перевод</option>
+                </select>
+            </div>
+            <div style="margin-top:10px;"><label>ФАКТУРА</label>
+                <select id="edit-invoice-type" class="form-select">
+                    <option value="false" ${!order.needsSeparateInvoice ? 'selected' : ''}>Общая</option>
+                    <option value="true" ${order.needsSeparateInvoice ? 'selected' : ''}>Раздельная</option>
+                </select>
+            </div>
+
+            <!-- СКРЫТОЕ ПОЛЕ ПРОЦЕНТА -->
+            <div style="display: none;">
+                <input type="number" id="order-discount-percent" value="${currentPercent}">
+            </div>
+
+            <div style="margin-top:10px;"><label>КОММЕНТАРИЙ</label>
+                <input type="text" id="edit-comment" class="form-control" value="${order.comment || ''}">
+            </div>
+        </div>`;
+
+    // АКТИВАЦИЯ ПОИСКА: Инициализируем живой поиск для нового поля
+    initSmartClientSearch('edit-shop', 'edit-order-clients-datalist');
+
+    renderItemsTable(tempItems, true);
+
+    document.getElementById('order-footer-actions').innerHTML = `
+        <button class="btn-primary" style="background:#10b981" onclick="saveFullChanges(${id})">💾 Сохранить</button>
+        <button class="btn-primary" style="background:#64748b" onclick="openOrderDetails(${id})">Отмена</button>`;
+}
+
+
+
+
+
+
+
 function recalculateWithPercent() {
     const percent = parseFloat(document.getElementById('order-discount-percent').value) || 0;
     let total = 0;
@@ -850,107 +1101,7 @@ function printInvoiceInline(invoiceId) {
     };
 }
 
-async function cancelOrder(id) {
-    // Используем ваше модальное окно подтверждения
-    showConfirmModal("Отменить заказ?", "Товар вернется на склад, суммы заказа будут обнулены.", async () => {
-        try {
-            // 1. Отправляем запрос на сервер
-            const response = await fetch(`/api/admin/orders/${id}/cancel`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
-            });
 
-            // 2. Пытаемся получить JSON с сервера (там может быть текст ошибки)
-            const result = await response.json().catch(() => ({}));
-
-            if (response.ok) {
-                // Успех: уведомляем и обновляем страницу
-                showToast(result.message || "Заказ успешно отменен", "success");
-
-                // Небольшая задержка, чтобы пользователь успел увидеть сообщение
-                setTimeout(() => {
-                    location.reload();
-                }, 800);
-            } else {
-                // Ошибка со стороны сервера (например: "Нельзя отменить заказ с выставленным счетом!")
-                const errorMessage = result.error || result.message || "Ошибка при отмене";
-                showToast(errorMessage, "error");
-
-                // Если ошибка критическая (например, данные устарели), можно обновить страницу через время
-                if (response.status === 400) {
-                    console.warn("Отмена отклонена сервером:", errorMessage);
-                }
-            }
-        } catch (e) {
-            // Ошибка сети или выполнения скрипта
-            console.error("Network error during order cancellation:", e);
-            showToast("Ошибка сети: не удалось связаться с сервером", "error");
-        }
-    });
-}
-
-async function showOrderHistory(orderId) {
-    const body = document.getElementById('order-items-body');
-    const footer = document.getElementById('order-footer-actions');
-    const title = document.getElementById('modal-title');
-    const totalEl = document.getElementById('order-total-price');
-
-    try {
-        // Визуальная индикация загрузки
-        body.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px;">⌛ Загрузка истории...</td></tr>';
-
-        const response = await fetch(`/api/admin/audit/order/${orderId}`);
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            showToast(`Ошибка: ${response.status}`, "error");
-            body.innerHTML = `<tr><td colspan="5" style="color:red; text-align:center; padding:20px;">Не удалось загрузить данные</td></tr>`;
-            return;
-        }
-
-        const logs = await response.json();
-
-        // Меняем заголовок модального окна
-        title.innerHTML = `📜 ИСТОРИЯ ИЗМЕНЕНИЙ #${orderId}`;
-
-        if (logs.length === 0) {
-            body.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:40px; color:#94a3b8;">История изменений для этой операции пуста</td></tr>';
-        } else {
-            // Формируем строки таблицы истории
-            body.innerHTML = logs.map(log => `
-                <tr style="border-bottom: 1px solid #f1f5f9;">
-                    <td style="white-space: nowrap; color: #64748b; font-size: 12px;">
-                        ${formatDate(log.timestamp)}
-                    </td>
-                    <td>
-                        <span class="badge" style="background:#e0f2fe; color:#0369a1;">${log.username}</span>
-                    </td>
-                    <td style="font-weight: 600; color: #1e293b;">
-                        ${log.action}
-                    </td>
-                    <td colspan="2" style="font-size: 13px; color: #475569; font-style: italic;">
-                        ${log.details || '---'}
-                    </td>
-                </tr>
-            `).join('');
-        }
-
-        // Скрываем общую сумму, так как мы смотрим логи
-        if (totalEl) totalEl.style.display = 'none';
-
-        // Обновляем футер (только кнопка Назад)
-        footer.innerHTML = `
-            <button class="btn-primary" style="background:#64748b; width: 100%; padding: 10px;" onclick="openOrderDetails(${orderId})">
-                🔙 ВЕРНУТЬСЯ К ДЕТАЛЯМ
-            </button>
-        `;
-
-    } catch (e) {
-        console.error("Audit load error:", e);
-        showToast("Критическая ошибка сети", "error");
-        body.innerHTML = '<tr><td colspan="5" style="text-align:center; color:red;">Нет связи с сервером</td></tr>';
-    }
-}
 
 function showTab(tabId) {
     document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
@@ -1394,6 +1545,163 @@ async function deleteProduct(id) {
         }
     });
 }
+
+
+async function openProductDetails(id) {
+    const p = productsData.find(prod => prod.id == id);
+    if (!p) return;
+    window.currentProductId = id;
+
+    document.getElementById('modal-product-title').innerHTML = `ТОВАР: <span class="badge" style="background:var(--accent)">${p.name}</span>`;
+
+    const info = document.getElementById('product-info');
+    info.innerHTML = `
+        <div class="modal-info-container" style="margin-top:15px;">
+            <div class="modal-info-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; background: #f8fafc; padding: 15px; border-radius: 10px; border: 1px solid #e2e8f0; margin-bottom: 10px;">
+                <div><small style="color: #64748b; font-weight: 700;">КАТЕГОРИЯ:</small><br><b>${p.category || '---'}</b></div>
+                <div><small style="color: #64748b; font-weight: 700;">ЦЕНА:</small><br><b class="price-up">${(p.price || 0).toLocaleString()} ֏</b></div>
+                <div><small style="color: #64748b; font-weight: 700;">КОД SKU (1С):</small><br><b style="font-family: monospace;">${p.hsnCode || '---'}</b></div>
+                <div><small style="color: #64748b; font-weight: 700;">СРОК ГОДНОСТИ:</small><br><b>${p.expiryDate ? formatDate(p.expiryDate) : '---'}</b></div>
+            </div>
+            <div class="modal-info-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; background: #fff; padding: 15px; border-radius: 10px; border: 1px solid #e2e8f0;">
+                <div><small style="color: #64748b; font-weight: 700;">ОСТАТОК:</small><br><span class="badge ${p.stockQuantity > 10 ? 'bg-light text-dark' : 'bg-danger text-white'}">${p.stockQuantity || 0} шт.</span></div>
+                <div><small style="color: #64748b; font-weight: 700;">ШТРИХ-КОД:</small><br><b style="font-family: monospace;">${p.barcode || '---'}</b></div>
+                <div><small style="color: #64748b; font-weight: 700;">УПАКОВКА:</small><br><b>${p.itemsPerBox || 1} шт.</b></div>
+                <div><small style="color: #64748b; font-weight: 700;">ЕД. ИЗМЕРЕНИЯ:</small><br><b class="text-primary">${p.unit || 'шт'}</b></div>
+            </div>
+        </div>
+    `;
+
+    document.getElementById('product-footer-actions').innerHTML = `
+        <button class="btn-primary" style="background:#f59e0b" onclick="doInventory()">⚖️ Инвентарь</button>
+        <button class="btn-primary" onclick="enableProductEdit()">✏️ Изменить</button>
+        <button class="btn-primary" style="background:#ef4444;" onclick="deleteProduct(${p.id})">🗑 Удалить</button>
+        <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-product-view')">Закрыть</button>
+    `;
+    openModal('modal-product-view');
+}
+
+
+function enableProductEdit() {
+    const p = productsData.find(prod => prod.id == window.currentProductId);
+    const info = document.getElementById('product-info');
+
+    info.innerHTML = `
+        <div class="modal-info-container" style="margin-top:15px;">
+            <div class="modal-info-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; background: #f1f5f9; padding: 15px; border-radius: 10px; margin-bottom: 10px;">
+                <div><label class="label-small">КАТЕГОРИЯ</label><input type="text" id="edit-product-category" class="form-control" value="${p.category || ''}"></div>
+                <div><label class="label-small">ЦЕНА</label><input type="number" id="edit-product-price" class="form-control" value="${p.price}"></div>
+                <div><label class="label-small">КОД SKU</label><input type="text" id="edit-product-hsn" class="form-control" value="${p.hsnCode || ''}"></div>
+                <div><label class="label-small">СРОК ГОДНОСТИ</label><input type="date" id="edit-product-expiry" class="form-control" value="${convertDateToISO(p.expiryDate)}"></div>
+            </div>
+            <div class="modal-info-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; background: #fff; padding: 15px; border-radius: 10px; border: 1px solid #e2e8f0;">
+                <div><label class="label-small">НАЗВАНИЕ</label><input type="text" id="edit-product-name" class="form-control" value="${p.name}"></div>
+                <div><label class="label-small">ОСТАТОК</label><input type="number" id="edit-product-qty" class="form-control" value="${p.stockQuantity}"></div>
+                <div><label class="label-small">ШТРИХ-КОД</label><input type="text" id="edit-product-barcode" class="form-control" value="${p.barcode || ''}"></div>
+                <div style="display: flex; gap: 5px;">
+                    <div style="flex:1"><label class="label-small">УПАКОВКА</label><input type="number" id="edit-product-perbox" class="form-control" value="${p.itemsPerBox}"></div>
+                    <div style="flex:1"><label class="label-small">ЕД. ИЗМ.</label>
+                        <select id="edit-product-unit" class="form-select">
+                            <option value="шт" ${p.unit === 'шт' ? 'selected' : ''}>шт</option>
+                            <option value="кг" ${p.unit === 'кг' ? 'selected' : ''}>кг</option>
+                            <option value="кор" ${p.unit === 'кор' ? 'selected' : ''}>кор</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.getElementById('product-footer-actions').innerHTML = `
+        <button class="btn-primary" style="background:#10b981" onclick="saveProductChanges(${p.id})">💾 Сохранить</button>
+        <button class="btn-primary" style="background:#64748b" onclick="openProductDetails(${p.id})">Отмена</button>
+    `;
+}
+
+
+
+function toggleProductEdit(isEdit) {
+    const view = document.getElementById('product-view-mode');
+    const edit = document.getElementById('product-edit-mode');
+    if (view && edit) {
+        view.style.display = isEdit ? 'none' : 'block';
+        edit.style.display = isEdit ? 'block' : 'none';
+    }
+}
+
+
+async function saveProductChanges(id) {
+    // 1. Собираем данные (ID полей теперь соответствуют новой форме 4x2)
+    const data = {
+        category: document.getElementById('edit-product-category').value,
+        price: parseFloat(document.getElementById('edit-product-price').value) || 0,
+        hsnCode: document.getElementById('edit-product-hsn').value,
+        expiryDate: document.getElementById('edit-product-expiry').value,
+
+        name: document.getElementById('edit-product-name').value,
+        stockQuantity: parseInt(document.getElementById('edit-product-qty').value) || 0,
+        barcode: document.getElementById('edit-product-barcode').value,
+        itemsPerBox: parseInt(document.getElementById('edit-product-perbox').value) || 0,
+        unit: document.getElementById('edit-product-unit').value
+    };
+
+    try {
+        // 2. Отправка на сервер через PUT
+        await secureFetch(`/api/admin/products/${id}/edit`, {
+            method: 'PUT',
+            body: data
+        });
+
+        // 3. Обновляем локальный массив данных Sellion 2026
+        const idx = productsData.findIndex(p => p.id == id);
+        if (idx !== -1) {
+            productsData[idx] = {...productsData[idx], ...data};
+
+            // 4. Умное обновление строки в основной таблице склада
+            const row = document.querySelector(`tr[onclick*="openProductDetails(${id})"]`);
+            if (row) {
+                // Название (внутри div для стиля)
+                const nameDiv = row.cells[0].querySelector('div');
+                if (nameDiv) nameDiv.innerText = data.name;
+
+                // Цена
+                row.cells[1].innerText = data.price.toLocaleString() + ' ֏';
+
+                // Остаток (Badge-стиль)
+                const qtyBadge = row.cells[2].querySelector('span');
+                if (qtyBadge) {
+                    qtyBadge.innerText = data.stockQuantity + ' шт.';
+                    qtyBadge.className = data.stockQuantity > 10 ? 'badge bg-light text-dark' : 'badge bg-danger text-white';
+                }
+
+                // Упаковка + Единица измерения
+                row.cells[3].innerText = `${data.itemsPerBox} ${data.unit}/уп`;
+
+                // Штрих-код
+                row.cells[4].innerText = data.barcode || '---';
+
+                // Срок годности
+                if (row.cells[5]) {
+                    row.cells[5].innerText = data.expiryDate ? formatDate(data.expiryDate) : '---';
+                    // Подсветка красным, если срок истекает
+                    const isExpired = data.expiryDate && new Date(data.expiryDate) < new Date(new Date().getTime() + 30 * 24 * 60 * 60 * 1000);
+                    row.cells[5].className = isExpired ? 'text-danger fw-bold' : '';
+                }
+            }
+        }
+
+        showToast("Товар успешно обновлен", "success");
+
+        // 5. Возвращаемся в режим просмотра деталей с новыми данными
+        openProductDetails(id);
+
+    } catch (e) {
+        console.error("Ошибка сохранения продукта:", e);
+        showToast("Не удалось сохранить изменения", "error");
+    }
+}
+
+
 
 async function deleteClient(id) {
     showConfirmModal("Удалить клиента?", "Он будет скрыт из списков, но останется в старых счетах и заказах.", async () => {
@@ -2276,6 +2584,7 @@ function removeItemFromEdit(pId) {
 
 
 
+
 function addItemToEdit() {
     const select = document.getElementById('add-item-select');
     const qtyInput = document.getElementById('add-item-qty');
@@ -2537,85 +2846,9 @@ function openWriteOffModal() {
 }
 
 
-function openOrderDetails(id) {
-    const order = ordersData.find(o => o.id == id);
-    if (!order) return showToast("Данные не найдены", "error");
 
-    tempItems = syncTempItems(order.items);
-    // Проверка на списание (по названию магазина или типу)
-    const isWriteOff = order.shopName === 'СПИСАНИЕ' || order.type === 'WRITE_OFF';
-    const discountPercent = order.discountPercent || 0;
 
-    // 1. Заголовок
-    document.getElementById('modal-title').innerHTML = isWriteOff
-        ? `<span style="color: #ef4444;">📉 СПИСАНИЕ №${order.id}</span>`
-        : `ЗАКАЗ №${order.id} <span class="badge" style="background: #6366f1; margin-left: 10px;">${discountPercent}%</span>`;
 
-    const info = document.getElementById('order-info');
-
-    if (isWriteOff) {
-        // РЕЖИМ СПИСАНИЯ: Оставляем только Менеджера, Дату и Комментарий
-        info.innerHTML = `
-            <div class="modal-info-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; background: #f8fafc; padding: 15px; border-radius: 10px; margin-top: 15px; border: 1px solid #e2e8f0;">
-                <div><small style="color: #94a3b8; font-weight: 700;">МАГАЗИН:</small><br><b style="color: #cbd5e1;">null</b></div>
-                <div><small style="color: #64748b; font-weight: 700;">МЕНЕДЖЕР:</small><br><b>${order.managerId || 'Офис'}</b></div>
-                <div><small style="color: #64748b; font-weight: 700;">ДАТА СОЗДАНИЯ:</small><br><b>${formatDate(order.createdAt)}</b></div>
-
-                <div style="border-top: 1px solid #e2e8f0; padding-top: 8px;"><small style="color: #94a3b8; font-weight: 700;">ДОСТАВКА:</small><br><b style="color: #cbd5e1;">---</b></div>
-                <div style="border-top: 1px solid #e2e8f0; padding-top: 8px;"><small style="color: #94a3b8; font-weight: 700;">АВТО:</small><br><b style="color: #cbd5e1;">---</b></div>
-                <div style="border-top: 1px solid #e2e8f0; padding-top: 8px;"><small style="color: #94a3b8; font-weight: 700;">ПРОЦЕНТ МАГАЗИНА:</small><br><b style="color: #cbd5e1;">0%</b></div>
-
-                <div style="border-top: 1px solid #e2e8f0; padding-top: 8px;"><small style="color: #94a3b8; font-weight: 700;">ОПЛАТА:</small><br><b style="color: #cbd5e1;">---</b></div>
-                <div style="border-top: 1px solid #e2e8f0; padding-top: 8px;"><small style="color: #94a3b8; font-weight: 700;">ФАКТУРА:</small><br><b style="color: #1e293b;">Общая</b></div>
-                <div style="border-top: 1px solid #e2e8f0; padding-top: 8px;"><small style="color: #64748b; font-weight: 700;">КОММЕНТАРИЙ:</small><br><b>${order.comment || '---'}</b></div>
-            </div>
-            <input type="hidden" id="order-discount-percent" value="0">`;
-    } else {
-        // РЕЖИМ ОБЫЧНОГО ЗАКАЗА
-        info.innerHTML = `
-            <div class="modal-info-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; background: #f8fafc; padding: 15px; border-radius: 10px; margin-top: 15px; border: 1px solid #e2e8f0;">
-                <div><small style="color: #64748b; font-weight: 700;">МАГАЗИН:</small><br><b style="color: #1e293b;">${order.shopName}</b></div>
-                <div><small style="color: #64748b; font-weight: 700;">МЕНЕДЖЕР:</small><br><b>${order.managerId}</b></div>
-                <div><small style="color: #64748b; font-weight: 700;">ДАТА СОЗДАНИЯ:</small><br><b>${formatDate(order.createdAt)}</b></div>
-
-                <div style="border-top: 1px solid #e2e8f0; padding-top: 8px;"><small style="color: #64748b; font-weight: 700;">ДОСТАВКА:</small><br><b>${formatDate(order.deliveryDate).split(' ')[0]}</b></div>
-                <div style="border-top: 1px solid #e2e8f0; padding-top: 8px;"><small style="color: #64748b; font-weight: 700;">АВТО:</small><br><b>${order.carNumber || '---'}</b></div>
-                <div style="border-top: 1px solid #e2e8f0; padding-top: 8px;"><small style="color: #6366f1; font-weight: 800;">ПРОЦЕНТ МАГАЗИНА:</small><br><b style="color:#6366f1;">${discountPercent}%</b></div>
-
-                <div style="border-top: 1px solid #e2e8f0; padding-top: 8px;"><small style="color: #64748b; font-weight: 700;">ОПЛАТА:</small><br><b>${translatePayment(order.paymentMethod)}</b></div>
-                <div style="border-top: 1px solid #e2e8f0; padding-top: 8px;"><small style="color: #64748b; font-weight: 700;">ФАКТУРА:</small><br><b>${order.needsSeparateInvoice ? 'Раздельная' : 'Общая'}</b></div>
-                <div style="border-top: 1px solid #e2e8f0; padding-top: 8px;"><small style="color: #64748b; font-weight: 700;">КОММЕНТАРИЙ:</small><br><i style="font-size: 11px;">${order.comment || '---'}</i></div>
-            </div>
-            <input type="hidden" id="order-discount-percent" value="${discountPercent}">`;
-    }
-
-    renderItemsTable(tempItems, false);
-
-    const footer = document.getElementById('order-footer-actions');
-    let btnsHtml = `<button class="btn-primary" style="background:#6366f1" onclick="showOrderHistory(${order.id})">📜 История</button>`;
-
-    if (isWriteOff) {
-        btnsHtml += `<button class="btn-primary" style="background:#475569" onclick="printOrder(${order.id})">🖨 Печать</button>`;
-        btnsHtml += `<button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-order-view')">Закрыть</button>`;
-    } else {
-        btnsHtml += `<button class="btn-primary" style="background:#475569" onclick="printOrder(${order.id})">🖨 Печать</button>`;
-        if (!order.invoiceId) {
-            btnsHtml += `
-                <button class="btn-primary" onclick="enableOrderEdit(${order.id})">✏️ Изменить</button>
-                <button class="btn-primary" style="background:#ef4444" onclick="cancelOrder(${order.id})">🗑 Отмена</button>`;
-        } else {
-            btnsHtml += `<div style="color:#15803d; font-weight:700; padding: 0 10px;">✅ ПРОВЕРЕНО</div>`;
-        }
-        btnsHtml += `<button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-order-view')">Закрыть</button>`;
-    }
-
-    footer.innerHTML = btnsHtml;
-
-    const totalEl = document.getElementById('order-total-price');
-    if (totalEl) totalEl.style.display = isWriteOff ? 'none' : 'block';
-
-    openModal('modal-order-view');
-}
 
 
 async function saveFullChanges(id) {
@@ -2922,68 +3155,6 @@ function openReturnDetails(id) {
 }
 
 
-function enableOrderEdit(id) {
-    const order = ordersData.find(o => o.id == id);
-    if (!order) return showToast("Ошибка: Заказ не найден", "error");
-
-    tempItems = syncTempItems(order.items);
-    const dates = getSmartDeliveryDates();
-
-    document.getElementById('modal-title').innerText = "📝 Редактирование заказа #" + id;
-
-    const currentPercent = order.discountPercent || 0;
-
-    const info = document.getElementById('order-info');
-    info.innerHTML = `
-        <div class="modal-info-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; background: #f1f5f9; padding: 15px; border-radius: 10px;">
-            <div>
-                <label>МАГАЗИН (Поиск):</label>
-                <!-- ИСПРАВЛЕНО: input + datalist вместо простого select -->
-                <input type="text" id="edit-shop" class="form-control"
-                       list="edit-order-clients-datalist"
-                       value="${order.shopName}"
-                       placeholder="Введите название...">
-                <datalist id="edit-order-clients-datalist"></datalist>
-            </div>
-            <div><label>ДОСТАВКА</label>
-                <input type="date" id="edit-delivery" class="form-control"
-                       min="${dates.min}"
-                       value="${convertDateToISO(order.deliveryDate)}">
-            </div>
-            <div><label>АВТО</label><input type="text" id="edit-car-number" class="form-control" value="${order.carNumber || ''}"></div>
-
-            <div style="margin-top:10px;"><label>ОПЛАТА</label>
-                <select id="edit-payment" class="form-select">
-                    <option value="CASH" ${order.paymentMethod === 'CASH' ? 'selected' : ''}>Наличный</option>
-                    <option value="TRANSFER" ${order.paymentMethod === 'TRANSFER' ? 'selected' : ''}>Перевод</option>
-                </select>
-            </div>
-            <div style="margin-top:10px;"><label>ФАКТУРА</label>
-                <select id="edit-invoice-type" class="form-select">
-                    <option value="false" ${!order.needsSeparateInvoice ? 'selected' : ''}>Общая</option>
-                    <option value="true" ${order.needsSeparateInvoice ? 'selected' : ''}>Раздельная</option>
-                </select>
-            </div>
-
-            <!-- СКРЫТОЕ ПОЛЕ ПРОЦЕНТА -->
-            <div style="display: none;">
-                <input type="number" id="order-discount-percent" value="${currentPercent}">
-            </div>
-
-            <div style="margin-top:10px;"><label>КОММЕНТАРИЙ</label>
-                <input type="text" id="edit-comment" class="form-control" value="${order.comment || ''}">
-            </div>
-        </div>`;
-
-    // АКТИВАЦИЯ ПОИСКА: Инициализируем живой поиск для нового поля
-    initSmartClientSearch('edit-shop', 'edit-order-clients-datalist');
-
-    renderItemsTable(tempItems, true);
-
-    document.getElementById('order-footer-actions').innerHTML = `
-        <button class="btn-primary" style="background:#10b981" onclick="saveFullChanges(${id})">💾 Сохранить</button>
-        <button class="btn-primary" style="background:#64748b" onclick="openOrderDetails(${id})">Отмена</button>`;
-}
 
 function handleClientChangeInEdit(clientName) {
     // 1. Находим данные клиента в локальном справочнике
@@ -3066,76 +3237,7 @@ async function saveClientChanges(id) {
     }
 }
 
-async function openProductDetails(id) {
-    const p = productsData.find(prod => prod.id == id);
-    if (!p) return;
-    window.currentProductId = id;
 
-    document.getElementById('modal-product-title').innerHTML = `ТОВАР: <span class="badge" style="background:var(--accent)">${p.name}</span>`;
-
-    const info = document.getElementById('product-info');
-    info.innerHTML = `
-        <div class="modal-info-container" style="margin-top:15px;">
-            <div class="modal-info-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; background: #f8fafc; padding: 15px; border-radius: 10px; border: 1px solid #e2e8f0; margin-bottom: 10px;">
-                <div><small style="color: #64748b; font-weight: 700;">КАТЕГОРИЯ:</small><br><b>${p.category || '---'}</b></div>
-                <div><small style="color: #64748b; font-weight: 700;">ЦЕНА:</small><br><b class="price-up">${(p.price || 0).toLocaleString()} ֏</b></div>
-                <div><small style="color: #64748b; font-weight: 700;">КОД SKU (1С):</small><br><b style="font-family: monospace;">${p.hsnCode || '---'}</b></div>
-                <div><small style="color: #64748b; font-weight: 700;">СРОК ГОДНОСТИ:</small><br><b>${p.expiryDate ? formatDate(p.expiryDate) : '---'}</b></div>
-            </div>
-            <div class="modal-info-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; background: #fff; padding: 15px; border-radius: 10px; border: 1px solid #e2e8f0;">
-                <div><small style="color: #64748b; font-weight: 700;">ОСТАТОК:</small><br><span class="badge ${p.stockQuantity > 10 ? 'bg-light text-dark' : 'bg-danger text-white'}">${p.stockQuantity || 0} шт.</span></div>
-                <div><small style="color: #64748b; font-weight: 700;">ШТРИХ-КОД:</small><br><b style="font-family: monospace;">${p.barcode || '---'}</b></div>
-                <div><small style="color: #64748b; font-weight: 700;">УПАКОВКА:</small><br><b>${p.itemsPerBox || 1} шт.</b></div>
-                <div><small style="color: #64748b; font-weight: 700;">ЕД. ИЗМЕРЕНИЯ:</small><br><b class="text-primary">${p.unit || 'шт'}</b></div>
-            </div>
-        </div>
-    `;
-
-    document.getElementById('product-footer-actions').innerHTML = `
-        <button class="btn-primary" style="background:#f59e0b" onclick="doInventory()">⚖️ Инвентарь</button>
-        <button class="btn-primary" onclick="enableProductEdit()">✏️ Изменить</button>
-        <button class="btn-primary" style="background:#ef4444;" onclick="deleteProduct(${p.id})">🗑 Удалить</button>
-        <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-product-view')">Закрыть</button>
-    `;
-    openModal('modal-product-view');
-}
-
-
-function enableProductEdit() {
-    const p = productsData.find(prod => prod.id == window.currentProductId);
-    const info = document.getElementById('product-info');
-
-    info.innerHTML = `
-        <div class="modal-info-container" style="margin-top:15px;">
-            <div class="modal-info-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; background: #f1f5f9; padding: 15px; border-radius: 10px; margin-bottom: 10px;">
-                <div><label class="label-small">КАТЕГОРИЯ</label><input type="text" id="edit-product-category" class="form-control" value="${p.category || ''}"></div>
-                <div><label class="label-small">ЦЕНА</label><input type="number" id="edit-product-price" class="form-control" value="${p.price}"></div>
-                <div><label class="label-small">КОД SKU</label><input type="text" id="edit-product-hsn" class="form-control" value="${p.hsnCode || ''}"></div>
-                <div><label class="label-small">СРОК ГОДНОСТИ</label><input type="date" id="edit-product-expiry" class="form-control" value="${convertDateToISO(p.expiryDate)}"></div>
-            </div>
-            <div class="modal-info-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; background: #fff; padding: 15px; border-radius: 10px; border: 1px solid #e2e8f0;">
-                <div><label class="label-small">НАЗВАНИЕ</label><input type="text" id="edit-product-name" class="form-control" value="${p.name}"></div>
-                <div><label class="label-small">ОСТАТОК</label><input type="number" id="edit-product-qty" class="form-control" value="${p.stockQuantity}"></div>
-                <div><label class="label-small">ШТРИХ-КОД</label><input type="text" id="edit-product-barcode" class="form-control" value="${p.barcode || ''}"></div>
-                <div style="display: flex; gap: 5px;">
-                    <div style="flex:1"><label class="label-small">УПАКОВКА</label><input type="number" id="edit-product-perbox" class="form-control" value="${p.itemsPerBox}"></div>
-                    <div style="flex:1"><label class="label-small">ЕД. ИЗМ.</label>
-                        <select id="edit-product-unit" class="form-select">
-                            <option value="шт" ${p.unit === 'шт' ? 'selected' : ''}>шт</option>
-                            <option value="кг" ${p.unit === 'кг' ? 'selected' : ''}>кг</option>
-                            <option value="кор" ${p.unit === 'кор' ? 'selected' : ''}>кор</option>
-                        </select>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
-
-    document.getElementById('product-footer-actions').innerHTML = `
-        <button class="btn-primary" style="background:#10b981" onclick="saveProductChanges(${p.id})">💾 Сохранить</button>
-        <button class="btn-primary" style="background:#64748b" onclick="openProductDetails(${p.id})">Отмена</button>
-    `;
-}
 
 function applyClientCategoryFilter(category) {
     // Получаем текущие параметры URL
@@ -3151,86 +3253,6 @@ function applyClientCategoryFilter(category) {
 }
 
 
-function toggleProductEdit(isEdit) {
-    const view = document.getElementById('product-view-mode');
-    const edit = document.getElementById('product-edit-mode');
-    if (view && edit) {
-        view.style.display = isEdit ? 'none' : 'block';
-        edit.style.display = isEdit ? 'block' : 'none';
-    }
-}
-
-
-async function saveProductChanges(id) {
-    // 1. Собираем данные (ID полей теперь соответствуют новой форме 4x2)
-    const data = {
-        category: document.getElementById('edit-product-category').value,
-        price: parseFloat(document.getElementById('edit-product-price').value) || 0,
-        hsnCode: document.getElementById('edit-product-hsn').value,
-        expiryDate: document.getElementById('edit-product-expiry').value,
-
-        name: document.getElementById('edit-product-name').value,
-        stockQuantity: parseInt(document.getElementById('edit-product-qty').value) || 0,
-        barcode: document.getElementById('edit-product-barcode').value,
-        itemsPerBox: parseInt(document.getElementById('edit-product-perbox').value) || 0,
-        unit: document.getElementById('edit-product-unit').value
-    };
-
-    try {
-        // 2. Отправка на сервер через PUT
-        await secureFetch(`/api/admin/products/${id}/edit`, {
-            method: 'PUT',
-            body: data
-        });
-
-        // 3. Обновляем локальный массив данных Sellion 2026
-        const idx = productsData.findIndex(p => p.id == id);
-        if (idx !== -1) {
-            productsData[idx] = {...productsData[idx], ...data};
-
-            // 4. Умное обновление строки в основной таблице склада
-            const row = document.querySelector(`tr[onclick*="openProductDetails(${id})"]`);
-            if (row) {
-                // Название (внутри div для стиля)
-                const nameDiv = row.cells[0].querySelector('div');
-                if (nameDiv) nameDiv.innerText = data.name;
-
-                // Цена
-                row.cells[1].innerText = data.price.toLocaleString() + ' ֏';
-
-                // Остаток (Badge-стиль)
-                const qtyBadge = row.cells[2].querySelector('span');
-                if (qtyBadge) {
-                    qtyBadge.innerText = data.stockQuantity + ' шт.';
-                    qtyBadge.className = data.stockQuantity > 10 ? 'badge bg-light text-dark' : 'badge bg-danger text-white';
-                }
-
-                // Упаковка + Единица измерения
-                row.cells[3].innerText = `${data.itemsPerBox} ${data.unit}/уп`;
-
-                // Штрих-код
-                row.cells[4].innerText = data.barcode || '---';
-
-                // Срок годности
-                if (row.cells[5]) {
-                    row.cells[5].innerText = data.expiryDate ? formatDate(data.expiryDate) : '---';
-                    // Подсветка красным, если срок истекает
-                    const isExpired = data.expiryDate && new Date(data.expiryDate) < new Date(new Date().getTime() + 30 * 24 * 60 * 60 * 1000);
-                    row.cells[5].className = isExpired ? 'text-danger fw-bold' : '';
-                }
-            }
-        }
-
-        showToast("Товар успешно обновлен", "success");
-
-        // 5. Возвращаемся в режим просмотра деталей с новыми данными
-        openProductDetails(id);
-
-    } catch (e) {
-        console.error("Ошибка сохранения продукта:", e);
-        showToast("Не удалось сохранить изменения", "error");
-    }
-}
 
 
 function filterTable(inputId, tableBodyId) {
