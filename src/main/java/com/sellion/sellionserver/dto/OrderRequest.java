@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
+import java.math.BigDecimal;
 import java.util.Map;
 
 @Data
@@ -22,4 +23,5 @@ public class OrderRequest {
     private String androidId;
     private String managerId;
     private String deliveryDate; // Будет распарсено в сервисе
+    private BigDecimal discountPercent;
 }

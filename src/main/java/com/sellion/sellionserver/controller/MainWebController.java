@@ -4,7 +4,10 @@ import com.sellion.sellionserver.dto.ManagerKpiDTO;
 import com.sellion.sellionserver.entity.*;
 import com.sellion.sellionserver.repository.*;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.*;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -13,7 +16,10 @@ import org.springframework.web.bind.annotation.RequestParam;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.time.*;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.Year;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -35,10 +41,16 @@ public class MainWebController {
     public String showDashboard(
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "size", defaultValue = "50") int size,
-            // НОВЫЕ ПАРАМЕТРЫ ДЛЯ КЛИЕНТОВ
             @RequestParam(value = "clientPage", defaultValue = "0") int clientPage,
             @RequestParam(value = "clientCategory", required = false) String clientCategory,
             @RequestParam(value = "clientSearch", required = false) String clientSearch,
+
+            // НОВЫЕ ПАРАМЕТРЫ ДЛЯ ИНВОЙСОВ
+            @RequestParam(value = "invoicePage", defaultValue = "0") int invoicePage,
+            @RequestParam(value = "invoiceStart", required = false) String invoiceStart,
+            @RequestParam(value = "invoiceEnd", required = false) String invoiceEnd,
+            @RequestParam(value = "invoiceManager", required = false) String invoiceManager,
+            @RequestParam(value = "invoiceStatus", required = false) String invoiceStatus,
 
             @RequestParam(value = "orderManagerId", required = false) String orderManagerId,
             @RequestParam(value = "returnManagerId", required = false) String returnManagerId,
@@ -49,7 +61,7 @@ public class MainWebController {
             @RequestParam(value = "activeTab", required = false, defaultValue = "tab-orders") String activeTab,
             Model model) {
 
-        // --- 1. ЛОГИКА ДАТ (2026 СТАНДАРТ) ---
+        // --- 1. ЛОГИКА ДАТ (ЗАКАЗЫ И ВОЗВРАТЫ - БЕЗ ИЗМЕНЕНИЙ) ---
         LocalDate startD = (orderStartDate != null && !orderStartDate.isEmpty()) ? LocalDate.parse(orderStartDate) : LocalDate.now();
         LocalDate endD = (orderEndDate != null && !orderEndDate.isEmpty()) ? LocalDate.parse(orderEndDate) : startD;
         LocalDateTime oStartDT = startD.atStartOfDay();
@@ -59,6 +71,12 @@ public class MainWebController {
         LocalDate endR = (returnEndDate != null && !returnEndDate.isEmpty()) ? LocalDate.parse(returnEndDate) : startR;
         LocalDateTime rStartDT = startR.atStartOfDay();
         LocalDateTime rEndDT = endR.atTime(LocalTime.MAX);
+
+        // --- ЛОГИКА ДАТ ДЛЯ ИНВОЙСОВ ---
+        LocalDate invStartD = (invoiceStart != null && !invoiceStart.isEmpty()) ? LocalDate.parse(invoiceStart) : LocalDate.now().withDayOfMonth(1);
+        LocalDate invEndD = (invoiceEnd != null && !invoiceEnd.isEmpty()) ? LocalDate.parse(invoiceEnd) : LocalDate.now();
+        LocalDateTime invStartDT = invStartD.atStartOfDay();
+        LocalDateTime invEndDT = invEndD.atTime(LocalTime.MAX);
 
         // --- 2. ЛОГИКА ДЛЯ ЗАКАЗОВ ---
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
@@ -96,10 +114,21 @@ public class MainWebController {
 
         BigDecimal netProfitBD = rawSales.subtract(rawPurchaseCost).subtract(totalReturnsSum).setScale(0, RoundingMode.HALF_UP);
 
-        // --- 4. ОБЩАЯ СТАТИСТИКА И СЧЕТА ---
-        List<Invoice> invoices = Optional.ofNullable(invoiceRepository.findAllByOrderByCreatedAtDesc()).orElse(new ArrayList<>());
-        BigDecimal totalInvoiceDebt = invoices.stream().filter(Objects::nonNull).map(i -> (i.getTotalAmount() != null ? i.getTotalAmount() : BigDecimal.ZERO).subtract(i.getPaidAmount() != null ? i.getPaidAmount() : BigDecimal.ZERO)).reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal totalPaidSum = invoices.stream().filter(i -> i != null && i.getPaidAmount() != null).map(Invoice::getPaidAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+        // --- 4. ОБЩАЯ СТАТИСТИКА И СЧЕТА (ПАГИНАЦИЯ + ФИЛЬТРЫ) ---
+        BigDecimal totalInvoiceDebt = Optional.ofNullable(invoiceRepository.calculateTotalDebt()).orElse(BigDecimal.ZERO);
+        BigDecimal totalPaidSum = Optional.ofNullable(invoiceRepository.calculateTotalPaid()).orElse(BigDecimal.ZERO);
+
+        // Подготовка параметров для фильтра
+        String managerParam = (invoiceManager != null && !invoiceManager.isEmpty()) ? invoiceManager : null;
+        String statusParam = (invoiceStatus != null && !invoiceStatus.isEmpty()) ? invoiceStatus : null;
+
+        Pageable invPageable = PageRequest.of(invoicePage, 15, Sort.by("createdAt").descending());
+
+        // ВАЖНО: Загружаем только один раз с учетом ВСЕХ фильтров
+        Page<Invoice> invoicesPage = invoiceRepository.findFilteredInvoices(
+                invStartDT, invEndDT, managerParam, statusParam, invPageable);
+
+        List<Invoice> invoicesList = invoicesPage.getContent();
 
         long activeOrdersCount = allOrdersForPeriod.stream().filter(o -> o.getStatus() != OrderStatus.CANCELLED).count();
         BigDecimal avgCheck = (activeOrdersCount == 0) ? BigDecimal.ZERO : rawSales.divide(BigDecimal.valueOf(activeOrdersCount), 2, RoundingMode.HALF_UP);
@@ -118,14 +147,22 @@ public class MainWebController {
             managerStats.put(mName, dto);
         }
 
-        // --- 6. ПЕРЕДАЧА В МОДЕЛЬ ---
-        addModel(page, orderManagerId, returnManagerId, model, ordersPage, totalOrdersSum, rawSales, rawPurchaseCost, netProfitBD, avgCheck, limitedLogs, invoices, totalInvoiceDebt, totalPaidSum, startD, endD, allReturns, totalReturnsSum, startR, endR);
+        addModel(page, orderManagerId, returnManagerId, model, ordersPage, totalOrdersSum, rawSales, rawPurchaseCost, netProfitBD, avgCheck, limitedLogs, invoicesList, totalInvoiceDebt, totalPaidSum, startD, endD, allReturns, totalReturnsSum, startR, endR);
 
-        // ИСПРАВЛЕННЫЙ ВЫЗОВ (Передаем 7 аргументов)
-
-        groupAndWarehouse(activeTab, clientPage, clientCategory, clientSearch, model, managersForUI, managerStats, invoices);
-
+        addInvModel(invoicePage, invoiceManager, invoiceStatus, model, invoicesList, invoicesPage, invStartD, invEndD);
+        groupAndWarehouse(activeTab, clientPage, clientCategory, clientSearch, model, managersForUI, managerStats, invoicesList);
         return "dashboard";
+
+    }
+
+    private static void addInvModel(int invoicePage, String invoiceManager, String invoiceStatus, Model model, List<Invoice> invoicesList, Page<Invoice> invoicesPage, LocalDate invStartD, LocalDate invEndD) {
+        model.addAttribute("invoices", invoicesList);
+        model.addAttribute("invCurrentPage", invoicePage);
+        model.addAttribute("invTotalPages", invoicesPage.getTotalPages());
+        model.addAttribute("invoiceStart", invStartD.toString());
+        model.addAttribute("invoiceEnd", invEndD.toString());
+        model.addAttribute("selectedInvManager", invoiceManager);
+        model.addAttribute("selectedInvStatus", invoiceStatus);
     }
 
 
@@ -160,8 +197,9 @@ public class MainWebController {
 
 
     private void groupAndWarehouse(String activeTab, int clientPage, String clientCategory, String clientSearch, Model model, List<String> managersForUI, Map<String, ManagerKpiDTO> managerStats, List<Invoice> invoices) {
-        // 1. Склад (без изменений)
+        // 1. Склад: Получаем активные товары с сортировкой
         List<Product> activeProducts = Optional.ofNullable(productRepository.findAllByIsDeletedFalse()).orElse(new ArrayList<>());
+
         Map<String, List<Product>> groupedProducts = activeProducts.stream()
                 .filter(Objects::nonNull)
                 .peek(p -> {
@@ -175,37 +213,42 @@ public class MainWebController {
                             return list;
                         })
                 ));
+
         model.addAttribute("groupedProducts", groupedProducts);
         model.addAttribute("products", activeProducts);
 
-        // 2. Логика PAGE + SEARCH для Клиентов (ИСПРАВЛЕНО)
+        // 2. Логика PAGE + SEARCH для Клиентов (Исправлено)
         int pageSize = 50;
         Pageable pageable = PageRequest.of(clientPage, pageSize, Sort.by("name").ascending());
+        Page<Client> clientsPage;
 
-        // ВАЖНО: searchKeyword не должен быть null для SQL запроса LIKE
-        String searchKeyword = (clientSearch != null) ? clientSearch.trim() : "";
-
-        // categoryFilter должен быть null, если строка пустая, чтобы сработал SQL запрос (:category IS NULL)
+        // Очистка параметров для поиска
+        String searchKeyword = (clientSearch != null && !clientSearch.trim().isEmpty()) ? clientSearch.trim() : null;
         String categoryFilter = (clientCategory != null && !clientCategory.trim().isEmpty()) ? clientCategory.trim() : null;
 
-        // Всегда используем searchClients, так как он умеет обрабатывать и пустой поиск, и наличие категории
-        Page<Client> clientsPage = clientRepository.searchClients(searchKeyword, categoryFilter, pageable);
+        // Глобальный поиск по базе через репозиторий
+        if (searchKeyword != null || categoryFilter != null) {
+            // Вызываем новый метод поиска, который ищет по имени И адресу И категории
+            clientsPage = clientRepository.searchClients(searchKeyword, categoryFilter, pageable);
+        } else {
+            clientsPage = clientRepository.findAllByIsDeletedFalse(pageable);
+        }
 
         model.addAttribute("clients", clientsPage.getContent());
         model.addAttribute("clientCurrentPage", clientPage);
         model.addAttribute("clientTotalPages", clientsPage.getTotalPages());
         model.addAttribute("clientTotalElements", clientsPage.getTotalElements());
-        model.addAttribute("selectedCategory", clientCategory); // Для th:selected в HTML
-        model.addAttribute("clientSearch", clientSearch);
+        model.addAttribute("selectedCategory", clientCategory);
+        model.addAttribute("clientSearch", clientSearch); // Чтобы значение осталось в инпуте
         model.addAttribute("clientCategories", clientRepository.findUniqueCategories());
 
-        // 3. Персонал и KPI (без изменений)
+        // 3. Персонал и KPI
         model.addAttribute("users", Optional.ofNullable(userRepository.findAll()).orElse(new ArrayList<>()));
         model.addAttribute("managers", managersForUI);
         model.addAttribute("managersKPI", managersForUI);
         model.addAttribute("managerStats", managerStats);
 
-        // 4. Логика просрочки (без изменений)
+        // 4. Логика просрочки
         LocalDateTime limitDate = LocalDateTime.now().minusDays(30);
         Set<String> overdueClients = invoices.stream()
                 .filter(inv -> inv != null && !"PAID".equals(inv.getStatus()))
@@ -215,7 +258,7 @@ public class MainWebController {
                 .collect(Collectors.toSet());
         model.addAttribute("overdueClients", overdueClients);
 
-        // 5. Карта долгов для JS (без изменений)
+        // 5. Карта долгов для JS
         List<Client> allActiveForMap = clientRepository.findAllByIsDeletedFalse();
         Map<String, BigDecimal> clientDebts = allActiveForMap.stream()
                 .filter(c -> c != null && c.getName() != null)
@@ -230,8 +273,6 @@ public class MainWebController {
         model.addAttribute("returnReasons", ReasonsReturn.values());
         model.addAttribute("activeTab", activeTab);
     }
-
-
 
 
 }

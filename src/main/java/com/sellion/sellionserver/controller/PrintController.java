@@ -5,6 +5,7 @@ import com.sellion.sellionserver.entity.*;
 import com.sellion.sellionserver.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.stereotype.Controller;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.ui.Model;
@@ -15,7 +16,6 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
-import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -220,10 +220,25 @@ public class PrintController {
 
     @GetMapping("/invoices/print-debts")
     @Transactional(readOnly = true)
-    public String printManagerDebts(@RequestParam String managerId, Model model) {
+    public String printManagerDebts(
+            @RequestParam String managerId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate start,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate end,
+            Model model) {
+
         List<Invoice> unpaidInvoices = invoiceRepository.findAllByOrderByCreatedAtDesc().stream()
                 .filter(inv -> managerId.equals(inv.getManagerId()))
                 .filter(inv -> !"PAID".equals(inv.getStatus()))
+                // --- ФИЛЬТР ПО ДАТАМ ---
+                .filter(inv -> {
+                    if (inv.getCreatedAt() == null) return false;
+                    LocalDate invDate = inv.getCreatedAt().toLocalDate();
+                    boolean matches = true;
+                    if (start != null && invDate.isBefore(start)) matches = false;
+                    if (end != null && invDate.isAfter(end)) matches = false;
+                    return matches;
+                })
+                // -----------------------
                 .toList();
 
         BigDecimal totalDebt = unpaidInvoices.stream()
@@ -234,6 +249,10 @@ public class PrintController {
         model.addAttribute("managerId", managerId);
         model.addAttribute("totalDebt", totalDebt.setScale(2, RoundingMode.HALF_UP));
         model.addAttribute("title", "ЛИСТ ЗАДОЛЖЕННОСТИ: " + managerId);
+
+        // Передаем даты в модель, чтобы их можно было отобразить в заголовке печатной формы
+        model.addAttribute("startDate", start);
+        model.addAttribute("endDate", end);
         model.addAttribute("currentDate", LocalDateTime.now());
 
         return "print_debts_template";
@@ -264,7 +283,6 @@ public class PrintController {
         }
         return dtoList;
     }
-
 
 
     @PostMapping("/orders/print-daily-summary") // Заменили на PostMapping
@@ -304,9 +322,6 @@ public class PrintController {
 
         return "print_daily_summary_template";
     }
-
-
-
 
 
 }

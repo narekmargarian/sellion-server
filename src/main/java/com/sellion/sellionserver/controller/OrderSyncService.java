@@ -29,17 +29,15 @@ public class OrderSyncService {
 
     @Transactional(rollbackFor = Exception.class)
     public void processOrderFromAndroid(Order order) {
-        // 1. Проверка на дубликат по Android ID (защита от повторных нажатий кнопки "Отправить")
+        // 1. Проверка на дубликат
         if (order.getAndroidId() != null && orderRepository.existsByAndroidId(order.getAndroidId())) {
             log.info("Пропуск дубликата заказа: AndroidId [{}]", order.getAndroidId());
             return;
         }
 
-        // 2. Блокировка всех товаров заказа для предотвращения Race Condition (стандарт 2026)
-        // Используем метод с @Lock(LockModeType.PESSIMISTIC_WRITE)
+        // 2. Блокировка товаров (PESSIMISTIC_WRITE) для предотвращения Race Condition
         List<Product> lockedProducts = productRepository.findAllByIdWithLock(order.getItems().keySet());
 
-        // Преобразуем в карту для быстрого поиска внутри цикла
         Map<Long, Product> productMap = lockedProducts.stream()
                 .collect(Collectors.toMap(Product::getId, java.util.function.Function.identity()));
 
@@ -48,6 +46,17 @@ public class OrderSyncService {
 
         BigDecimal totalCost = BigDecimal.ZERO;
         BigDecimal totalAmount = BigDecimal.ZERO;
+
+        // --- ЛОГИКА СКИДКИ (ВЫЧИТАНИЕ ПРОЦЕНТА) ---
+        // Получаем процент клиента (например, 10.0)
+        BigDecimal percent = Optional.ofNullable(order.getDiscountPercent()).orElse(BigDecimal.ZERO);
+
+        // Вычисляем множитель СКИДКИ: (1 - percent/100).
+        // Например, если 10%, то 1 - 0.10 = 0.90 (клиент платит 90% от цены)
+        BigDecimal modifier = BigDecimal.ONE.subtract(
+                percent.divide(new BigDecimal("100"), 4, RoundingMode.HALF_UP)
+        );
+        // ------------------------------------------
 
         // 3. Расчет стоимости на основе заблокированных данных
         for (Map.Entry<Long, Integer> entry : order.getItems().entrySet()) {
@@ -58,30 +67,37 @@ public class OrderSyncService {
 
             Product p = productMap.get(productId);
             if (p == null) {
-                throw new RuntimeException("Ошибка синхронизации: Товар ID " + productId + " не найден в базе данных");
+                throw new RuntimeException("Ошибка: Товар ID " + productId + " не найден");
             }
 
             BigDecimal qty = BigDecimal.valueOf(qtyInt);
 
-            // Расчет себестоимости и суммы продажи
+            // Себестоимость (всегда базовая для отчетов прибыли)
             BigDecimal purchasePrice = Optional.ofNullable(p.getPurchasePrice()).orElse(BigDecimal.ZERO);
-            BigDecimal salePrice = Optional.ofNullable(p.getPrice()).orElse(BigDecimal.ZERO);
+
+            // ЦЕНА ПРОДАЖИ С УЧЕТОМ СКИДКИ
+            BigDecimal baseSalePrice = Optional.ofNullable(p.getPrice()).orElse(BigDecimal.ZERO);
+
+            // Вычисляем итоговую цену за 1 шт, округляем до целых (для ֏)
+            BigDecimal finalPricePerUnit = baseSalePrice.multiply(modifier).setScale(0, RoundingMode.HALF_UP);
 
             totalCost = totalCost.add(purchasePrice.multiply(qty));
-            totalAmount = totalAmount.add(salePrice.multiply(qty));
+            totalAmount = totalAmount.add(finalPricePerUnit.multiply(qty));
         }
 
-        // 4. Фиксация сумм в объекте заказа
+        // 4. Фиксация итогов
         order.setTotalPurchaseCost(totalCost.setScale(2, RoundingMode.HALF_UP));
-        order.setPurchaseCost(totalCost.setScale(2, RoundingMode.HALF_UP)); // Для совместимости полей
-        order.setTotalAmount(totalAmount.setScale(2, RoundingMode.HALF_UP));
+        order.setPurchaseCost(totalCost.setScale(2, RoundingMode.HALF_UP));
 
-        // 5. Выполнение резервирования на складе
-        // Если товара не хватит, StockService выбросит RuntimeException и вся транзакция откатится
-        stockService.reserveItemsFromStock(order.getItems(), "Android Sync: " + order.getShopName());
+        // Итоговая сумма заказа (уже накоплена из округленных цен товаров)
+        order.setTotalAmount(totalAmount.setScale(0, RoundingMode.HALF_UP));
 
-        // 6. Финальное сохранение заказа
+        // 5. Резервирование склада
+        stockService.reserveItemsFromStock(order.getItems(), "Заказ (скидка " + percent + "%): " + order.getShopName());
+
+        // 6. Сохранение
         orderRepository.save(order);
-        log.info("Заказ из Android успешно обработан: Магазин [{}], Сумма [{}]", order.getShopName(), totalAmount);
+        log.info("Заказ обработан. Магазин: {}, Скидка: {}%, Итоговая сумма: {} ֏",
+                order.getShopName(), percent, order.getTotalAmount());
     }
 }

@@ -11,7 +11,6 @@ import lombok.Setter;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -44,7 +43,7 @@ public class Order {
     @Column(name = "payment_method", nullable = false) // База будет знать, что это String
     private PaymentMethod paymentMethod = PaymentMethod.CASH;
 
-    private Boolean needsSeparateInvoice=false;
+    private Boolean needsSeparateInvoice = false;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
@@ -64,6 +63,7 @@ public class Order {
     private LocalDateTime createdAt;
 
     private String comment;
+    private BigDecimal discountPercent = BigDecimal.ZERO;
 
     @Column(unique = true, name = "android_id") // ИСПРАВЛЕНО: Индекс на уровне БД
     private String androidId;

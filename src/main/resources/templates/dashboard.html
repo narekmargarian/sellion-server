@@ -202,48 +202,62 @@
 
 
         <div id="tab-invoices" class="tab-pane">
+
+            <!-- КАРТОЧКИ СТАТИСТИКИ (Данные из базы за всё время или период) -->
             <div class="summary-card" style="background: #f0fdf4; border-color: #bbf7d0; display: flex; gap: 20px;">
                 <div class="summary-item">
-                    <small>Общий долг по счетам:</small><br>
+                    <small>Общий долг системы:</small><br>
                     <span class="price-down"
                           th:text="${(totalInvoiceDebt ?: 0) == 0 ? '0 ֏' : #numbers.formatInteger(totalInvoiceDebt, 1, 'WHITESPACE') + ' ֏'}">
-                    </span>
+            </span>
                 </div>
                 <div class="summary-item">
-                    <small>Оплаченный долг по счетам:</small><br>
+                    <small>Всего оплачено:</small><br>
                     <span class="price-up"
-                          th:text="${totalPaidSum == null ? '0 ֏' : #numbers.formatInteger(totalPaidSum, 1, 'WHITESPACE') + ' ֏'}">
-                    </span>
+                          th:text="${(totalPaidSum ?: 0) == 0 ? '0 ֏' : #numbers.formatInteger(totalPaidSum, 1, 'WHITESPACE') + ' ֏'}">
+            </span>
                 </div>
             </div>
 
+            <!-- БАР ФИЛЬТРОВ -->
             <div class="filter-bar">
                 <input type="text" id="search-invoices" onkeyup="filterTable('search-invoices', 'invoices-table-body')"
-                       placeholder="Поиск..." class="form-control" style="width: 150px;">
+                       placeholder="Поиск в таблице..." class="form-control" style="width: 150px;">
 
+                <!-- Селектор менеджера (с сохранением выбора) -->
                 <select id="filter-invoice-manager" class="form-select" style="width: 150px;"
-                        onchange="filterInvoices()">
+                        onchange="applyInvoiceFilters()">
                     <option value="">Все менеджеры</option>
-                    <option th:each="m : ${managers}" th:value="${m}" th:text="${m}"></option>
+                    <option th:each="m : ${managers}" th:value="${m}" th:text="${m}"
+                            th:selected="${m == selectedInvManager}"></option>
                 </select>
 
+                <!-- Селектор статуса (с сохранением выбора) -->
                 <select id="filter-invoice-status" class="form-select" style="width: 150px;"
-                        onchange="filterInvoices()">
+                        onchange="applyInvoiceFilters()">
                     <option value="">Все статусы</option>
-                    <option value="Оплачен">Оплачен</option>
-                    <option value="Частично">Частично</option>
-                    <option value="Не Оплачен">Не Оплачен</option>
+                    <option value="Оплачен" th:selected="${selectedInvStatus == 'Оплачен'}">Оплачен</option>
+                    <option value="Частично" th:selected="${selectedInvStatus == 'Частично'}">Частично</option>
+                    <option value="Не Оплачен" th:selected="${selectedInvStatus == 'Не Оплачен'}">Не Оплачен</option>
                 </select>
 
+                <!-- Даты -->
                 <div class="d-flex gap-1">
-                    <input type="date" id="inv-date-start" class="form-control" style="width: 130px;">
-                    <input type="date" id="inv-date-end" class="form-control" style="width: 130px;">
+                    <input type="date" id="inv-date-start" class="form-control" style="width: 135px;"
+                           th:value="${invoiceStart}">
+                    <input type="date" id="inv-date-end" class="form-control" style="width: 135px;"
+                           th:value="${invoiceEnd}">
+                    <button class="btn-primary" onclick="applyInvoiceFilters()">⟳ Филтр</button>
                 </div>
 
-                <button class="btn-primary" onclick="printManagerDebts()" style="background: #1e293b;">⎙ Лист долгов
+                <!-- КНОПКА ПЕЧАТИ (Вернул назад) -->
+                <button class="btn-primary" onclick="printManagerDebts()" style="background: #1e293b;">
+                    ⎙ Лист долгов
                 </button>
             </div>
 
+
+            <!-- ТАБЛИЦА -->
             <div class="table-container">
                 <table class="table">
                     <thead>
@@ -257,40 +271,58 @@
                     </tr>
                     </thead>
                     <tbody id="invoices-table-body">
-
                     <tr th:each="inv : ${invoices}" th:data-manager="${inv.managerId}">
-
                         <td th:text="${inv.invoiceNumber}"></td>
                         <td th:text="${inv.shopName}" style="font-weight:700;"></td>
                         <td th:text="${#numbers.formatInteger(inv.totalAmount, 1, 'WHITESPACE') + ' ֏'}"></td>
                         <td class="price-up"
                             th:text="${#numbers.formatInteger(inv.paidAmount, 1, 'WHITESPACE') + ' ֏'}"></td>
-
                         <td>
-                            <span th:with="isFullyPaid=(${inv.paidAmount} >= ${inv.totalAmount}), isPartial=(${inv.paidAmount} > 0 and ${inv.paidAmount} < ${inv.totalAmount})"
-
-                                  th:class="|badge ${isFullyPaid ? 'bg-success text-white' : (isPartial ? 'bg-info text-dark' : 'bg-warning text-dark')}|"
-
-                                  th:text="${isFullyPaid ? 'Оплачен' : (isPartial ? 'Частично' : 'Не Оплачен')}">
-                            </span>
+                    <span th:with="isFullyPaid=(${inv.paidAmount} >= ${inv.totalAmount}),
+                                   isPartial=(${inv.paidAmount} > 0 and ${inv.paidAmount} < ${inv.totalAmount})"
+                          th:class="|badge ${isFullyPaid ? 'bg-success text-white' : (isPartial ? 'bg-info text-dark' : 'bg-warning text-dark')}|"
+                          th:text="${isFullyPaid ? 'Оплачен' : (isPartial ? 'Частично' : 'Не Оплачен')}">
+                    </span>
                         </td>
-
-
                         <td>
                             <div style="display: flex; gap: 5px;">
                                 <button class="btn-primary" style="padding:5px;"
                                         th:onclick="'openPaymentModal(' + ${inv.id} + ')'">💳 Оплата
                                 </button>
                                 <button class="btn-primary" style="background:#64748b; padding:5px;"
-                                        th:onclick="'printInvoiceInline(' + ${inv.id} + ')'">
-                                    🖨 Печать
+                                        th:onclick="'printInvoiceInline(' + ${inv.id} + ')'">🖨 Печать
                                 </button>
                             </div>
+                        </td>
+                    </tr>
+                    <tr th:if="${#lists.isEmpty(invoices)}">
+                        <td colspan="6" style="text-align: center; padding: 20px; color: var(--text-muted);">
+                            За выбранный период счетов не найдено.
                         </td>
                     </tr>
                     </tbody>
                 </table>
             </div>
+
+            <div class="pagination-wrapper" th:if="${invTotalPages > 1}"
+                 style="display: flex; flex-direction: column; align-items: center; gap: 5px; margin-top: 15px;">
+
+                <div style="display: flex; gap: 10px; justify-content: center; align-items: center;">
+                    <!-- Назад -->
+                    <a th:href="@{/admin(activeTab='tab-invoices', invoicePage=${invCurrentPage - 1}, invoiceStart=${invoiceStart}, invoiceEnd=${invoiceEnd})}"
+                       th:if="${invCurrentPage > 0}" class="btn-ghost">← Назад</a>
+
+                    <!-- Счётчик -->
+                    <span style="font-weight: 700; background: #f1f5f9; padding: 5px 15px; border-radius: 20px; font-size: 13px; border: 1px solid #e2e8f0;">
+                Страница <span th:text="${invCurrentPage + 1}"></span> из <span th:text="${invTotalPages}"></span>
+            </span>
+
+                    <!-- Вперед -->
+                    <a th:href="@{/admin(activeTab='tab-invoices', invoicePage=${invCurrentPage + 1}, invoiceStart=${invoiceStart}, invoiceEnd=${invoiceEnd})}"
+                       th:if="${invCurrentPage < invTotalPages - 1}" class="btn-ghost">Вперед →</a>
+                </div>
+            </div>
+
         </div>
 
 
@@ -448,7 +480,8 @@
 
                     <!-- Счётчик страниц -->
                     <span style="font-weight: 700; background: #f1f5f9; padding: 5px 15px; border-radius: 20px; font-size: 13px; border: 1px solid #e2e8f0;">
-                     Страница <span th:text="${clientCurrentPage + 1}"></span> из <span th:text="${clientTotalPages}"></span>
+                     Страница <span th:text="${clientCurrentPage + 1}"></span> из <span
+                            th:text="${clientTotalPages}"></span>
                        </span>
 
                     <!-- Кнопка ВПЕРЕД (Добавлен clientSearch) -->
@@ -552,6 +585,7 @@
                     <input type="date" name="kpiEnd" class="form-control" th:value="${orderEndDate}">
                     <button type="submit" class="btn-primary">Применить период</button>
                 </form>
+
             </div>
 
             <div class="manager-table-container">
@@ -809,8 +843,7 @@
                     <!-- Кнопка обновления -->
                     <button type="button" class="btn-primary"
                             style="height: 31px; padding: 0 15px; background: #6366f1; border: none; box-shadow: 0 2px 4px rgba(99, 102, 241, 0.2);"
-                            onclick="applyReportFilters()" title="Применить период">
-                        <i class="bi bi-check-lg"></i>
+                            onclick="applyReportFilters()" title="Применить период">⟳
                     </button>
                 </div>
 
@@ -1096,7 +1129,8 @@
                         <tr>
                             <th>Товар</th>
                             <th>Кол-во</th>
-                            <th>Цена</th>
+                            <th>Прайс</th>
+                            <th>Прайс - %</th>
                             <th>Итого</th>
                             <th>Кат.</th>
                         </tr>
@@ -1242,7 +1276,8 @@
                             </div>
                             <div>
                                 <label class="label-small">КАТЕГОРИЯ КЛИЕНТА</label>
-                                <input type="text" name="category" class="form-control" placeholder="Напр: Сеть, Розница">
+                                <input type="text" name="category" class="form-control"
+                                       placeholder="Напр: Сеть, Розница">
                             </div>
                             <div>
                                 <label class="label-small">ТЕЛЕФОН</label>
@@ -1285,8 +1320,12 @@
                     </div>
 
                     <div style="display: flex; gap: 10px; margin-top: 25px; justify-content: flex-end;">
-                        <button type="submit" class="btn-primary" style="background:#10b981; padding: 10px 25px;">Создать клиента</button>
-                        <button type="button" class="btn-primary" style="background:#64748b" onclick="closeModal('modal-client')">Отмена</button>
+                        <button type="submit" class="btn-primary" style="background:#10b981; padding: 10px 25px;">
+                            Создать клиента
+                        </button>
+                        <button type="button" class="btn-primary" style="background:#64748b"
+                                onclick="closeModal('modal-client')">Отмена
+                        </button>
                     </div>
                 </form>
             </div>
@@ -1358,7 +1397,6 @@
                 </div>
             </div>
         </div>
-
 
 
         <div id="modal-product-create-new" class="modal">

@@ -7,11 +7,13 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.math.BigDecimal;
-import java.util.Map;
 
 @Entity
 @Table(name = "clients")
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
 public class Client {
 
     @Id
@@ -31,5 +33,6 @@ public class Client {
     private String bankAccount;
     private String bankName;
     private String category;
+    private BigDecimal defaultPercent = BigDecimal.ZERO;
 
 }

@@ -21,6 +21,7 @@ public interface ClientRepository extends JpaRepository<Client, Long> {
 
     // Пагинация для WEB: Все активные клиенты
     Page<Client> findAllByIsDeletedFalse(Pageable pageable);
+
     // Поиск с фильтром категории для пагинации (Web)
     Page<Client> findAllByIsDeletedFalseAndCategory(String category, Pageable pageable);
 
@@ -52,5 +53,6 @@ public interface ClientRepository extends JpaRepository<Client, Long> {
     Page<Client> searchClients(@Param("keyword") String keyword,
                                @Param("category") String category,
                                Pageable pageable);
+
 
 }
