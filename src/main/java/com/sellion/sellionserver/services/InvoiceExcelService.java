@@ -50,7 +50,8 @@ public class InvoiceExcelService {
         return workbook;
     }
 
-    private void fillSheetData(SXSSFWorkbook workbook, Map<String, String> seller, List<Order> orders, List<ReturnOrder> returns) {
+    private void fillSheetData(SXSSFWorkbook workbook, Map<String, String> seller, List<Order> orders,
+                               List<ReturnOrder> returns) {
         // 1. Предварительная загрузка справочников
         Map<String, Client> clients = clientRepository.findAll().stream()
                 .collect(Collectors.toMap(Client::getName, Function.identity(), (e, r) -> e));
@@ -75,12 +76,10 @@ public class InvoiceExcelService {
                 // Рендерим сводную накладную
                 if (!combined.isEmpty()) {
                     Map<Long, Integer> mergedItems = new HashMap<>();
-                    Map<Long, BigDecimal> mergedPromos = new HashMap<>(); // Собираем акции для сводной
+                    Map<Long, BigDecimal> mergedPromos = new HashMap<>();
 
                     combined.forEach(o -> {
-                        // Объединяем количество товаров
                         o.getItems().forEach((id, qty) -> mergedItems.merge(id, qty, Integer::sum));
-                        // Объединяем акции (если у одного товара в разных заказах разные акции, затрется последней)
                         if (o.getAppliedPromoItems() != null) {
                             mergedPromos.putAll(o.getAppliedPromoItems());
                         }
@@ -90,8 +89,9 @@ public class InvoiceExcelService {
                     BigDecimal groupPercent = Optional.ofNullable(first.getDiscountPercent()).orElse(BigDecimal.ZERO);
 
                     String sheetName = createSafeSheetName("Продажа " + shopName);
+                    // ИСПРАВЛЕНО: Добавлен null в конце (для заказов нет ручных цен)
                     renderSheet(workbook, sheetName, shopName, clients.get(shopName), mergedItems, products, seller,
-                            "Сводная накладная", first.getManagerId(), first.getCarNumber(), groupPercent, mergedPromos);
+                            "Сводная накладная", first.getManagerId(), first.getCarNumber(), groupPercent, mergedPromos, null);
                 }
 
                 // Рендерим раздельные накладные
@@ -99,8 +99,9 @@ public class InvoiceExcelService {
                     BigDecimal orderPercent = Optional.ofNullable(o.getDiscountPercent()).orElse(BigDecimal.ZERO);
 
                     String sheetName = createSafeSheetName("Прод " + shopName + " #" + o.getId());
+                    // ИСПРАВЛЕНО: Добавлен null в конце
                     renderSheet(workbook, sheetName, shopName, clients.get(shopName), o.getItems(), products, seller,
-                            "Накладная №" + o.getId(), o.getManagerId(), o.getCarNumber(), orderPercent, o.getAppliedPromoItems());
+                            "Накладная №" + o.getId(), o.getManagerId(), o.getCarNumber(), orderPercent, o.getAppliedPromoItems(), null);
                 }
             });
         }
@@ -109,9 +110,10 @@ public class InvoiceExcelService {
         if (returns != null && !returns.isEmpty()) {
             for (ReturnOrder r : returns) {
                 String sheetName = createSafeSheetName("Возврат " + r.getShopName() + " #" + r.getId());
-                // Для возвратов передаем пустую карту акций
+
+                // ИСПРАВЛЕНО: Передаем r.getItemPrices() последним аргументом
                 renderSheet(workbook, sheetName, r.getShopName(), clients.get(r.getShopName()), r.getItems(), products, seller,
-                        "Акт возврата №" + r.getId(), r.getManagerId(), r.getCarNumber(), BigDecimal.ZERO, new HashMap<>());
+                        "Акт возврата №" + r.getId(), r.getManagerId(), r.getCarNumber(), BigDecimal.ZERO, new HashMap<>(), r.getItemPrices());
             }
         }
     }
@@ -119,10 +121,12 @@ public class InvoiceExcelService {
 
 
 
+
     private void renderSheet(SXSSFWorkbook workbook, String sheetName, String shopName, Client c,
                              Map<Long, Integer> items, Map<Long, Product> products,
                              Map<String, String> seller, String docInfo, String managerId, String carNumber,
-                             BigDecimal discountPercent, Map<Long, BigDecimal> appliedPromos) {
+                             BigDecimal discountPercent, Map<Long, BigDecimal> appliedPromos,
+                             Map<Long, BigDecimal> manualPrices) { // <-- ДОБАВЛЕН ПАРАМЕТР
 
         String finalName = createSafeSheetName(sheetName);
         Sheet sheet = workbook.createSheet(finalName);
@@ -179,13 +183,10 @@ public class InvoiceExcelService {
             addHeaderRowWithBorder(sheet, rowIdx++, "Данные:", "Реквизиты клиента не заполнены", borderStyle);
         }
 
-        // Находим этот блок в методе renderSheet
         if (discountPercent != null && discountPercent.compareTo(BigDecimal.ZERO) > 0) {
-            // ИСПРАВЛЕНО: используем stripTrailingZeros().toPlainString() для красоты (12.0% -> 12%)
             String discountStr = discountPercent.stripTrailingZeros().toPlainString() + "%";
             addHeaderRowWithBorder(sheet, rowIdx++, "Скидка магазина:", discountStr, borderStyle);
         }
-
 
         addHeaderRowWithBorder(sheet, rowIdx++, "Документ:", docInfo, borderStyle);
         addHeaderRowWithBorder(sheet, rowIdx++, "Менеджер / Авто:",
@@ -193,14 +194,14 @@ public class InvoiceExcelService {
 
         rowIdx += 2;
 
-        // ВЫЗОВ ИСПРАВЛЕННОГО МЕТОДА (с передачей акций)
-        rowIdx = fillItemsTable(sheet, rowIdx, items, products, discountPercent, appliedPromos);
+        // ВЫЗОВ ИСПРАВЛЕННОГО МЕТОДА (теперь передаем manualPrices)
+        rowIdx = fillItemsTable(sheet, rowIdx, items, products, discountPercent, appliedPromos, manualPrices);
 
-        // Автоподбор для 8 колонок
         for (int i = 0; i < 8; i++) {
             sheet.autoSizeColumn(i);
         }
     }
+
 
 
     // Вспомогательный метод для строк с границами
@@ -224,18 +225,18 @@ public class InvoiceExcelService {
 
 
     private int fillItemsTable(Sheet sheet, int rowIdx, Map<Long, Integer> items, Map<Long, Product> products,
-                               BigDecimal discountPercent, Map<Long, BigDecimal> appliedPromos) {
+                               BigDecimal discountPercent, Map<Long, BigDecimal> appliedPromos,
+                               Map<Long, BigDecimal> manualPrices) { // Добавлен параметр для цен возврата
         Workbook wb = sheet.getWorkbook();
         DataFormat format = wb.createDataFormat();
 
-        // Стили с поддержкой одного знака после запятой
         CellStyle borderStyle = wb.createCellStyle();
         borderStyle.setBorderBottom(BorderStyle.THIN);
         borderStyle.setBorderTop(BorderStyle.THIN);
         borderStyle.setBorderRight(BorderStyle.THIN);
         borderStyle.setBorderLeft(BorderStyle.THIN);
         borderStyle.setVerticalAlignment(VerticalAlignment.CENTER);
-        borderStyle.setDataFormat(format.getFormat("#,##0.0")); // Формат: 1 751.2
+        borderStyle.setDataFormat(format.getFormat("#,##0.0"));
 
         CellStyle centerStyle = wb.createCellStyle();
         centerStyle.cloneStyleFrom(borderStyle);
@@ -246,9 +247,8 @@ public class InvoiceExcelService {
         Font boldFont = wb.createFont();
         boldFont.setBold(true);
         headerStyle.setFont(boldFont);
-        headerStyle.setDataFormat(format.getFormat("@")); // Для заголовков текст
+        headerStyle.setDataFormat(format.getFormat("@"));
 
-        // 1. Заголовки
         Row header = sheet.createRow(rowIdx++);
         String[] colNames = {"Товар", "Код(ԱՏԳ)", "Ед.", "Кол-во", "Прайс", "%", "Цена (со скидкой)", "Сумма"};
 
@@ -260,26 +260,30 @@ public class InvoiceExcelService {
 
         BigDecimal totalAmount = BigDecimal.ZERO;
 
-        // 2. Заполнение строками
         if (items != null) {
             for (Map.Entry<Long, Integer> entry : items.entrySet()) {
                 Long productId = entry.getKey();
                 Product p = products.get(productId);
                 if (p == null) continue;
 
-                BigDecimal itemPromo = (appliedPromos != null) ? appliedPromos.getOrDefault(productId, BigDecimal.ZERO) : BigDecimal.ZERO;
-                BigDecimal finalPercent = (itemPromo.compareTo(BigDecimal.ZERO) > 0) ? itemPromo : (discountPercent != null ? discountPercent : BigDecimal.ZERO);
-
                 BigDecimal qty = BigDecimal.valueOf(entry.getValue());
                 BigDecimal basePrice = Optional.ofNullable(p.getPrice()).orElse(BigDecimal.ZERO);
+                BigDecimal finalPrice;
+                BigDecimal finalPercent = BigDecimal.ZERO;
 
-                // ИСПРАВЛЕНО: modifier и finalPrice теперь сохраняют точность
-                BigDecimal modifier = BigDecimal.ONE.subtract(finalPercent.divide(new BigDecimal("100"), 4, RoundingMode.HALF_UP));
+                // ЛОГИКА: Если есть ручная цена (ВОЗВРАТ), берем её. Иначе — считаем скидку (ЗАКАЗ).
+                if (manualPrices != null && manualPrices.containsKey(productId)) {
+                    finalPrice = manualPrices.get(productId);
+                    basePrice = finalPrice; // Для возвратов в колонку "Прайс" пишем фактическую цену
+                } else {
+                    BigDecimal itemPromo = (appliedPromos != null) ? appliedPromos.getOrDefault(productId, BigDecimal.ZERO) : BigDecimal.ZERO;
+                    finalPercent = (itemPromo.compareTo(BigDecimal.ZERO) > 0) ? itemPromo : (discountPercent != null ? discountPercent : BigDecimal.ZERO);
 
-                // Расчет: Цена за 1 шт с округлением до 0.1
-                BigDecimal finalPrice = basePrice.multiply(modifier).setScale(1, RoundingMode.HALF_UP);
+                    BigDecimal modifier = BigDecimal.ONE.subtract(finalPercent.divide(new BigDecimal("100"), 4, RoundingMode.HALF_UP));
+                    finalPrice = basePrice.multiply(modifier);
+                }
 
-                // Сумма по строке (Цена * Кол-во)
+                finalPrice = finalPrice.setScale(1, RoundingMode.HALF_UP);
                 BigDecimal itemTotal = finalPrice.multiply(qty).setScale(1, RoundingMode.HALF_UP);
                 totalAmount = totalAmount.add(itemTotal);
 
@@ -289,11 +293,8 @@ public class InvoiceExcelService {
                 createStyledCell(row, c++, p.getHsnCode() != null ? p.getHsnCode() : "", borderStyle);
                 createStyledCell(row, c++, p.getUnit() != null ? p.getUnit() : "шт", centerStyle);
                 createStyledCell(row, c++, entry.getValue().doubleValue(), centerStyle);
-
-                // ИСПРАВЛЕНО: Используем doubleValue() вместо intValue()
                 createStyledCell(row, c++, basePrice.doubleValue(), borderStyle);
 
-                // Колонка %
                 String percentValue = (finalPercent.compareTo(BigDecimal.ZERO) > 0) ? finalPercent.stripTrailingZeros().toPlainString() : "";
                 createStyledCell(row, c++, percentValue, centerStyle);
 
@@ -302,21 +303,19 @@ public class InvoiceExcelService {
             }
         }
 
-        // 3. Итоговая строка
         rowIdx++;
         Row totalRow = sheet.createRow(rowIdx++);
-
         Cell totalLabel = totalRow.createCell(6);
         totalLabel.setCellValue("ИТОГО К ОПЛАТЕ:");
         totalLabel.setCellStyle(headerStyle);
 
         Cell sumCell = totalRow.createCell(7);
-        // ИСПРАВЛЕНО: Итоговая сумма с точностью 0.1
         sumCell.setCellValue(totalAmount.setScale(1, RoundingMode.HALF_UP).doubleValue());
         sumCell.setCellStyle(headerStyle);
 
         return rowIdx;
     }
+
 
 
 

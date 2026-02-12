@@ -256,60 +256,84 @@ public class AdminManagementController {
             return ResponseEntity.badRequest().body(Map.of("error", "Нельзя менять подтвержденный возврат"));
         }
 
-        // Сохранение доп. полей
-        if (payload.containsKey("carNumber")) {
-            ret.setCarNumber((String) payload.get("carNumber"));
-        }
-        if (payload.containsKey("comment")) {
-            ret.setComment((String) payload.get("comment"));
-        }
-
-        ret.setShopName((String) payload.get("shopName"));
+        // 1. Обновление базовых полей
+        if (payload.containsKey("carNumber")) ret.setCarNumber((String) payload.get("carNumber"));
+        if (payload.containsKey("comment")) ret.setComment((String) payload.get("comment"));
+        if (payload.containsKey("shopName")) ret.setShopName((String) payload.get("shopName"));
 
         if (payload.get("returnDate") != null) {
             ret.setReturnDate(LocalDate.parse((String) payload.get("returnDate")));
         }
-
         if (payload.get("returnReason") != null) {
             ret.setReturnReason(ReasonsReturn.fromString((String) payload.get("returnReason")));
         }
 
-        // Конвертация товаров
+        // 2. Обработка товаров (items) и индивидуальных цен (itemPrices)
         Map<Long, Integer> newItems = new HashMap<>();
+        Map<Long, BigDecimal> newItemPrices = new HashMap<>();
+        BigDecimal totalSum = BigDecimal.ZERO;
+
         Object itemsObj = payload.get("items");
+        Object pricesObj = payload.get("itemPrices"); // Получаем кастомные цены из JS
 
         if (itemsObj instanceof Map) {
             @SuppressWarnings("unchecked")
-            Map<Object, Object> rawItems = (Map<Object, Object>) itemsObj;
-            rawItems.forEach((key, value) -> {
+            Map<String, Object> rawItems = (Map<String, Object>) itemsObj;
+            @SuppressWarnings("unchecked")
+            Map<String, Object> rawPrices = (pricesObj instanceof Map) ? (Map<String, Object>) pricesObj : new HashMap<>();
+
+            for (Map.Entry<String, Object> entry : rawItems.entrySet()) {
                 try {
-                    Long productId = Long.valueOf(key.toString());
-                    Integer qty = (value instanceof Number) ? ((Number) value).intValue() : Integer.parseInt(value.toString());
-                    if (qty > 0) newItems.put(productId, qty);
+                    Long productId = Long.valueOf(entry.getKey());
+                    Integer qty = (entry.getValue() instanceof Number) ?
+                            ((Number) entry.getValue()).intValue() : Integer.parseInt(entry.getValue().toString());
+
+                    if (qty > 0) {
+                        newItems.put(productId, qty);
+
+                        // Берем кастомную цену из payload, если её нет - ищем в товарах (fallback)
+                        BigDecimal price;
+                        if (rawPrices.containsKey(entry.getKey())) {
+                            price = new BigDecimal(rawPrices.get(entry.getKey()).toString());
+                        } else {
+                            // Если цена не пришла, пытаемся оставить ту, что была или взять текущую из БД
+                            price = productRepository.findById(productId)
+                                    .map(Product::getPrice)
+                                    .orElse(BigDecimal.ZERO);
+                        }
+
+                        newItemPrices.put(productId, price);
+
+                        // Расчет суммы: Цена из документа * Количество
+                        BigDecimal rowSum = price.multiply(BigDecimal.valueOf(qty));
+                        totalSum = totalSum.add(rowSum);
+                    }
                 } catch (Exception e) {
-                    log.error("Error parsing return item: " + key);
+                    log.error("Ошибка парсинга товара/цены для ID: " + entry.getKey(), e);
                 }
-            });
+            }
         }
 
-        // РАСЧЕТ СУММЫ ВОЗВРАТА (Для возвратов скидка всегда 0%)
-        // Используем модифицированный метод с передачей BigDecimal.ZERO
-        Map<String, BigDecimal> totals = calculateTotalSaleAndCostWithDiscount(newItems, BigDecimal.ZERO);
-
+        // 3. Сохранение данных
         ret.setItems(newItems);
-        // Округляем до целых для драммов
-        ret.setTotalAmount(totals.get("totalSale").setScale(0, RoundingMode.HALF_UP));
+        ret.setItemPrices(newItemPrices); // Сохраняем кастомные цены в ReturnOrder
+
+        // Округляем итог до целых (актуально для 2026 года)
+        ret.setTotalAmount(totalSum.setScale(0, RoundingMode.HALF_UP));
 
         returnOrderRepository.save(ret);
 
+        // 4. Аудит
         recordAudit(id, "RETURN", "ИЗМЕНЕНИЕ ВОЗВРАТА",
-                "Обновлен состав, Авто: " + ret.getCarNumber() + ". Сумма: " + ret.getTotalAmount() + " ֏");
+                String.format("Обновлен состав и цены. Авто: %s. Итого: %s ֏",
+                        ret.getCarNumber(), ret.getTotalAmount()));
 
         return ResponseEntity.ok(Map.of(
                 "newTotal", ret.getTotalAmount(),
-                "message", "Возврат изменен"
+                "message", "Возврат изменен (цены зафиксированы в документе)"
         ));
     }
+
 
 
     @PostMapping("/returns/{id}/delete")
@@ -628,6 +652,83 @@ public class AdminManagementController {
 
         return ResponseEntity.ok(Map.of("message", "Списание успешно проведено"));
     }
+
+
+    @PostMapping("/returns/create-manual")
+    @Transactional(rollbackFor = Exception.class)
+    public ResponseEntity<?> createReturnManual(@RequestBody Map<String, Object> payload) {
+        try {
+            log.info("Получен запрос на создание возврата: {}", payload);
+
+            ReturnOrder ret = new ReturnOrder();
+            ret.setStatus(ReturnStatus.DRAFT);
+            ret.setCreatedAt(LocalDateTime.now());
+
+            // Магазин и Менеджер
+            ret.setShopName((String) payload.getOrDefault("shopName", "Неизвестно"));
+            ret.setManagerId((String) payload.getOrDefault("managerId", "OFFICE"));
+            ret.setCarNumber((String) payload.get("carNumber"));
+            ret.setComment((String) payload.get("comment"));
+
+            // Дата и Причина
+            if (payload.get("returnDate") != null) {
+                ret.setReturnDate(LocalDate.parse((String) payload.get("returnDate")));
+            }
+            if (payload.get("returnReason") != null) {
+                ret.setReturnReason(ReasonsReturn.fromString((String) payload.get("returnReason")));
+            }
+
+            // КРИТИЧЕСКИЙ УЗЕЛ: Парсинг товаров (items)
+            Map<Long, Integer> items = new HashMap<>();
+            Map<Long, BigDecimal> itemPrices = new HashMap<>();
+            BigDecimal totalAmount = BigDecimal.ZERO;
+
+            // Пытаемся достать карту товаров
+            Object rawItemsObj = payload.get("items");
+            if (rawItemsObj instanceof Map) {
+                Map<?, ?> rawItemsMap = (Map<?, ?>) rawItemsObj;
+                Map<?, ?> rawPricesMap = (payload.get("itemPrices") instanceof Map) ? (Map<?, ?>) payload.get("itemPrices") : new HashMap<>();
+
+                for (Map.Entry<?, ?> entry : rawItemsMap.entrySet()) {
+                    String key = entry.getKey().toString();
+                    Long pId = Long.valueOf(key);
+                    Integer qty = Integer.valueOf(entry.getValue().toString());
+
+                    if (qty <= 0) continue;
+
+                    items.put(pId, qty);
+
+                    // Определяем цену: из фронта или из базы
+                    BigDecimal price;
+                    if (rawPricesMap.containsKey(key)) {
+                        price = new BigDecimal(rawPricesMap.get(key).toString());
+                    } else {
+                        price = productRepository.findById(pId).map(Product::getPrice).orElse(BigDecimal.ZERO);
+                    }
+
+                    itemPrices.put(pId, price);
+                    totalAmount = totalAmount.add(price.multiply(BigDecimal.valueOf(qty)));
+                }
+            }
+
+            if (items.isEmpty()) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Список товаров пуст!"));
+            }
+
+            ret.setItems(items);
+            ret.setItemPrices(itemPrices);
+            ret.setTotalAmount(totalAmount.setScale(1, RoundingMode.HALF_UP));
+
+            ReturnOrder saved = returnOrderRepository.save(ret);
+
+            return ResponseEntity.ok(Map.of("id", saved.getId(), "message", "Возврат успешно создан"));
+
+        } catch (Exception e) {
+            log.error("Ошибка при ручном создании возврата: ", e);
+            return ResponseEntity.status(500).body(Map.of("error", "Ошибка сервера: " + e.getMessage()));
+        }
+    }
+
 
 
 }

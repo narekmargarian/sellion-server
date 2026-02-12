@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="ru" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: sans-serif; font-size: 11px; }
+        .page-header {
+            border-bottom: 2px solid #000;
+            margin-bottom: 20px;
+            padding-bottom: 5px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        .invoice-block { border: 1px solid #000; margin-bottom: 20px; padding: 10px; page-break-inside: avoid; }
+        .inv-header { font-weight: bold; border-bottom: 1px solid #eee; margin-bottom: 5px; font-size: 13px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { border: 1px solid #ddd; padding: 6px; text-align: left; }
+        .num { text-align: right; }
+        .center { text-align: center; }
+        .total { text-align: right; font-weight: bold; margin-top: 5px; font-size: 12px; }
+
+        @media print {
+            @page { margin: 0; }
+            body { margin: 1cm; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- ОБЩИЙ ЗАГОЛОВОК -->
+<div class="page-header" th:if="${payload != null && !payload.isEmpty()}">
+    <span>РЕЕСТР ВОЗВРАТОВ (КОМПАКТ)</span>
+    <span>МЕНЕДЖЕР: <span th:text="${payload[0].managerId}"></span></span>
+    <span>ДАТА: <span th:text="${#temporals.format(#temporals.createNow(), 'dd.MM.yyyy')}"></span></span>
+</div>
+
+<div th:each="op : ${payload}" th:if="${op != null}" class="invoice-block">
+    <div class="inv-header">
+        Магазин: <span th:text="${op.shopName != null ? op.shopName : '---'}"></span>
+        <span style="float:right">ВОЗВРАТ № <span th:text="${op.id}"></span></span>
+        <div style="clear:both"></div>
+    </div>
+
+    <table>
+        <thead>
+        <tr>
+            <th style="width: 30px;">№</th>
+            <th>Наименование товара</th>
+            <th style="width: 70px;" class="center">Кол-во</th>
+            <th style="width: 100px;" class="num">Цена</th>
+            <th style="width: 120px;" class="num">Сумма</th>
+        </tr>
+        </thead>
+
+        <tbody>
+        <tr th:each="entry, stat : ${op.items}"
+            th:with="
+        p=${productRepo.findById(entry.key).orElse(null)},
+        price=${op.itemPrices != null ? op.itemPrices.getOrDefault(entry.key, (p != null ? p.price : 0)) : (p != null ? p.price : 0)}
+    ">
+            <td class="center" th:text="${stat.count}"></td>
+            <td th:text="${p != null ? p.name : 'Товар #' + entry.key}"></td>
+            <td class="center" th:text="${entry.value + ' шт.'}"></td>
+            <!-- Цена -->
+            <td class="num" th:text="${#numbers.formatDecimal(price, 1, 'WHITESPACE', 0, 'POINT') + ' ֏'}"></td>
+            <!-- Сумма -->
+            <td class="num" th:text="${#numbers.formatDecimal(price.doubleValue() * entry.value, 1, 'WHITESPACE', 0, 'POINT') + ' ֏'}"></td>
+        </tr>
+        </tbody>
+
+    </table>
+
+    <div class="total">
+        ИТОГО ВОЗВРАТ: <span th:text="${#numbers.formatDecimal(op.totalAmount != null ? op.totalAmount : 0, 1, 'WHITESPACE', 0, 'POINT') + ' ֏'}"></span>
+    </div>
+    <div th:if="${op.returnReason != null}" style="font-size: 9px; color: #666; margin-top: 3px;">
+        Причина: <span th:text="${op.returnReason.displayName}"></span>
+    </div>
+</div>
+
+<div th:if="${payload == null || #lists.isEmpty(payload)}" style="text-align: center; padding: 20px;">
+    Нет выбранных возвратов для печати.
+</div>
+
+</body>
+</html>

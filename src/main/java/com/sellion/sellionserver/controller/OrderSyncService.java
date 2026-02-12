@@ -30,7 +30,6 @@ public class OrderSyncService {
     @Transactional(rollbackFor = Exception.class)
     public void processOrderFromAndroid(Order order) {
 
-
         // 1. Проверка на дубликат
         if (order.getAndroidId() != null && orderRepository.existsByAndroidId(order.getAndroidId())) {
             log.info("Пропуск дубликата заказа: AndroidId [{}]", order.getAndroidId());
@@ -49,13 +48,10 @@ public class OrderSyncService {
         BigDecimal totalCost = BigDecimal.ZERO;
         BigDecimal totalAmount = BigDecimal.ZERO;
 
-        // --- ЛОГИКА СКИДКИ ---
-        BigDecimal percent = Optional.ofNullable(order.getDiscountPercent()).orElse(BigDecimal.ZERO);
-        BigDecimal modifier = BigDecimal.ONE.subtract(
-                percent.divide(new BigDecimal("100"), 4, RoundingMode.HALF_UP)
-        );
+        // --- БАЗОВАЯ СКИДКА МАГАЗИНА ---
+        BigDecimal shopPercent = Optional.ofNullable(order.getDiscountPercent()).orElse(BigDecimal.ZERO);
 
-        // 3. Расчет стоимости
+        // 3. Расчет стоимости каждой позиции
         for (Map.Entry<Long, Integer> entry : order.getItems().entrySet()) {
             Long productId = entry.getKey();
             Integer qtyInt = entry.getValue();
@@ -69,38 +65,50 @@ public class OrderSyncService {
 
             BigDecimal qty = BigDecimal.valueOf(qtyInt);
 
-            // Себестоимость
-            BigDecimal purchasePrice = Optional.ofNullable(p.getPurchasePrice()).orElse(BigDecimal.ZERO);
+            // --- ЛОГИКА ПРИОРИТЕТА АКЦИИ ---
+            BigDecimal currentItemPercent;
+            // Если из Android пришла карта акций и в ней есть этот товар
+            if (order.getAppliedPromoItems() != null && order.getAppliedPromoItems().containsKey(productId)) {
+                currentItemPercent = order.getAppliedPromoItems().get(productId);
+            } else {
+                // Иначе применяем стандартный процент магазина
+                currentItemPercent = shopPercent;
+            }
 
-            // ЦЕНА ПРОДАЖИ
+            // Модификатор цены (напр. 1 - 22/100 = 0.78)
+            BigDecimal itemModifier = BigDecimal.ONE.subtract(
+                    currentItemPercent.divide(new BigDecimal("100"), 4, RoundingMode.HALF_UP)
+            );
+
+            // ЦЕНА ПРОДАЖИ ЗА ЕДИНИЦУ (Округление до 0.1 как в АПП)
             BigDecimal baseSalePrice = Optional.ofNullable(p.getPrice()).orElse(BigDecimal.ZERO);
+            BigDecimal finalPricePerUnit = baseSalePrice.multiply(itemModifier).setScale(1, RoundingMode.HALF_UP);
 
-            // ИСПРАВЛЕНО: Округляем цену за единицу до 1 знака (было 0)
-            BigDecimal finalPricePerUnit = baseSalePrice.multiply(modifier).setScale(1, RoundingMode.HALF_UP);
-
-            totalCost = totalCost.add(purchasePrice.multiply(qty));
-
-            // Сумма по позиции (Цена * Кол-во)
+            // СУММА СТРОКИ
             BigDecimal itemLineTotal = finalPricePerUnit.multiply(qty);
             totalAmount = totalAmount.add(itemLineTotal);
+
+            // СЕБЕСТОИМОСТЬ (для отчетов прибыли)
+            BigDecimal purchasePrice = Optional.ofNullable(p.getPurchasePrice()).orElse(BigDecimal.ZERO);
+            totalCost = totalCost.add(purchasePrice.multiply(qty));
         }
 
-        // 4. Фиксация итогов
+        // 4. Фиксация итогов в БД
         order.setTotalPurchaseCost(totalCost.setScale(2, RoundingMode.HALF_UP));
         order.setPurchaseCost(totalCost.setScale(2, RoundingMode.HALF_UP));
 
-        // ИСПРАВЛЕНО: Итоговая сумма заказа теперь тоже с 1 знаком после запятой
+        // ИТОГОВАЯ СУММА ЗАКАЗА (теперь точно совпадет с АПП и деталями)
         order.setTotalAmount(totalAmount.setScale(1, RoundingMode.HALF_UP));
 
-
         // 5. Резервирование склада
-        stockService.reserveItemsFromStock(order.getItems(), "Заказ (скидка " + percent + "%): " + order.getShopName());
-
+        stockService.reserveItemsFromStock(order.getItems(), "Android Заказ: " + order.getShopName());
 
         // 6. Сохранение
         orderRepository.save(order);
-        log.info("Заказ обработан. Магазин: {}, Скидка: {}%, Итоговая сумма: {} ֏",
-                order.getShopName(), percent, order.getTotalAmount());
+        log.info("Заказ синхронизирован. Магазин: {}, Итоговая сумма: {} ֏",
+                order.getShopName(), order.getTotalAmount());
     }
+
+
 
 }

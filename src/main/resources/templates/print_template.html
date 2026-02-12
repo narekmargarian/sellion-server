@@ -3,91 +3,99 @@
 <head>
     <meta charset="UTF-8">
     <style>
-        body { font-family: 'Inter', sans-serif; font-size: 12px; color: #333; margin: 20px; }
+        body { font-family: 'Inter', sans-serif; font-size: 12px; color: #333; margin: 0; }
         .header { display: flex; justify-content: space-between; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; }
-        .company-info { line-height: 1.4; }
+        .company-info { line-height: 1.4; font-size: 11px; }
         .doc-title { font-size: 18px; font-weight: bold; text-transform: uppercase; }
         .info-table { width: 100%; margin-bottom: 20px; border-collapse: collapse; }
         .info-table td { padding: 5px 0; border-bottom: 1px solid #eee; }
         .main-table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
-        .main-table th { background: #f0f0f0; border: 1px solid #ccc; padding: 8px; text-align: left; }
+        .main-table th { background: #f0f0f0 !important; border: 1px solid #ccc; padding: 8px; text-align: left; -webkit-print-color-adjust: exact; }
         .main-table td { border: 1px solid #ccc; padding: 8px; }
         .total-block { text-align: right; font-size: 16px; font-weight: bold; }
         .footer-sig { margin-top: 50px; display: flex; justify-content: space-between; }
-        .sig-line { border-top: 1px solid #000; width: 200px; margin-top: 40px; text-align: center; font-size: 10px; }
+        .sig-line { border-top: 1px solid #000; width: 200px; margin-top: 40px; text-align: center; font-size: 10px; padding-top: 5px; }
 
         @media print {
-    @page {
-        margin: 0; /* Убирает отступы, где печатаются колонтитулы */
-    }
-    body {
-        margin: 1.5cm; /* Добавляет отступ уже самому контенту, чтобы текст не прилипал к краю листа */
-    }
-}
-
+            @page { margin: 0; }
+            body { margin: 1.5cm; }
+        }
     </style>
 </head>
 <body>
-<div class="header">
-    <div class="company-info">
-        <strong>SELLION ERP 2026</strong><br>
-        Система управления складом и продажами<br>
-        г. Ереван, Армения
+<div th:if="${op != null}">
+    <div class="header">
+        <div class="company-info">
+            <strong th:text="${@companySettings != null ? @companySettings.getSetting('COMPANY_NAME', 'SELLION ERP 2026') : 'SELLION ERP 2026'}"></strong><br>
+            <span th:text="${@companySettings != null ? @companySettings.getSetting('COMPANY_ADDRESS', 'г. Ереван, Армения') : 'г. Ереван, Армения'}"></span>
+        </div>
+        <div class="doc-title" th:text="${title != null ? title : 'ДОКУМЕНТ'}">ДОКУМЕНТ</div>
     </div>
-    <div class="doc-title" th:text="${title}">ДОКУМЕНТ</div>
+
+    <table class="info-table">
+        <tr>
+            <td width="180">Контрагент (Магазин):</td>
+            <td><strong th:text="${op.shopName != null ? op.shopName : '---'}"></strong></td>
+        </tr>
+        <tr>
+            <td>Дата документа:</td>
+            <td th:with="cName=${op.class.name},
+                         isOrder=${#strings.contains(cName, 'Order') and !#strings.contains(cName, 'Return')},
+                         docDate=${isOrder ? op.deliveryDate : op.returnDate}"
+                th:text="${docDate != null ? #temporals.format(docDate, 'dd.MM.yyyy') : (op.createdAt != null ? #temporals.format(op.createdAt, 'dd.MM.yyyy HH:mm') : '---')}">
+            </td>
+        </tr>
+        <tr>
+            <td>Ответственное лицо:</td>
+            <td th:text="${op.managerId != null ? op.managerId : '---'}">Менеджер</td>
+        </tr>
+        <tr th:if="${op.carNumber != null && !#strings.isEmpty(op.carNumber)}">
+            <td>Номер автомобиля:</td>
+            <td th:text="${op.carNumber}"></td>
+        </tr>
+    </table>
+
+    <table class="main-table">
+        <thead>
+        <tr>
+            <th style="width: 40px;">№</th>
+            <th>Наименование товара</th>
+            <th style="width: 80px; text-align: center;">Кол-во</th>
+            <th style="width: 120px; text-align: right;">Цена (֏)</th>
+            <th style="width: 140px; text-align: right;">Сумма (֏)</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="item, iter : ${printItems}" th:if="${printItems != null}">
+            <td style="text-align: center;" th:text="${iter.count}">1</td>
+            <td th:text="${item.name}">Товар</td>
+            <td style="text-align: center;" th:text="${item.quantity + ' шт.'}">10</td>
+            <td style="text-align: right;" th:text="${#numbers.formatDecimal(item.price != null ? item.price : 0, 1, 'WHITESPACE', 0, 'POINT') + ' ֏'}"></td>
+            <td style="text-align: right;" th:text="${#numbers.formatDecimal(item.total != null ? item.total : 0, 1, 'WHITESPACE', 0, 'POINT') + ' ֏'}"></td>
+        </tr>
+        <tr th:if="${printItems == null || #lists.isEmpty(printItems)}">
+            <td colspan="5" style="text-align: center; padding: 20px;">Список товаров пуст</td>
+        </tr>
+        </tbody>
+    </table>
+
+    <div class="total-block">
+        ИТОГО К ОПЛАТЕ: <span th:text="${#numbers.formatDecimal(op.totalAmount != null ? op.totalAmount : 0, 1, 'WHITESPACE', 0, 'POINT') + ' ֏'}">0</span>
+    </div>
+
+    <div th:if="${op.comment != null && !#strings.isEmpty(op.comment)}" style="margin-top: 20px; font-style: italic; font-size: 11px;">
+        Примечание: <span th:text="${op.comment}"></span>
+    </div>
+
+    <div class="footer-sig">
+        <div class="sig-line">Отпустил (Подпись)</div>
+        <div class="sig-line">Получил (Подпись / Печать)</div>
+    </div>
 </div>
 
-<table class="info-table">
-    <tr>
-        <td width="150">Контрагент (Магазин):</td>
-        <td th:text="${op.shopName}">Название магазина</td>
-    </tr>
-    <tr>
-
-        <td>Дата документа:</td>
-        <td th:text="${op.createdAt != null ? #temporals.format(op.createdAt, 'dd.MM.yyyy HH:mm') : (op.returnDate != null ? #temporals.format(op.returnDate, 'dd.MM.yyyy') : '---')}"></td>
-
-    </tr>
-    <tr>
-        <td>Ответственное лицо:</td>
-        <td th:text="${op.managerId}">Менеджер</td>
-    </tr>
-</table>
-
-<table class="main-table">
-    <thead>
-    <tr>
-        <th>№</th>
-        <th>Наименование товара</th>
-        <th>Кол-во</th>
-        <th>Цена (֏)</th>
-        <th>Сумма (֏)</th>
-    </tr>
-    </thead>
-    <tbody>
-    <!-- Изменяем th:each на printItems -->
-    <tr th:each="item, iter : ${printItems}">
-        <td th:text="${iter.index + 1}">1</td>
-        <td th:text="${item.name}">Товар</td>
-        <td th:text="${item.quantity + ' шт.'}">10</td>
-        <!-- Отображаем цену с форматированием -->
-        <td th:text="${#numbers.formatInteger(item.price, 1, 'WHITESPACE') + ' ֏'}">790 ֏</td>
-        <!-- Отображаем сумму с форматированием -->
-        <td th:text="${#numbers.formatInteger(item.total, 1, 'WHITESPACE') + ' ֏'}">790 ֏</td>
-    </tr>
-    </tbody>
-</table>
-
-
-<div class="total-block">
-    ИТОГО: <span th:text="${#numbers.formatInteger(op.totalAmount, 1, 'WHITESPACE') + ' ֏'}">0</span>
+<div th:if="${op == null}" style="text-align: center; padding: 50px;">
+    <h2>Ошибка: Документ не найден</h2>
 </div>
-
-<div class="footer-sig">
-    <div class="sig-line">Отпустил (Подпись)</div>
-    <div class="sig-line">Получил (Подпись / Печать)</div>
-</div>
-
 
 </body>
 </html>

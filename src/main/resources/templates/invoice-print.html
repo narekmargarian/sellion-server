@@ -3,43 +3,55 @@
 <head>
     <meta charset="UTF-8">
     <style>
-        body { font-family: sans-serif; padding: 20px; }
-        .header { display: flex; justify-content: space-between; border-bottom: 2px solid #000; }
+        body { font-family: sans-serif; padding: 20px; font-size: 12px; }
+        .header { display: flex; justify-content: space-between; border-bottom: 2px solid #000; padding-bottom: 10px; }
         .items-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        .items-table th, .items-table td { border: 1px solid #333; padding: 8px; }
-        .total { text-align: right; margin-top: 20px; font-weight: bold; font-size: 1.2em; }
+        .items-table th, .items-table td { border: 1px solid #333; padding: 8px; text-align: left; }
+        .total { text-align: right; margin-top: 20px; font-weight: bold; font-size: 1.4em; border-top: 1px solid #000; padding-top: 10px; }
 
         @media print {
             body { padding: 0; margin: 0; }
-            @page { size: auto; margin: 10mm; } /* Убирает лишние отступы бумаги */
+            @page { size: auto; margin: 10mm; }
         }
     </style>
 </head>
 <body>
-<div class="header">
-    <div>
-        <h2>СЧЕТ № <span th:text="${invoice.invoiceNumber}"></span></h2>
-        <p>Клиент: <b th:text="${invoice.shopName}"></b></p>
+<div th:if="${invoice != null}">
+    <div class="header">
+        <div>
+            <h2>СЧЕТ № <span th:text="${invoice.invoiceNumber != null ? invoice.invoiceNumber : '---'}"></span></h2>
+            <p>Клиент: <b th:text="${invoice.shopName != null ? invoice.shopName : '---'}"></b></p>
+        </div>
+        <div style="text-align: right;">
+            <p>Дата: <span th:text="${invoice.createdAt != null ? #temporals.format(invoice.createdAt, 'dd.MM.yyyy') : '---'}"></span></p>
+        </div>
     </div>
-    <div style="text-align: right;">
-        <p>Дата: <span th:text="${#temporals.format(invoice.createdAt, 'dd.MM.yyyy')}"></span></p>
+
+    <table class="items-table">
+        <thead>
+        <tr>
+            <th>Товар</th>
+            <th style="width: 100px; text-align: center;">Кол-во</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="entry : ${items}" th:if="${items != null}">
+            <td th:text="${entry.key}"></td>
+            <td style="text-align: center;" th:text="${entry.value + ' шт.'}"></td>
+        </tr>
+        <tr th:if="${items == null || items.isEmpty()}">
+            <td colspan="2" style="text-align: center;">Нет данных о товарах</td>
+        </tr>
+        </tbody>
+    </table>
+
+    <div class="total">
+        ИТОГО: <span th:text="${#numbers.formatDecimal(invoice.totalAmount != null ? invoice.totalAmount : 0, 1, 'WHITESPACE', 0, 'POINT') + ' ֏'}"></span>
     </div>
 </div>
 
-<table class="items-table">
-    <thead>
-    <tr><th>Товар</th><th>Кол-во</th></tr>
-    </thead>
-    <tbody>
-    <tr th:each="entry : ${items}">
-        <td th:text="${entry.key}"></td>
-        <td th:text="${entry.value}"></td>
-    </tr>
-    </tbody>
-</table>
-
-<div class="total">
-    ИТОГО: <span th:text="${#numbers.formatInteger(invoice.totalAmount, 1, 'WHITESPACE') + ' ֏'}"></span>
+<div th:if="${invoice == null}" style="text-align: center; padding: 50px;">
+    <h2>Ошибка: Данные инвойса не найдены</h2>
 </div>
 </body>
 </html>

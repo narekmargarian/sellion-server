@@ -2,78 +2,78 @@
 <html lang="ru" xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="UTF-8">
-    <title th:text="${title}">Реестр операций</title>
+    <title th:text="${title != null ? title : 'Реестр операций'}">Реестр операций</title>
     <style>
-        body { font-family: 'Inter', sans-serif; font-size: 11px; margin: 20px; color: #000; }
+        body { font-family: 'Inter', sans-serif; font-size: 11px; margin: 0; color: #000; }
         .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 10px; }
         .main-table { width: 100%; border-collapse: collapse; }
         .main-table th, .main-table td { border: 1px solid #000; padding: 6px; text-align: left; }
-        .main-table th { background: #f0f0f0; text-transform: uppercase; }
-        .total-row { font-weight: bold; background: #f9f9f9; }
+        .main-table th { background: #f0f0f0 !important; text-transform: uppercase; -webkit-print-color-adjust: exact; }
+        .total-row { font-weight: bold; background: #f9f9f9 !important; }
         .text-right { text-align: right; }
-        .col-id { width: 40px; text-align: center; } /* Новый класс для центрирования номера */
-
+        .col-id { width: 40px; text-align: center; }
 
         @media print {
-    @page {
-        margin: 0; /* Убирает отступы, где печатаются колонтитулы */
-    }
-    body {
-        margin: 1.5cm; /* Добавляет отступ уже самому контенту, чтобы текст не прилипал к краю листа */
-    }
-}
-
+            @page { margin: 0; }
+            body { margin: 1.5cm; }
+        }
     </style>
 </head>
 <body>
-<div class="header">
-    <h1 th:text="${title}" style="margin: 0; font-size: 18px;">РЕЕСТР</h1>
-    <p style="margin: 5px 0;">Дата печати: <span th:text="${#temporals.format(currentDateTime, 'dd.MM.yyyy HH:mm')}"></span></p>
+<div th:if="${operations != null}">
+    <div class="header">
+        <h1 th:text="${title != null ? title : 'РЕЕСТР'}" style="margin: 0; font-size: 18px;">РЕЕСТР</h1>
+        <p style="margin: 5px 0;">Дата печати: <span th:text="${currentDateTime != null ? #temporals.format(currentDateTime, 'dd.MM.yyyy HH:mm') : '---'}"></span></p>
+    </div>
+
+    <table class="main-table">
+        <thead>
+        <tr>
+            <th class="col-id">№</th>
+            <th style="width: 110px;">Дата</th>
+            <th>Магазин</th>
+            <th class="text-right" style="width: 100px;">Сумма (֏)</th>
+            <th>Комментарий/Причина</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="op, stat : ${operations}" th:if="${op != null}">
+            <td class="col-id" th:text="${stat.count}">1</td>
+
+            <td th:text="${op.createdAt != null ? #temporals.format(op.createdAt, 'dd.MM.yyyy HH:mm') : '---'}"></td>
+
+            <td th:text="${op.shopName != null ? op.shopName : '---'}" style="font-weight: bold;"></td>
+
+            <td class="text-right" th:text="${op.totalAmount != null ? #numbers.formatDecimal(op.totalAmount, 1, 'WHITESPACE', 0, 'POINT') : '0'}"></td>
+
+            <td>
+                <!-- Безопасная проверка через #strings -->
+                <th:block th:if="${title != null && #strings.contains(title, 'ВОЗВРАТ')}">
+                    <span th:text="${op.returnReason != null ? op.returnReason.displayName : '---'}"></span>
+                </th:block>
+
+                <th:block th:if="${title != null && #strings.contains(title, 'ЗАКАЗ')}">
+                    <span th:text="${(op.comment != null && !op.comment.isEmpty()) ? op.comment : (op.paymentMethod != null ? op.paymentMethod.displayName : '---')}"></span>
+                </th:block>
+            </td>
+        </tr>
+        <tr th:if="${#lists.isEmpty(operations)}">
+            <td colspan="5" style="text-align: center; padding: 20px;">Операций не найдено</td>
+        </tr>
+        </tbody>
+        <tfoot>
+        <tr class="total-row">
+            <td colspan="3" class="text-right">ИТОГО ПО РЕЕСТРУ:</td>
+            <td class="text-right" th:text="${#numbers.formatDecimal(finalTotal != null ? finalTotal : 0, 1, 'WHITESPACE', 0, 'POINT') + ' ֏'}"></td>
+            <td></td>
+        </tr>
+        </tfoot>
+    </table>
 </div>
 
-<table class="main-table">
-    <thead>
-    <tr>
-        <th class="col-id">№</th> <!-- Изменили заголовок с ID на № -->
-        <th style="width: 110px;">Дата</th>
-        <th>Магазин</th>
-        <th class="text-right" style="width: 100px;">Сумма (֏)</th>
-        <th>Комментарий/Причина</th>
-    </tr>
-    </thead>
-    <tbody>
-    <!-- Используем "stat" для получения индекса цикла -->
-    <tr th:each="op, stat : ${operations}">
-        <td class="col-id" th:text="${stat.index + 1}">1</td> <!-- Выводим порядковый номер -->
+<div th:if="${operations == null}" style="text-align: center; padding: 50px;">
+    <h2>Данные реестра не сформированы</h2>
+</div>
 
-        <!-- Универсальный вывод даты -->
-        <td th:text="${op.createdAt != null ? #temporals.format(op.createdAt, 'dd.MM.yyyy HH:mm') : '---'}"></td>
-
-
-        <td th:text="${op.shopName}" style="font-weight: bold;"></td>
-
-        <td class="text-right" th:text="${op.totalAmount != null ? #numbers.formatInteger(op.totalAmount, 1, 'WHITESPACE') : '0'}"></td>
-
-        <td>
-            <!-- Логика для ВОЗВРАТА -->
-            <th:block th:if="${title.contains('ВОЗВРАТ')}">
-                <span th:text="${op.returnReason != null ? op.returnReason.displayName : '---'}"></span>
-            </th:block>
-
-            <!-- Логика для ЗАКАЗА -->
-            <th:block th:if="${title.contains('ЗАКАЗ')}">
-                <span th:text="${(op.comment != null && !op.comment.isEmpty()) ? op.comment : (op.paymentMethod != null ? op.paymentMethod.displayName : '---')}"></span>
-            </th:block>
-        </td>
-    </tr>
-    </tbody>
-    <tfoot>
-    <tr class="total-row">
-        <td colspan="3" class="text-right">ИТОГО К ОПЛАТЕ:</td>
-        <td class="text-right" th:text="${#numbers.formatInteger(finalTotal, 1, 'WHITESPACE') + ' ֏'}"></td>
-        <td></td>
-    </tr>
-    </tfoot>
-</table>
 </body>
 </html>

@@ -1,51 +1,89 @@
 <!DOCTYPE html>
 <html lang="ru" xmlns:th="http://www.thymeleaf.org">
 <head>
+    <meta charset="UTF-8">
     <style>
         body { font-family: sans-serif; font-size: 11px; }
+        .page-header {
+            border-bottom: 2px solid #000;
+            margin-bottom: 20px;
+            padding-bottom: 5px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 14px;
+            font-weight: bold;
+        }
         .invoice-block { border: 1px solid #000; margin-bottom: 20px; padding: 10px; page-break-inside: avoid; }
         .inv-header { font-weight: bold; border-bottom: 1px solid #eee; margin-bottom: 5px; font-size: 13px; }
         table { width: 100%; border-collapse: collapse; }
         th, td { border: 1px solid #ddd; padding: 4px; text-align: left; }
         .total { text-align: right; font-weight: bold; margin-top: 5px; }
 
-
-    @media print {
-    @page {
-        margin: 0; /* Убирает отступы, где печатаются колонтитулы */
-    }
-    body {
-        margin: 1.5cm; /* Добавляет отступ уже самому контенту, чтобы текст не прилипал к краю листа */
-    }
-}
-
-
+        @media print {
+            @page { margin: 0; }
+            body { margin: 1cm; }
+        }
     </style>
 </head>
 <body>
-<div th:each="op : ${payload}" class="invoice-block">
+
+<!-- ОБЩИЙ ЗАГОЛОВОК -->
+<div class="page-header" th:if="${payload != null && !payload.isEmpty()}">
+    <span>РЕЕСТР НАКЛАДНЫХ</span>
+    <!-- Берем managerId из первого элемента списка payload -->
+    <span>МЕНЕДЖЕР: <span th:text="${payload[0].managerId}"></span></span>
+    <span>ДАТА: <span th:text="${#temporals.format(#temporals.createNow(), 'dd.MM.yyyy')}"></span></span>
+</div>
+
+<div th:each="op : ${payload}" th:if="${op != null}" class="invoice-block">
     <div class="inv-header">
-        Контрагент (Магазин): <span th:text="${op.shopName}"></span>
-        <span style="float:right">№ [[${op.id}]]</span>
+        Контрагент (Магазин): <span th:text="${op.shopName != null ? op.shopName : '---'}"></span>
+        <span style="float:right">№ <span th:text="${op.id}"></span></span>
+        <div style="clear:both"></div>
     </div>
     <table>
         <thead>
-        <tr><th>№</th><th>Наименование товара</th><th>Кол-во</th><th>Цена</th><th>Сумма</th></tr>
+        <tr>
+            <th>№</th>
+            <th>Наименование товара</th>
+            <th>Кол-во</th>
+            <th>Ед.</th> <!-- Тут будет itemsPerBox или unit -->
+            <th>Прайс</th>
+            <th>%</th>
+            <th>Цена</th>
+            <th>Сумма</th>
+        </tr>
         </thead>
         <tbody>
-        <tr th:each="entry, stat : ${op.items}">
-            <td th:text="${stat.index + 1}"></td>
-            <!-- Получаем имя товара по ID -->
-            <td th:text="${productRepo.findById(entry.key).get().name}"></td>
-            <td th:text="${entry.value + ' шт.'}"></td>
-            <td th:text="${#numbers.formatInteger(productRepo.findById(entry.key).get().price, 1, 'WHITESPACE') + ' ֏'}"></td>
-            <td th:text="${#numbers.formatInteger(productRepo.findById(entry.key).get().price * entry.value, 1, 'WHITESPACE') + ' ֏'}"></td>
+        <tr th:each="entry, stat : ${op.items}"
+            th:with="
+                p=${productRepo.findById(entry.key).orElse(null)},
+                isOrder=${#strings.contains(op.class.name, 'Order') and !#strings.contains(op.class.name, 'Return')},
+                discount=${isOrder ? (op.appliedPromoItems != null ? op.appliedPromoItems.getOrDefault(entry.key, op.discountPercent != null ? op.discountPercent : 0) : (op.discountPercent != null ? op.discountPercent : 0)) : 0},
+                basePrice=${p != null ? p.price : 0},
+                finalPrice=${isOrder ? (basePrice.doubleValue() * (1.0 - (discount.doubleValue() / 100.0))) : (op.itemPrices != null ? op.itemPrices.getOrDefault(entry.key, basePrice) : basePrice)}
+            ">
+            <td th:text="${stat.count}"></td>
+            <td th:text="${p != null ? p.name : 'Товар #' + entry.key}"></td>
+            <td th:text="${entry.value}"></td>
+
+            <!-- ИСПРАВЛЕНО: Если есть itemsPerBox, пишем его (напр. '12'), иначе пишем unit (напр. 'шт.') -->
+            <td th:text="${p != null ? (p.itemsPerBox != null ? p.itemsPerBox : p.unit) : '---'}"></td>
+
+            <td th:text="${#numbers.formatDecimal(basePrice, 1, 'WHITESPACE', 0, 'POINT') + ' ֏'}"></td>
+            <td th:text="${discount.doubleValue() > 0 ? (discount + '%') : '-'}"></td>
+            <td th:text="${#numbers.formatDecimal(finalPrice, 1, 'WHITESPACE', 0, 'POINT') + ' ֏'}"></td>
+            <td th:text="${#numbers.formatDecimal(finalPrice.doubleValue() * entry.value, 1, 'WHITESPACE', 0, 'POINT') + ' ֏'}"></td>
         </tr>
         </tbody>
     </table>
     <div class="total">
-        ИТОГО: <span th:text="${#numbers.formatInteger(op.totalAmount, 1, 'WHITESPACE') + ' ֏'}"></span>
+        ИТОГО: <span th:text="${#numbers.formatDecimal(op.totalAmount != null ? op.totalAmount : 0, 1, 'WHITESPACE', 0, 'POINT') + ' ֏'}"></span>
     </div>
+</div>
+
+<div th:if="${payload == null || #lists.isEmpty(payload)}" style="text-align: center; padding: 20px;">
+    Нет данных для печати.
 </div>
 </body>
 </html>

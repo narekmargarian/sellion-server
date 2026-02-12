@@ -9,6 +9,10 @@ let managerIdList = [];
 let tempPromoItems = {};
 let currentPromoData = null;
 
+function roundHalfUp(num) {
+    return Math.round(num * 10) / 10;
+}
+
 
 function openModal(id) {
     const modal = document.getElementById(id);
@@ -26,6 +30,11 @@ function closeModal(id) {
     if (!modal) return;
     modal.classList.remove('active');
     document.body.style.overflow = '';
+
+    // ОЧИСТКА ГЛОБАЛЬНЫХ ДАННЫХ
+    tempItems = {};
+    window.currentOrderPromos = {}; // Очищаем акции
+    console.log("Данные сессии очищены");
 }
 
 function translatePayment(m) {
@@ -53,7 +62,6 @@ function translateReason(r) {
     };
     return mapping[val] || val;
 }
-
 
 function translateReturnStatus(status) {
     switch (status) {
@@ -191,42 +199,61 @@ function submitAsPost(url, ids, targetName) {
 
 
 async function confirmReturn(id) {
-    // 1. Используем модальное окно подтверждения
-    showConfirmModal("Подтвердить возврат?", "Сумма будет вычтена из долга клиента. Это действие нельзя отменить.", async () => {
-        try {
-            // 2. Отправка запроса на подтверждение
-            const response = await fetch(`/api/admin/returns/${id}/confirm`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
-            });
+    const ret = (returnsData || []).find(r => r.id == id);
+    if (!ret) return showToast("Возврат не найден", "error");
 
-            // 3. Получаем данные ответа (там информация о складе и итоговой сумме)
-            const result = await response.json();
+    // 1. Проверяем, есть ли несохраненные изменения в ценах или количестве
+    // Если мы в режиме редактирования (есть инпуты), сначала сохраняем
+    const isEditMode = !!document.querySelector('.item-price-input');
 
-            if (response.ok) {
-                // Формируем красивое сообщение для уведомления
-                let successMsg = result.message || "Возврат успешно подтвержден!";
-                if (result.stockUpdated) {
-                    successMsg += " 📦 Склад пополнен.";
+    if (isEditMode) {
+        showToast("Сначала сохраните изменения перед подтверждением", "info");
+        return;
+    }
+
+    // 2. Используем модальное окно подтверждения
+    showConfirmModal(
+        "Провести возврат?",
+        `Сумма ${window.currentOrderTotal.toLocaleString()} ֏ будет вычтена из долга клиента. Склад будет обновлен автоматически (если применимо).`,
+        async () => {
+            try {
+                // Блокируем кнопку, чтобы избежать двойного клика
+                const confirmBtn = document.querySelector('#confirm-modal-ok');
+                if (confirmBtn) confirmBtn.disabled = true;
+
+                // 3. Отправка запроса на подтверждение
+                const response = await fetch(`/api/admin/returns/${id}/confirm`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    // Формируем детальное сообщение
+                    let successMsg = `Возврат #${id} проведен. `;
+                    if (result.stockUpdated) {
+                        successMsg += "📦 Товар возвращен на склад.";
+                    }
+
+                    showToast(successMsg, "success");
+
+                    // 4. Обновляем статус в локальном массиве (для красоты до релоада)
+                    ret.status = 'CONFIRMED';
+
+                    setTimeout(() => {
+                        location.reload();
+                    }, 800);
                 } else {
-                    successMsg += " ⚠️ Без возврата на склад.";
+                    showToast(result.error || "Ошибка при подтверждении", "error");
+                    if (confirmBtn) confirmBtn.disabled = false;
                 }
-
-                showToast(successMsg, "success");
-
-                // 4. Задержка перед обновлением страницы
-                setTimeout(() => {
-                    location.reload();
-                }, 1000);
-            } else {
-                // Если сервер вернул ошибку (например, возврат уже подтвержден)
-                showToast(result.error || "Ошибка при подтверждении возврата", "error");
+            } catch (e) {
+                console.error("Confirm return error:", e);
+                showToast("Ошибка сети: проверьте соединение", "error");
             }
-        } catch (e) {
-            console.error("Confirm return error:", e);
-            showToast("Ошибка сети: не удалось связаться с сервером", "error");
         }
-    });
+    );
 }
 
 
@@ -566,6 +593,20 @@ async function loadManagerIds() {
 async function openCreateOrderModal() {
     await loadManagerIds();
     tempItems = {};
+
+    // СБРОС СОСТОЯНИЙ (чтобы кнопки не прыгали и Итого не пропадало)
+    const footer = document.getElementById('order-footer-actions');
+    const totalEl = document.getElementById('order-total-price');
+    if (footer) {
+        footer.style.display = 'flex';
+        footer.style.justifyContent = 'flex-end'; // Кнопки вправо
+        footer.style.gap = '10px';
+    }
+    if (totalEl) {
+        totalEl.style.display = 'block'; // Показываем Итого
+        totalEl.innerText = "Итого: 0 ֏";
+    }
+
     const dates = getSmartDeliveryDates();
 
     document.getElementById('modal-title').innerText = "🛒 Создание нового заказа";
@@ -594,7 +635,6 @@ async function openCreateOrderModal() {
                 </select>
             </div>
 
-            <!-- СКРЫТОЕ ПОЛЕ ПРОЦЕНТА (визуально убрано, функционал сохранен) -->
             <div style="display: none;">
                 <input type="number" id="new-op-percent" value="0">
             </div>
@@ -603,13 +643,17 @@ async function openCreateOrderModal() {
         </div>`;
 
     initSmartClientSearch('new-op-shop', 'clients-datalist');
+
+    // Перерисовываем таблицу товаров
     renderItemsTable(tempItems, true);
 
-    document.getElementById('order-total-price').innerText = "Итого: 0 ֏";
-    document.getElementById('order-footer-actions').innerHTML = `
-        <button class="btn-primary" style="background:#10b981" onclick="saveNewManualOperation('order')">Создать заказ</button>
-        <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-order-view')">Отмена</button>
-    `;
+    if (footer) {
+        footer.innerHTML = `
+            <button class="btn-primary" style="background:#10b981" onclick="saveNewManualOperation('order')">Создать заказ</button>
+            <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-order-view')">Отмена</button>
+        `;
+    }
+
     openModal('modal-order-view');
 }
 
@@ -660,71 +704,55 @@ async function showOrderHistory(orderId) {
     const totalEl = document.getElementById('order-total-price');
 
     try {
-        // Визуальная индикация загрузки
         body.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px;">⌛ Загрузка истории...</td></tr>';
-
         const response = await fetch(`/api/admin/audit/order/${orderId}`);
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            showToast(`Ошибка: ${response.status}`, "error");
-            body.innerHTML = `<tr><td colspan="5" style="color:red; text-align:center; padding:20px;">Не удалось загрузить данные</td></tr>`;
-            return;
-        }
-
+        if (!response.ok) throw new Error("Ошибка загрузки");
         const logs = await response.json();
 
-        // Меняем заголовок модального окна
         title.innerHTML = `📜 ИСТОРИЯ ИЗМЕНЕНИЙ #${orderId}`;
 
         if (logs.length === 0) {
-            body.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:40px; color:#94a3b8;">История изменений для этой операции пуста</td></tr>';
+            body.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:40px; color:#94a3b8;">История пуста</td></tr>';
         } else {
-            // Формируем строки таблицы истории
             body.innerHTML = logs.map(log => `
                 <tr style="border-bottom: 1px solid #f1f5f9;">
-                    <td style="white-space: nowrap; color: #64748b; font-size: 12px;">
-                        ${formatDate(log.timestamp)}
-                    </td>
-                    <td>
-                        <span class="badge" style="background:#e0f2fe; color:#0369a1;">${log.username}</span>
-                    </td>
-                    <td style="font-weight: 600; color: #1e293b;">
-                        ${log.action}
-                    </td>
-                    <td colspan="2" style="font-size: 13px; color: #475569; font-style: italic;">
-                        ${log.details || '---'}
-                    </td>
-                </tr>
-            `).join('');
+                    <td style="white-space: nowrap; color: #64748b; font-size: 12px;">${formatDate(log.timestamp)}</td>
+                    <td><span class="badge" style="background:#e0f2fe; color:#0369a1;">${log.username}</span></td>
+                    <td style="font-weight: 600; color: #1e293b;">${log.action}</td>
+                    <td colspan="2" style="font-size: 13px; color: #475569; font-style: italic;">${log.details || '---'}</td>
+                </tr>`).join('');
         }
 
-        // Скрываем общую сумму, так как мы смотрим логи
         if (totalEl) totalEl.style.display = 'none';
 
-        // Обновляем футер (только кнопка Назад)
+        // ИСПРАВЛЕНИЕ: Гарантируем выравнивание кнопки "Назад" вправо
+        footer.style.display = 'flex';
+        footer.style.justifyContent = 'flex-end';
         footer.innerHTML = `
-            <button class="btn-primary" style="background:#64748b; width: 100%; padding: 10px;" onclick="openOrderDetails(${orderId})">
+            <button class="btn-primary" style="background:#64748b; min-width: 200px; padding: 10px;" onclick="restoreModalState(${orderId})">
                 🔙 ВЕРНУТЬСЯ К ДЕТАЛЯМ
             </button>
         `;
 
     } catch (e) {
-        console.error("Audit load error:", e);
-        showToast("Критическая ошибка сети", "error");
-        body.innerHTML = '<tr><td colspan="5" style="text-align:center; color:red;">Нет связи с сервером</td></tr>';
+        showToast("Ошибка сети", "error");
+        restoreModalState(orderId); // Возвращаемся, если произошла ошибка
     }
+}
+
+// Вспомогательная функция для корректного возврата из Истории
+function restoreModalState(orderId) {
+    const totalEl = document.getElementById('order-total-price');
+    if (totalEl) totalEl.style.display = 'block'; // Возвращаем Итого
+    openOrderDetails(orderId); // Перерисовываем детали заказа
 }
 
 function openOrderDetails(id) {
     const order = ordersData.find(o => o.id == id);
     if (!order) return showToast("Данные не найдены", "error");
 
-    // --- КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ ДЛЯ АКЦИЙ ---
-    // Сохраняем акции этого заказа, чтобы функция renderItemsTable увидела их
     window.currentOrderPromos = order.appliedPromoItems || {};
-    // --------------------------------------
-
+    window.tempItemPrices = order.itemPrices || {};
     tempItems = syncTempItems(order.items);
 
     const isWriteOff = order.shopName === 'СПИСАНИЕ' || order.type === 'WRITE_OFF';
@@ -767,10 +795,8 @@ function openOrderDetails(id) {
             <input type="hidden" id="order-discount-percent" value="${discountPercent}">`;
     }
 
-    // Вызываем отрисовку таблицы (теперь она увидит window.currentOrderPromos)
     renderItemsTable(tempItems, false);
 
-    const footer = document.getElementById('order-footer-actions');
     let btnsHtml = `<button class="btn-primary" style="background:#6366f1" onclick="showOrderHistory(${order.id})">📜 История</button>`;
 
     if (isWriteOff) {
@@ -788,84 +814,26 @@ function openOrderDetails(id) {
         btnsHtml += `<button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-order-view')">Закрыть</button>`;
     }
 
-    footer.innerHTML = btnsHtml;
+    const footer = document.getElementById('order-footer-actions');
+
+    // ИСПРАВЛЕНИЕ: Добавляем распорку (spacer), если это списание.
+    // Она заберет всё место слева и прижмет кнопки вправо.
+    const spacer = isWriteOff ? '<div style="margin-right: auto;"></div>' : '';
+    footer.innerHTML = spacer + btnsHtml;
+
+    if (footer) {
+        footer.style.display = 'flex';
+        footer.style.width = '100%';
+        footer.style.justifyContent = 'flex-end';
+        footer.style.alignItems = 'center';
+        footer.style.gap = '10px';
+    }
 
     const totalEl = document.getElementById('order-total-price');
     if (totalEl) totalEl.style.display = isWriteOff ? 'none' : 'block';
 
     openModal('modal-order-view');
 }
-
-
-
-
-
-
-//function enableOrderEdit(id) {
-//    const order = ordersData.find(o => o.id == id);
-//    if (!order) return showToast("Ошибка: Заказ не найден", "error");
-//
-//    tempItems = syncTempItems(order.items);
-//    const dates = getSmartDeliveryDates();
-//
-//    document.getElementById('modal-title').innerText = "📝 Редактирование заказа #" + id;
-//
-//    const currentPercent = order.discountPercent || 0;
-//
-//    const info = document.getElementById('order-info');
-//    info.innerHTML = `
-//        <div class="modal-info-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; background: #f1f5f9; padding: 15px; border-radius: 10px;">
-//            <div>
-//                <label>МАГАЗИН (Поиск):</label>
-//                <!-- ИСПРАВЛЕНО: input + datalist вместо простого select -->
-//                <input type="text" id="edit-shop" class="form-control"
-//                       list="edit-order-clients-datalist"
-//                       value="${order.shopName}"
-//                       placeholder="Введите название...">
-//                <datalist id="edit-order-clients-datalist"></datalist>
-//            </div>
-//            <div><label>ДОСТАВКА</label>
-//                <input type="date" id="edit-delivery" class="form-control"
-//                       min="${dates.min}"
-//                       value="${convertDateToISO(order.deliveryDate)}">
-//            </div>
-//            <div><label>АВТО</label><input type="text" id="edit-car-number" class="form-control" value="${order.carNumber || ''}"></div>
-//
-//            <div style="margin-top:10px;"><label>ОПЛАТА</label>
-//                <select id="edit-payment" class="form-select">
-//                    <option value="CASH" ${order.paymentMethod === 'CASH' ? 'selected' : ''}>Наличный</option>
-//                    <option value="TRANSFER" ${order.paymentMethod === 'TRANSFER' ? 'selected' : ''}>Перевод</option>
-//                </select>
-//            </div>
-//            <div style="margin-top:10px;"><label>ФАКТУРА</label>
-//                <select id="edit-invoice-type" class="form-select">
-//                    <option value="false" ${!order.needsSeparateInvoice ? 'selected' : ''}>Общая</option>
-//                    <option value="true" ${order.needsSeparateInvoice ? 'selected' : ''}>Раздельная</option>
-//                </select>
-//            </div>
-//
-//            <!-- СКРЫТОЕ ПОЛЕ ПРОЦЕНТА -->
-//            <div style="display: none;">
-//                <input type="number" id="order-discount-percent" value="${currentPercent}">
-//            </div>
-//
-//            <div style="margin-top:10px;"><label>КОММЕНТАРИЙ</label>
-//                <input type="text" id="edit-comment" class="form-control" value="${order.comment || ''}">
-//            </div>
-//        </div>`;
-//
-//    // АКТИВАЦИЯ ПОИСКА: Инициализируем живой поиск для нового поля
-//    initSmartClientSearch('edit-shop', 'edit-order-clients-datalist');
-//
-//    renderItemsTable(tempItems, true);
-//
-//    document.getElementById('order-footer-actions').innerHTML = `
-//        <button class="btn-primary" style="background:#10b981" onclick="saveFullChanges(${id})">💾 Сохранить</button>
-//        <button class="btn-primary" style="background:#64748b" onclick="openOrderDetails(${id})">Отмена</button>`;
-//}
-
-
-
 
 
 function enableOrderEdit(id) {
@@ -936,9 +904,6 @@ function enableOrderEdit(id) {
 }
 
 
-
-
-
 function recalculateWithPercent() {
     const percent = parseFloat(document.getElementById('order-discount-percent').value) || 0;
     let total = 0;
@@ -965,6 +930,8 @@ function recalculateWithPercent() {
 async function openCreateReturnModal() {
     await loadManagerIds();
     tempItems = {};
+    // Инициализируем пустой объект цен, чтобы renderItemsTable не выдавала ошибок
+    window.tempItemPrices = {};
     const dates = getSmartDeliveryDates();
 
     document.getElementById('modal-title').innerText = "🔄 Новый возврат";
@@ -987,12 +954,16 @@ async function openCreateReturnModal() {
             <div><label>КОММЕНТАРИЙ:</label><input type="text" id="new-op-comment" class="form-control" placeholder="..."></div>
         </div>`;
 
-    initSmartClientSearch('new-op-shop', 'returns-clients-datalist'); // Активируем живой поиск
+    initSmartClientSearch('new-op-shop', 'returns-clients-datalist');
     renderItemsTable(tempItems, true);
 
     const totalEl = document.getElementById('order-total-price');
-    if (totalEl) { totalEl.innerText = "Итого: 0 ֏"; }
+    if (totalEl) {
+        totalEl.style.display = 'block'; // Возвращаем видимость, если до этого открывали списание
+        totalEl.innerText = "Итого: 0 ֏";
+    }
 
+    document.getElementById('order-footer-actions').style.justifyContent = 'flex-end'; // Выравнивание вправо
     document.getElementById('order-footer-actions').innerHTML = `
         <button class="btn-primary" style="background:#ef4444" onclick="saveNewManualOperation('return')">Создать возврат</button>
         <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-order-view')">Отмена</button>
@@ -1139,7 +1110,6 @@ function showTab(tabId) {
     }
 }
 
-//5
 function updateDashboardStats() {
     const statAvgCheck = document.getElementById('stat-avg-check');
     const statPendingOrders = document.getElementById('stat-pending-orders');
@@ -1158,6 +1128,7 @@ function updateDashboardStats() {
 
     // Безопасная запись данных
     if (statAvgCheck) {
+        // ИСПРАВЛЕНО: Заменил Math.round на toLocaleString с параметрами формата
         statAvgCheck.innerText = avg.toLocaleString(undefined, f) + " ֏";
     }
 
@@ -1358,51 +1329,6 @@ async function submitEditUser(id) {
 }
 
 
-//function showConfirmModal(title, message, onConfirm, onCancel) {
-//    const modal = document.getElementById('modal-confirm');
-//    if (!modal) {
-//        console.error("❌ Ошибка: Элемент #modal-confirm не найден в HTML!");
-//        return;
-//    }
-//
-//    // Заполняем текст
-//    const titleEl = modal.querySelector('.modal-title') || modal.querySelector('h2') || modal.querySelector('h3');
-//    const bodyEl = modal.querySelector('.modal-body') || modal.querySelector('.confirm-content');
-//
-//    if (titleEl) titleEl.innerText = title;
-//    if (bodyEl) bodyEl.innerHTML = message;
-//
-//    // Ищем кнопки (пробуем разные варианты классов)
-//    const btnConfirm = modal.querySelector('.btn-confirm') || modal.querySelector('.btn-primary');
-//    const btnCancel = modal.querySelector('.btn-cancel') || modal.querySelector('.btn-secondary') || modal.querySelector('.btn-ghost');
-//
-//    if (btnConfirm) {
-//        btnConfirm.onclick = (e) => {
-//            e.preventDefault();
-//            closeModal('modal-confirm');
-//            if (onConfirm) onConfirm();
-//        };
-//    }
-//
-//    if (btnCancel) {
-//        btnCancel.onclick = (e) => {
-//            e.preventDefault();
-//            closeModal('modal-confirm');
-//            if (onCancel) onCancel();
-//        };
-//    }
-//
-//    // ПРИНУДИТЕЛЬНОЕ ОТКРЫТИЕ
-//    modal.style.display = 'flex'; // Делаем видимым напрямую
-//    modal.classList.add('active'); // Если у вас анимация через класс
-//
-//    // Если есть функция openModal, вызываем и её
-//    if (typeof openModal === 'function') openModal('modal-confirm');
-//
-//    console.log("✅ Окно #modal-confirm должно быть на экране");
-//}
-
-
 function showConfirmModal(title, text, onConfirm) {
     const modal = document.getElementById('confirm-modal');
     document.getElementById('confirm-title').innerText = title;
@@ -1424,7 +1350,6 @@ function showConfirmModal(title, text, onConfirm) {
 
     modal.showModal();
 }
-
 
 
 function openCreateUserModal() {
@@ -1488,7 +1413,6 @@ async function resetPassword(userId) {
         }
     });
 }
-
 
 
 window.printOrder = function (id) {
@@ -2271,23 +2195,29 @@ function applyReportFilters() {
     window.location.href = url.toString();
 }
 
-
 function printCompactOrders() {
-    const managerId = document.getElementById('route-manager-select').value;
-    const date = document.getElementById('route-date-select').value;
-    if (!date) return showToast("Выберите дату", "error");
+    const checkboxes = document.querySelectorAll('.order-print-check:checked');
+    if (checkboxes.length === 0) return showToast("Выберите хотя бы один заказ", "error");
 
-    // Вызываем компактную печать заказов
-    const url = `/admin/logistic/print-compact?managerId=${encodeURIComponent(managerId)}&date=${date}&type=order`;
+    // Формируем строку параметров: type=order&ids=1&ids=2...
+    const params = new URLSearchParams();
+    params.append('type', 'order');
+    checkboxes.forEach(cb => params.append('ids', cb.value));
+
+    const url = `/admin/logistic/print-compact?${params.toString()}`;
     printAction(url);
 }
 
 function printCompactReturns() {
-    const managerId = document.getElementById('route-manager-select').value;
-    const date = document.getElementById('route-date-select').value;
-    if (!date) return showToast("Выберите дату", "error");
+    const checkboxes = document.querySelectorAll('.return-print-check:checked');
+    if (checkboxes.length === 0) return showToast("Выберите хотя бы один возврат", "error");
 
-    const url = `/admin/logistic/print-compact?managerId=${encodeURIComponent(managerId)}&date=${date}&type=return`;
+    // Формируем строку параметров: type=return&ids=1&ids=2...
+    const params = new URLSearchParams();
+    params.append('type', 'return');
+    checkboxes.forEach(cb => params.append('ids', cb.value));
+
+    const url = `/admin/logistic/print-compact?${params.toString()}`;
     printAction(url);
 }
 
@@ -2418,7 +2348,6 @@ function saveAllSettings() {
 }
 
 
-
 function printManagerDebts() {
     const managerId = document.getElementById('filter-invoice-manager').value;
     const start = document.getElementById('inv-date-start').value;
@@ -2457,7 +2386,6 @@ function setDefaultInvoiceDates() {
 }
 
 setDefaultInvoiceDates();
-
 
 
 
@@ -2517,73 +2445,116 @@ const fmt = formatDate;
 const formatOrderDate = formatDate;
 
 
-// Функция для РУЧНОГО СОЗДАНИЯ нового заказа
-// 1. ИСПРАВЛЕННОЕ СОЗДАНИЕ ЗАКАЗА
 async function saveNewManualOperation(type) {
-    const shopInput = document.getElementById('new-op-shop');
-    const shopName = shopInput?.value.trim();
+    const shopName = document.getElementById('new-op-shop')?.value.trim();
     const dateVal = document.getElementById('new-op-date')?.value;
 
     if (!shopName || !dateVal) {
         return showToast("Заполните магазин и дату!", "info");
     }
 
+    // Собираем товары
     const itemsToSave = collectItemsFromUI();
 
     if (Object.keys(itemsToSave).length === 0) {
-        return showToast("Добавьте товары в список!", "error");
+        return showToast("Список товаров пуст!", "error");
     }
 
-    // Если это ЗАКАЗ - проверяем акции
+    const saveBtn = document.querySelector('button[onclick*="saveNewManualOperation"]');
+    if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = "⏳ Проверка...";
+    }
+
+    // ЛОГИКА ДЛЯ ЗАКАЗА (С АКЦИЯМИ)
     if (type === 'order') {
-        checkAndApplyPromos(itemsToSave, (selectedPromos) => {
+        checkAndApplyPromos(itemsToSave, async (selectedPromos) => {
             const promoMap = {};
             selectedPromos.forEach(promo => {
-                Object.entries(promo.items).forEach(([pId, promoPercent]) => {
-                    if (itemsToSave[pId]) promoMap[pId] = promoPercent;
-                });
+                if (promo.items) {
+                    Object.entries(promo.items).forEach(([pId, percent]) => {
+                        if (itemsToSave[pId]) promoMap[pId] = percent;
+                    });
+                }
             });
-            executeOrderCreation(type, itemsToSave, promoMap);
+
+            // Формируем данные заказа
+            const data = {
+                shopName: shopName,
+                managerId: document.getElementById('new-op-manager')?.value,
+                items: itemsToSave,
+                appliedPromoItems: promoMap, // АКЦИИ ТУТ
+                carNumber: document.getElementById('new-op-car')?.value || "",
+                comment: document.getElementById('new-op-comment')?.value || "",
+                deliveryDate: dateVal,
+                paymentMethod: document.getElementById('new-op-payment')?.value,
+                needsSeparateInvoice: document.getElementById('new-op-separate')?.value === "true",
+                discountPercent: parseFloat(document.getElementById('new-op-percent')?.value) || 0,
+                androidId: `MANUAL-${Date.now()}`
+            };
+
+            await executeManualPost('/api/admin/orders/create-manual', data, saveBtn);
         });
-    } else {
-        // Если это ВОЗВРАТ - сохраняем сразу
-        executeOrderCreation(type, itemsToSave, {});
+    }
+    // ЛОГИКА ДЛЯ ВОЗВРАТА (БЕЗ АКЦИЙ)
+    else if (type === 'return') {
+        const data = {
+            shopName: shopName,
+            managerId: document.getElementById('new-op-manager')?.value,
+            items: itemsToSave,
+            itemPrices: window.tempItemPrices || {},
+            returnDate: dateVal,
+            returnReason: document.getElementById('new-op-reason')?.value,
+            carNumber: document.getElementById('new-op-car')?.value || "",
+            comment: document.getElementById('new-op-comment')?.value || "",
+            androidId: `MANUAL-${Date.now()}`
+        };
+
+        await executeManualPost('/api/admin/returns/create-manual', data, saveBtn);
     }
 }
-// Вспомогательная функция отправки (чтобы не дублировать код)
-async function executeOrderCreation(type, itemsToSave, appliedPromos) {
-    const shopName = document.getElementById('new-op-shop').value.trim();
-    const dateVal = document.getElementById('new-op-date').value;
 
-    const data = {
-        shopName: shopName,
-        managerId: document.getElementById('new-op-manager').value,
-        items: itemsToSave,
-        appliedPromoItems: appliedPromos, // АКЦИИ ТУТ
-        carNumber: document.getElementById('new-op-car')?.value || "",
-        comment: document.getElementById('new-op-comment')?.value || "",
-        deliveryDate: dateVal,
-        paymentMethod: document.getElementById('new-op-payment').value,
-        needsSeparateInvoice: document.getElementById('new-op-separate')?.value === "true",
-        discountPercent: parseFloat(document.getElementById('new-op-percent')?.value) || 0,
-        createdAt: `${dateVal}T12:00:00`,
-        androidId: `MANUAL-${Date.now()}`
-    };
+async function executeManualPost(endpoint, data, saveBtn) {
+    if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = "⏳ Сохранение...";
+    }
 
-    const response = await fetch('/api/admin/orders/create-manual', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-    });
+    try {
+        // Ищем CSRF токен (сначала в meta, потом в input)
+        const csrfToken = document.querySelector('meta[name="_csrf"]')?.content ||
+                          document.querySelector('input[name="_csrf"]')?.value || "";
 
-    if (response.ok) {
-        showToast("Заказ создан", "success");
-        location.reload();
-    } else {
-        const err = await response.json();
-        showToast(err.error || "Ошибка", "error");
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': csrfToken
+            },
+            body: JSON.stringify(data)
+        });
+
+        if (response.ok) {
+            showToast("Успешно сохранено!", "success");
+            setTimeout(() => location.reload(), 600);
+        } else {
+            const err = await response.json();
+            showToast(err.error || "Ошибка сохранения", "error");
+            if (saveBtn) {
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = "Повторить попытку";
+            }
+        }
+    } catch (e) {
+        console.error("Критическая ошибка отправки:", e);
+        showToast("Ошибка сети: сервер недоступен", "error");
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = "Попробовать снова";
+        }
     }
 }
+
 
 
 function calculateCurrentTempTotal() {
@@ -2607,69 +2578,375 @@ function removeItemFromEdit(pId) {
 }
 
 
+function updateQtyAndRecalculate(pId, shouldRedraw = false) {
+    // 1. Получаем строку и элементы
+    const row = document.getElementById(`row-${pId}`);
+    if (!row) return;
+
+    const qtyInput = document.getElementById(`input-qty-${pId}`);
+    const priceInput = row.querySelector('.item-price-input');
+
+    const p = productsData.find(prod => prod.id == pId);
+    if (!p) return;
+
+    // 2. Сбор актуальных данных из инпутов
+    let newQty = qtyInput ? (parseInt(qtyInput.value)) : (tempItems[pId] || 0);
+
+    // --- КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: УДАЛЕНИЕ ПРИ 0 ---
+    if (newQty <= 0) {
+        // Вызываем функцию удаления и выходим
+        if (typeof removeItemFromEdit === 'function') {
+            removeItemFromEdit(pId);
+        } else {
+            // Если функции нет, удаляем вручную из буферов
+            delete tempItems[pId];
+            if (window.tempItemPrices) delete window.tempItemPrices[pId];
+            renderItemsTable(tempItems, true);
+        }
+        return;
+    }
+    // ----------------------------------------------
+
+    // 3. Определяем режим (Возврат или Заказ)
+    const modalTitleEl = document.getElementById('modal-title');
+    const modalTitle = modalTitleEl ? modalTitleEl.innerText.toUpperCase() : "";
+    const isReturnOrWriteOff = modalTitle.includes("ВОЗВРАТ") || modalTitle.includes("СПИСАНИЕ") || modalTitle.includes("🔄");
+
+    let basePriceToUse = p.price;
+    if (isReturnOrWriteOff && priceInput) {
+        basePriceToUse = parseFloat(priceInput.value) || 0;
+        // Сохраняем в буфер цен, чтобы не потерять при перерисовке
+        if (!window.tempItemPrices) window.tempItemPrices = {};
+        window.tempItemPrices[pId] = basePriceToUse;
+    }
+
+    // Сохраняем в буфер товаров
+    if (typeof tempItems !== 'undefined') {
+        tempItems[pId] = newQty;
+    }
+
+    // 4. Если требуется полная перерисовка (например, после изменения кол-ва)
+    if (shouldRedraw) {
+        renderItemsTable(tempItems, true);
+        return;
+    }
+
+    // 5. ЛОКАЛЬНОЕ ОБНОВЛЕНИЕ СТРОКИ (без перерисовки всей таблицы)
+    const percentInput = document.getElementById('order-discount-percent') || document.getElementById('new-op-percent');
+    const shopPercent = parseFloat(percentInput?.value) || 0;
+
+    const appliedPromos = window.currentOrderPromos || {};
+    const hasPromo = !isReturnOrWriteOff && appliedPromos.hasOwnProperty(pId);
+    const finalPercent = hasPromo ? parseFloat(appliedPromos[pId]) : (isReturnOrWriteOff ? 0 : shopPercent);
+
+    const modifier = 1 - (finalPercent / 100);
+    const priceWithDiscount = roundHalfUp(basePriceToUse * modifier);
+    const rowSum = roundHalfUp(priceWithDiscount * newQty);
+
+    // Обновляем ячейки
+    const f = { minimumFractionDigits: 1, maximumFractionDigits: 1 };
+    const subtotalCell = document.getElementById(`total-row-${pId}`);
+    const priceCell = row.querySelector('.item-price-cell');
+
+    if (subtotalCell) {
+        subtotalCell.innerText = rowSum.toLocaleString(undefined, f) + " ֏";
+    }
+
+    if (priceCell && !priceInput) {
+        // Обновляем текст цены только если это не поле ввода (т.е. обычный заказ)
+        priceCell.innerText = priceWithDiscount.toLocaleString(undefined, f) + " ֏";
+    }
+
+    // 6. Обновляем общий итог внизу модального окна
+    if (typeof updateFinalTotalDisplay === 'function') {
+        updateFinalTotalDisplay(shopPercent);
+    } else {
+        // Если отдельной функции нет, просто считаем сумму по буферу и обновляем текст
+        let total = 0;
+        Object.entries(tempItems).forEach(([id, q]) => {
+            let pr = (isReturnOrWriteOff && window.tempItemPrices && window.tempItemPrices[id])
+                     ? window.tempItemPrices[id]
+                     : (productsData.find(prod => prod.id == id)?.price || 0);
+            total += roundHalfUp(pr * q);
+        });
+        const totalEl = document.getElementById('order-total-price');
+        if (totalEl) {
+            totalEl.innerHTML = `<span style="font-size: 14px; color: #64748b; font-weight: normal;">Итого:</span> <span style="font-weight: 800;">${total.toLocaleString(undefined, f)} ֏</span>`;
+        }
+    }
+}
+
+function updateFinalTotalDisplay(shopPercent) {
+    let total = 0;
+    const f = { minimumFractionDigits: 1, maximumFractionDigits: 1 };
+
+    const modalTitleEl = document.getElementById('modal-title');
+    const modalTitle = modalTitleEl ? modalTitleEl.innerText.toUpperCase() : "";
+    const isReturnOrWriteOff = modalTitle.includes("ВОЗВРАТ") || modalTitle.includes("СПИСАНИЕ");
+
+    const appliedPromos = window.currentOrderPromos || {};
+    const rows = document.querySelectorAll('#order-items-body tr[id^="row-"]');
+
+    rows.forEach(row => {
+        const pId = row.id.replace('row-', '');
+
+        // --- ЛОГИКА ОПРЕДЕЛЕНИЯ ЦЕНЫ ---
+        let basePrice = parseFloat(row.dataset.basePrice) || 0;
+
+        // Если это возврат, приоритет отдаем инпуту или буферу цен
+        if (isReturnOrWriteOff) {
+            const priceInput = row.querySelector('.item-price-input');
+            if (priceInput) {
+                basePrice = parseFloat(priceInput.value) || 0;
+            } else if (window.tempItemPrices && window.tempItemPrices[pId] !== undefined) {
+                basePrice = window.tempItemPrices[pId];
+            }
+        }
+
+        // Получаем количество
+        const qtyInput = row.querySelector('.qty-input-active');
+        const qty = qtyInput ? (parseInt(qtyInput.value) || 0) : (parseInt(row.querySelector('b')?.innerText) || 0);
+
+        // Скидки (только для заказов)
+        const currentItemPercent = isReturnOrWriteOff ? 0 : (appliedPromos.hasOwnProperty(pId) ? parseFloat(appliedPromos[pId]) : shopPercent);
+
+        // --- РАСЧЕТ ---
+        const modifier = 1 - (currentItemPercent / 100);
+        const discountedPrice = roundHalfUp(basePrice * modifier);
+        const rowSum = roundHalfUp(discountedPrice * qty);
+
+        total += rowSum;
+
+        // --- ВИЗУАЛЬНОЕ ОБНОВЛЕНИЕ СТРОКИ ---
+        const priceCell = row.querySelector('.item-price-cell');
+        if (priceCell) {
+            // Обновляем текст цены только если там нет инпута (чтобы не затирать ввод в возвратах)
+            if (!priceCell.querySelector('input')) {
+                priceCell.innerText = discountedPrice.toLocaleString(undefined, f) + " ֏";
+                priceCell.style.color = appliedPromos.hasOwnProperty(pId) ? "#ea580c" : (isReturnOrWriteOff ? "#1e293b" : "#6366f1");
+                priceCell.style.fontWeight = (appliedPromos.hasOwnProperty(pId) || isReturnOrWriteOff) ? "800" : "700";
+            }
+        }
+
+        const subtotalCell = document.getElementById(`total-row-${pId}`) || row.querySelector('.item-subtotal-cell');
+        if (subtotalCell) {
+            subtotalCell.innerText = rowSum.toLocaleString(undefined, f) + " ֏";
+        }
+    });
+
+    total = roundHalfUp(total);
+
+    const totalEl = document.getElementById('order-total-price') || document.getElementById('manual-order-total-price');
+    if (totalEl) {
+        totalEl.innerHTML = `<span style="font-size: 14px; color: #64748b; font-weight: normal;">Итого:</span> ${total.toLocaleString(undefined, f)} ֏`;
+    }
+
+    window.currentOrderTotal = total;
+}
 
 
-//function addItemToEdit() {
-//    const select = document.getElementById('add-item-select');
-//    const qtyInput = document.getElementById('add-item-qty');
-//    const pId = select.value;
-//
-//    // 1. ОПРЕДЕЛЯЕМ ТИП ОПЕРАЦИИ
-//    const modalTitleEl = document.getElementById('modal-title');
-//    const modalTitle = modalTitleEl ? modalTitleEl.innerText.toUpperCase() : "";
-//    const isReturnOrWriteOff = modalTitle.includes("ВОЗВРАТ") || modalTitle.includes("СПИСАНИЕ") || modalTitle.includes("🔄");
-//
-//    if (!pId) {
-//        return showToast("Сначала выберите товар из списка!", "error");
-//    }
-//
-//    const qtyToAdd = parseInt(qtyInput.value);
-//    if (isNaN(qtyToAdd) || qtyToAdd <= 0) {
-//        return showToast("Введите корректное количество!", "error");
-//    }
-//
-//    const product = productsData.find(p => p.id == pId);
-//
-//    if (product) {
-//        const alreadyInList = tempItems[pId] || 0;
-//        const totalNewQty = alreadyInList + qtyToAdd;
-//
-//        // --- ПРОВЕРКА СКЛАДА ТОЛЬКО ДЛЯ ЗАКАЗОВ ---
-//        if (!isReturnOrWriteOff && totalNewQty > product.stockQuantity) {
-//            qtyInput.style.border = "2px solid #ef4444";
-//            return showToast(`⚠️ Недостаточно на складе! В наличии: ${product.stockQuantity}`, "error");
-//        }
-//
-//        // --- ЛОГИКА АВТОМАТИЧЕСКОГО ОПРЕДЕЛЕНИЯ АКЦИИ ---
-//        if (!isReturnOrWriteOff) {
-//            // Инициализируем объект акций, если он еще не создан
-//            if (!window.currentOrderPromos) window.currentOrderPromos = {};
-//
-//            // Если у товара в базе прописан промо-процент — сохраняем его
-//            if (product.promoPercent > 0) {
-//                window.currentOrderPromos[pId] = product.promoPercent;
-//                showToast(`Применена акция товара: ${product.promoPercent}%`, "success");
-//            } else {
-//                // Если акции нет — удаляем старую запись (если она была), чтобы считался % магазина
-//                delete window.currentOrderPromos[pId];
-//            }
-//        }
-//
-//        qtyInput.style.border = "";
-//        tempItems[pId] = totalNewQty;
-//
-//        // Вызываем перерисовку таблицы (она теперь увидит новые акции)
-//        renderItemsTable(tempItems, true);
-//
-//        select.value = "";
-//        qtyInput.value = 1;
-//        showToast(`Добавлено: ${product.name}`, "success");
-//        select.focus();
-//    } else {
-//        showToast("Ошибка: Товар не найден", "error");
-//    }
-//}
+function openWriteOffModal() {
+    tempItems = {};
+    const today = new Date().toISOString().split('T')[0];
 
+    // Синтаксис для Thymeleaf атрибутов в JS
+    const userElement = document.querySelector('.sidebar [sec\\:authentication]');
+    const currentUser = userElement?.innerText || "ADMIN";
+
+    // 1. Сброс стилей футера (исправляет смещение кнопок влево)
+    const footer = document.getElementById('order-footer-actions');
+    if (footer) {
+        footer.style.display = 'flex';
+        footer.style.justifyContent = 'flex-end'; // Кнопки строго справа
+        footer.style.gap = '10px';
+    }
+
+    document.getElementById('modal-title').innerText = "📉 НОВОЕ СПИСАНИЕ ТОВАРА";
+    document.getElementById('order-info').innerHTML = `
+        <div class="modal-info-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; background: #fef2f2; padding: 15px; border-radius: 10px; border: 1px solid #fecdd3;">
+            <div><label>КТО СПИСЫВАЕТ</label><input type="text" id="write-off-user" class="form-control" value="${currentUser}" readonly></div>
+            <div><label>ДАТА СПИСАНИЯ</label><input type="date" id="write-off-date" class="form-control" value="${today}"></div>
+            <div><label>ПРИЧИНА СПИСАНИЯ</label><input type="text" id="write-off-comment" class="form-control" placeholder="Брак / Срок годности"></div>
+        </div>`;
+
+    renderItemsTable(tempItems, true);
+
+    // 2. Скрываем Итого для списаний (это корректно для данного типа операции)
+    const totalEl = document.getElementById('order-total-price');
+    if (totalEl) totalEl.style.display = 'none';
+
+    // 3. Отрисовка кнопок
+    if (footer) {
+        footer.innerHTML = `
+            <button class="btn-primary" style="background:#ef4444" onclick="submitWriteOff()">✅ ПОДТВЕРДИТЬ СПИСАНИЕ</button>
+            <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-order-view')">ОТМЕНА</button>
+        `;
+    }
+
+    openModal('modal-order-view');
+}
+
+function collectItemsFromUI() {
+    const items = {};
+
+    // Ищем во всех возможных телах таблиц (и в создании, и в редактировании)
+    const bodies = [
+        document.getElementById('order-items-body'),
+        document.getElementById('manual-order-items-body')
+    ];
+
+    bodies.forEach(body => {
+        if (!body || body.offsetParent === null) return; // Пропускаем, если тела нет или оно скрыто
+
+        body.querySelectorAll('tr').forEach(row => {
+            // 1. Пытаемся найти ID товара
+            // Либо из атрибута data-pid, либо из ID строки row-123
+            let pId = row.dataset.pid || row.id.replace('row-', '');
+
+            // Если это строка выбора нового товара (как внизу вашего скрина) — у неё нет ID
+            if (!pId || isNaN(pId)) {
+                const select = row.querySelector('select');
+                if (select && select.value) pId = select.value;
+            }
+
+            // 2. Ищем количество
+            const qtyInput = row.querySelector('input[type="number"]');
+            if (qtyInput && pId && !isNaN(pId)) {
+                const qty = parseInt(qtyInput.value) || 0;
+                if (qty > 0) {
+                    items[pId] = qty;
+                }
+            }
+        });
+    });
+
+    return items;
+}
+
+
+function renderItemsTable(itemsMap, isEdit) {
+    const body = document.getElementById('order-items-body');
+    if (!body) return;
+
+    const f = { minimumFractionDigits: 1, maximumFractionDigits: 1 };
+
+    const modalTitleEl = document.getElementById('modal-title');
+    const modalTitle = modalTitleEl ? modalTitleEl.innerText.toUpperCase() : "";
+
+    const isReturnOrWriteOff = modalTitle.includes("ВОЗВРАТ") ||
+                               modalTitle.includes("СПИСАНИЕ") ||
+                               modalTitle.includes("🔄");
+
+    const tableHeader = document.querySelector('#modal-order-view table thead tr');
+    if (tableHeader) {
+        if (isReturnOrWriteOff) {
+            tableHeader.innerHTML = `<th>Товар</th><th>Кол-во</th><th>Цена</th><th>Итого</th><th>Кат.</th>`;
+        } else {
+            tableHeader.innerHTML = `<th>Товар</th><th>Кол-во</th><th>Прайс</th><th>Прайс - %</th><th style="color:#f59e0b">Промо %</th><th>Итого</th><th>Кат.</th>`;
+        }
+    }
+
+    const percentInput = document.getElementById('order-discount-percent') || document.getElementById('new-op-percent');
+    const shopPercent = isReturnOrWriteOff ? 0 : (percentInput ? parseFloat(percentInput.value) || 0 : 0);
+    const appliedPromos = window.currentOrderPromos || {};
+
+    let html = '';
+    let totalSumForCalculation = 0;
+
+    Object.entries(itemsMap).forEach(([pId, qty]) => {
+        const p = productsData.find(prod => prod.id == pId);
+        if (!p) return;
+
+        let currentPrice = (isReturnOrWriteOff && window.tempItemPrices && window.tempItemPrices[pId] !== undefined)
+                           ? window.tempItemPrices[pId]
+                           : p.price;
+
+        const hasPromo = appliedPromos.hasOwnProperty(pId);
+        const currentItemPercent = hasPromo ? parseFloat(appliedPromos[pId]) : shopPercent;
+        const modifier = 1 - (currentItemPercent / 100);
+
+        const priceWithPercent = roundHalfUp(currentPrice * modifier);
+        const rowSum = roundHalfUp(priceWithPercent * qty);
+        totalSumForCalculation += rowSum;
+
+        const qtyDisplay = isEdit ?
+            `<div class="qty-edit-box" style="display: flex; align-items: center; gap: 3px;">
+                <input type="number" id="input-qty-${pId}" class="qty-input-active"
+                       value="${qty}" onchange="updateQtyAndRecalculate('${pId}', true)" style="width: 50px;">
+            </div>` : `<b>${qty} шт.</b>`;
+
+        if (isReturnOrWriteOff) {
+            const priceDisplay = isEdit ?
+                            `<div style="display: flex; align-items: center; gap: 4px; white-space: nowrap;">
+                                <input type="number" step="0.1" class="form-control item-price-input"
+                                       data-pid="${pId}"
+                                       value="${currentPrice}"
+                                       oninput="updateQtyAndRecalculate('${pId}', false)"
+                                       style="width: 75px; font-weight: bold; border: 1px solid #f87171; padding: 2px 5px; height: 30px;">
+                                <span style="font-weight: bold;">֏</span>
+                            </div>` :
+                            `<b style="white-space: nowrap;">${currentPrice.toLocaleString(undefined, f)} ֏</b>`;
+
+                        html += `<tr data-base-price="${currentPrice}" id="row-${pId}">
+                            <td style="padding-left: 15px;">
+                                ${p.name}
+                                ${isEdit ? `<span onclick="removeItemFromEdit('${pId}')" style="color: #ef4444; cursor: pointer; margin-left: 5px;">❌</span>` : ''}
+                            </td>
+                            <td>${qtyDisplay}</td>
+                            <td class="item-price-cell">${priceDisplay}</td>
+                            <td id="total-row-${pId}" class="item-subtotal-cell" style="font-weight:800; white-space: nowrap;">${rowSum.toLocaleString(undefined, f)} ֏</td>
+                            <td><small class="text-muted">${p.category || '---'}</small></td>
+                        </tr>`;
+        } else {
+            const isDiscounted = currentItemPercent > 0;
+            const priceStyle = isDiscounted ? 'text-decoration: line-through; color: #94a3b8;' : 'color: #1e293b;';
+
+            html += `<tr data-base-price="${p.price}" id="row-${pId}">
+                <td style="padding-left: 15px;">${p.name} ${isEdit ? `<span onclick="removeItemFromEdit('${pId}')" style="color: #ef4444; cursor: pointer; margin-left: 5px;">❌</span>` : ''}</td>
+                <td>${qtyDisplay}</td>
+                <td style="${priceStyle} font-size: 11px;">${p.price.toLocaleString(undefined, f)} ֏</td>
+                <td class="item-price-cell" style="color: #6366f1; font-weight: 700;">${priceWithPercent.toLocaleString(undefined, f)} ֏</td>
+                <td style="text-align:center;">
+                    ${hasPromo ? `<span class="badge" style="background:#fff7ed; color:#ea580c; border:1px solid #fdba74; padding: 2px 6px;">${currentItemPercent}%</span>` : `<span style="color:#cbd5e1;">---</span>`}
+                </td>
+                <td id="total-row-${pId}" class="item-subtotal-cell" style="font-weight:800;">${rowSum.toLocaleString(undefined, f)} ֏</td>
+                <td><small class="text-muted">${p.category || '---'}</small></td>
+            </tr>`;
+        }
+    });
+
+    if (isEdit) {
+        const options = `<option value="" disabled selected>Выберите товар...</option>` +
+            productsData.map(p => `<option value="${p.id}">${p.name} (${p.price} ֏)</option>`).join('');
+
+        const addRowColspan = isReturnOrWriteOff ? 3 : 5;
+        html += `<tr class="add-row-sticky" style="background: #f8fafc;">
+            <td><select id="add-item-select" class="form-select" style="font-size: 12px;">${options}</select></td>
+            <td><input type="number" id="add-item-qty" value="1" class="form-control" style="width: 60px;"></td>
+            <td colspan="${addRowColspan}">
+                <button class="btn-primary w-70" onclick="addItemToEdit()" style="padding: 5px;">+ Добавить в список</button>
+            </td>
+        </tr>`;
+    }
+
+    body.innerHTML = html;
+    totalSumForCalculation = roundHalfUp(totalSumForCalculation);
+
+    // ИСПРАВЛЕННЫЙ БЛОК: Запрет переноса строки
+    const totalEl = document.getElementById('order-total-price');
+    if (totalEl) {
+        totalEl.style.display = 'flex';
+        totalEl.style.alignItems = 'center';
+        totalEl.style.whiteSpace = 'nowrap'; // ЗАПРЕТ ПЕРЕНОСА
+        totalEl.style.gap = '8px';
+
+        totalEl.innerHTML = `
+            <span style="font-size: 14px; color: #64748b; font-weight: normal;">Итого:</span>
+            <span style="font-weight: 800;">${totalSumForCalculation.toLocaleString(undefined, f)} ֏</span>
+        `;
+    }
+    window.currentOrderTotal = totalSumForCalculation;
+}
 
 function addItemToEdit() {
     const select = document.getElementById('add-item-select');
@@ -2695,20 +2972,30 @@ function addItemToEdit() {
         const alreadyInList = tempItems[pId] || 0;
         const totalNewQty = alreadyInList + qtyToAdd;
 
-        if (!isReturnOrWriteOff && totalNewQty > product.stockQuantity) {
+        // Для заказов проверяем остаток, для возвратов — нет
+        if (!isReturnOrWriteOff && totalNewQty > (product.stockQuantity || 0)) {
             qtyInput.style.border = "2px solid #ef4444";
-            return showToast(`⚠️ Недостаточно на складе! В наличии: ${product.stockQuantity}`, "error");
+            return showToast(`Недостаточно на складе! В наличии: ${product.stockQuantity}`, "error");
         }
 
-        // Мы НЕ вызываем здесь окно акций. Просто сбрасываем старую акцию для этого ID,
-        // чтобы при сохранении она пересчиталась заново
-        if (!isReturnOrWriteOff && window.currentOrderPromos) {
-            delete window.currentOrderPromos[pId];
+        // --- НОВАЯ ЛОГИКА ДЛЯ ЦЕН ВОЗВРАТА ---
+        if (isReturnOrWriteOff) {
+            if (!window.tempItemPrices) window.tempItemPrices = {};
+            // Если товара еще нет в буфере цен, берем текущую цену из справочника
+            if (!window.tempItemPrices[pId]) {
+                window.tempItemPrices[pId] = product.price;
+            }
+        } else {
+            // Для обычных заказов сбрасываем акции, чтобы они пересчитались
+            if (window.currentOrderPromos) {
+                delete window.currentOrderPromos[pId];
+            }
         }
 
         qtyInput.style.border = "";
         tempItems[pId] = totalNewQty;
 
+        // Перерисовываем таблицу (она подхватит цену из window.tempItemPrices)
         renderItemsTable(tempItems, true);
 
         select.value = "";
@@ -2721,382 +3008,143 @@ function addItemToEdit() {
 }
 
 
-
-function renderItemsTable(itemsMap, isEdit) {
-    const body = document.getElementById('order-items-body');
-    if (!body) return;
-
-    // Настройки формата: 1 знак после запятой, разделитель тысяч — пробел
-    const f = { minimumFractionDigits: 1, maximumFractionDigits: 1 };
-
-    // 1. ОПРЕДЕЛЯЕМ ТИП ОПЕРАЦИИ
-    const modalTitleEl = document.getElementById('modal-title');
-    const modalTitle = modalTitleEl ? modalTitleEl.innerText.toUpperCase() : "";
-
-    const isReturnOrWriteOff = modalTitle.includes("ВОЗВРАТ") ||
-                               modalTitle.includes("СПИСАНИЕ") ||
-                               modalTitle.includes("🔄");
-
-    const tableHeader = document.querySelector('#modal-order-view table thead tr');
-    if (tableHeader) {
-        if (isReturnOrWriteOff) {
-            tableHeader.innerHTML = `<th>Товар</th><th>Кол-во</th><th>Цена</th><th>Итого</th><th>Кат.</th>`;
-        } else {
-            tableHeader.innerHTML = `<th>Товар</th><th>Кол-во</th><th>Прайс</th><th>Прайс - %</th><th style="color:#f59e0b">Промо %</th><th>Итого</th><th>Кат.</th>`;
-        }
-    }
-
-    // 2. Ищем базовый процент магазина
-    const percentInput = document.getElementById('order-discount-percent') || document.getElementById('new-op-percent');
-    const shopPercent = isReturnOrWriteOff ? 0 : (percentInput ? parseFloat(percentInput.value) || 0 : 0);
-
-    const appliedPromos = window.currentOrderPromos || {};
-
-    let html = '';
-    let totalSumForCalculation = 0;
-
-    Object.entries(itemsMap).forEach(([pId, qty]) => {
-        const p = productsData.find(prod => prod.id == pId);
-        if (!p) return;
-
-        const hasPromo = appliedPromos.hasOwnProperty(pId);
-        const currentItemPercent = hasPromo ? parseFloat(appliedPromos[pId]) : shopPercent;
-
-        // --- ИСПРАВЛЕННАЯ ЛОГИКА (0.1 точность вместо целых) ---
-        const modifier = 1 - (currentItemPercent / 100);
-
-        // Цена за 1 шт: умножаем и округляем до 1 знака через toFixed(1)
-        const priceWithPercent = parseFloat((p.price * modifier).toFixed(1));
-
-        // Итого по строке: (Цена с точностью 0.1) * Количество
-        const rowSum = parseFloat((priceWithPercent * qty).toFixed(1));
-
-        totalSumForCalculation += rowSum;
-
-        const qtyDisplay = isEdit ?
-            `<div class="qty-edit-box" style="display: flex; align-items: center; gap: 3px;">
-                <input type="number" id="input-qty-${pId}" class="qty-input-active"
-                       value="${qty}" onchange="updateQtyAndRecalculate('${pId}')" style="width: 50px;">
-                <button onclick="updateQtyAndRecalculate('${pId}')" title="Обновить" style="border:none; background:none; cursor:pointer;">✅</button>
-            </div>` : `<b>${qty} шт.</b>`;
-
-        if (isReturnOrWriteOff) {
-            html += `<tr data-base-price="${p.price}" id="row-${pId}">
-                <td style="padding-left: 15px;">
-                    ${p.name}
-                    ${isEdit ? `<span onclick="removeItemFromEdit('${pId}')" style="color: #ef4444; cursor: pointer; margin-left: 5px;">❌</span>` : ''}
-                </td>
-                <td>${qtyDisplay}</td>
-                <td style="font-weight: 700;">${p.price.toLocaleString(undefined, f)} ֏</td>
-                <td id="total-row-${pId}" style="font-weight:800;">${rowSum.toLocaleString(undefined, f)} ֏</td>
-                <td><small class="text-muted">${p.category || '---'}</small></td>
-            </tr>`;
-        } else {
-            const isDiscounted = currentItemPercent > 0;
-            const priceStyle = isDiscounted ? 'text-decoration: line-through; color: #94a3b8;' : 'color: #1e293b;';
-
-            html += `<tr data-base-price="${p.price}" id="row-${pId}">
-                <td style="padding-left: 15px;">${p.name} ${isEdit ? `<span onclick="removeItemFromEdit('${pId}')" style="color: #ef4444; cursor: pointer; margin-left: 5px;">❌</span>` : ''}</td>
-                <td>${qtyDisplay}</td>
-                <td style="${priceStyle} font-size: 11px;">${p.price.toLocaleString(undefined, f)} ֏</td>
-                <td class="item-price-cell" style="color: #6366f1; font-weight: 700;">${priceWithPercent.toLocaleString(undefined, f)} ֏</td>
-
-                <td style="text-align:center;">
-                    ${hasPromo ? `<span class="badge" style="background:#fff7ed; color:#ea580c; border:1px solid #fdba74; padding: 2px 6px;">${currentItemPercent}%</span>` : `<span style="color:#cbd5e1;">---</span>`}
-                </td>
-
-                <td id="total-row-${pId}" class="item-subtotal-cell" style="font-weight:800;">${rowSum.toLocaleString(undefined, f)} ֏</td>
-                <td><small class="text-muted">${p.category || '---'}</small></td>
-            </tr>`;
-        }
-    });
-
-    // ... блок добавления товаров (без изменений в расчетах) ...
-    if (isEdit) {
-        const options = `<option value="" disabled selected>Выберите товар...</option>` +
-            productsData.map(p => `<option value="${p.id}">${p.name} (${p.price} ֏)</option>`).join('');
-
-        const addRowColspan = isReturnOrWriteOff ? 3 : 5;
-        html += `<tr class="add-row-sticky" style="background: #f8fafc;">
-            <td><select id="add-item-select" class="form-select" style="font-size: 12px;">${options}</select></td>
-            <td><input type="number" id="add-item-qty" value="1" class="form-control" style="width: 60px;"></td>
-            <td colspan="${addRowColspan}">
-                <button class="btn-primary w-100" onclick="addItemToEdit()" style="padding: 5px;">+ Добавить в список</button>
-            </td>
-        </tr>`;
-    }
-
-    body.innerHTML = html;
-
-    const totalEl = document.getElementById('order-total-price');
-    if (totalEl) {
-        // Итоговая сумма тоже с одним знаком
-        totalEl.innerHTML = `<span style="font-size: 14px; color: #64748b; font-weight: normal;">Итого:</span> ${totalSumForCalculation.toLocaleString(undefined, f)} ֏`;
-    }
-}
-
-
-
-//1
-function updateQtyAndRecalculate(pId) {
-    const input = document.getElementById(`input-qty-${pId}`);
-    if (!input) return;
-
-    const p = productsData.find(prod => prod.id == pId);
-    let newQty = parseInt(input.value);
-
-    // Настройки формата для вывода (1 знак после запятой)
-    const f = { minimumFractionDigits: 1, maximumFractionDigits: 1 };
-
-    // ... (пункты 1, 2, 3, 4 и 5 без изменений) ...
-
-    // 6. РАСЧЕТ И ОТОБРАЖЕНИЕ СУММЫ С УЧЕТОМ АКЦИЙ
-    const percentInput = document.getElementById('order-discount-percent') || document.getElementById('new-op-percent');
-    const shopPercent = parseFloat(percentInput?.value) || 0;
-
-    if (p) {
-        let finalPercent = shopPercent;
-        const hasPromo = !isReturnOrWriteOff && window.currentOrderPromos && window.currentOrderPromos.hasOwnProperty(pId);
-
-        if (hasPromo) {
-            finalPercent = parseFloat(window.currentOrderPromos[pId]);
-        }
-
-        if (isReturnOrWriteOff) finalPercent = 0;
-
-        // --- ИСПРАВЛЕННЫЙ РАСЧЕТ (0.1 точность) ---
-        const modifier = 1 - (finalPercent / 100);
-
-        // Цена за 1 ед. с точностью до 0.1
-        const priceWithDiscount = parseFloat((p.price * modifier).toFixed(1));
-
-        // Итого по строке
-        const rowSum = parseFloat((priceWithDiscount * newQty).toFixed(1));
-
-        // ОБНОВЛЕНИЕ ИНТЕРФЕЙСА СТРОКИ
-        const subtotalCell = document.getElementById(`total-row-${pId}`);
-        const priceCell = row ? row.querySelector('.item-price-cell') : null;
-
-        if (subtotalCell) {
-            // ИСПРАВЛЕНО: вывод с одним знаком
-            subtotalCell.innerText = rowSum.toLocaleString(undefined, f) + " ֏";
-        }
-
-        if (priceCell) {
-            // ИСПРАВЛЕНО: вывод с одним знаком
-            priceCell.innerText = priceWithDiscount.toLocaleString(undefined, f) + " ֏";
-
-            if (hasPromo) {
-                priceCell.style.color = "#ea580c";
-                priceCell.style.fontWeight = "800";
-            } else {
-                priceCell.style.color = "#6366f1";
-                priceCell.style.fontWeight = "700";
-            }
-        }
-    }
-
-    // Обновляем общий итог всего заказа
-    updateFinalTotalDisplay(shopPercent);
-}
-
-
-//2
-function updateFinalTotalDisplay(shopPercent) {
-    let total = 0;
-    // Настройки формата: всегда 1 знак после запятой
-    const f = { minimumFractionDigits: 1, maximumFractionDigits: 1 };
-
-    const appliedPromos = window.currentOrderPromos || {};
-    const rows = document.querySelectorAll('#order-items-body tr[data-base-price]');
-
-    rows.forEach(row => {
-        const pId = row.id.replace('row-', '');
-        const basePrice = parseFloat(row.dataset.basePrice);
-
-        // Получаем количество
-        const qtyInput = row.querySelector('.qty-input-active');
-        const qty = qtyInput ? (parseInt(qtyInput.value) || 0) : (parseInt(row.querySelector('b')?.innerText) || 0);
-
-        // Приоритет: Акция > Магазин
-        const currentItemPercent = appliedPromos.hasOwnProperty(pId) ? parseFloat(appliedPromos[pId]) : shopPercent;
-
-        // --- ИСПРАВЛЕННЫЙ РАСЧЕТ (0.1 точность) ---
-        const modifier = 1 - (currentItemPercent / 100);
-
-        // Цена за 1 ед. (как на сервере и в других функциях JS)
-        const discountedPrice = parseFloat((basePrice * modifier).toFixed(1));
-
-        // Сумма строки
-        const rowSum = parseFloat((discountedPrice * qty).toFixed(1));
-
-        // Накопление общего итога
-        total += rowSum;
-
-        // Визуальное обновление цены в ячейке строки
-        const priceCell = row.querySelector('.item-price-cell');
-        if (priceCell) {
-            // ИСПРАВЛЕНО: формат с одним знаком
-            priceCell.innerText = discountedPrice.toLocaleString(undefined, f) + " ֏";
-            priceCell.style.color = appliedPromos.hasOwnProperty(pId) ? "#ea580c" : "#6366f1";
-        }
-
-        // Обновляем также итоговую ячейку строки (если она есть)
-        const subtotalCell = document.getElementById(`total-row-${pId}`);
-        if (subtotalCell) {
-            subtotalCell.innerText = rowSum.toLocaleString(undefined, f) + " ֏";
-        }
-    });
-
-    // Округляем итоговую сумму до 1 знака перед выводом
-    total = parseFloat(total.toFixed(1));
-
-    // 7. ОТОБРАЖЕНИЕ ОБЩЕГО ИТОГА
-    const totalEl = document.getElementById('order-total-price');
-    if (totalEl) {
-        // ИСПРАВЛЕНО: формат с одним знаком
-        totalEl.innerHTML = `<span style="font-size: 14px; color: #64748b; font-weight: normal;">Итого:</span> ${total.toLocaleString(undefined, f)} ֏`;
-    }
-
-    // 8. Сохраняем в глобальную переменную
-    window.currentOrderTotal = total;
-}
-
-
-function openWriteOffModal() {
-    tempItems = {};
-    const today = new Date().toISOString().split('T')[0];
-
-    // ИСПРАВЛЕНО: Правильный синтаксис селектора атрибута
-    const userElement = document.querySelector('.sidebar [sec\\:authentication]');
-    // Экранируем двоеточие обратным слэшем, чтобы JS понял, что это часть имени атрибута
-
-    const currentUser = userElement?.innerText || "ADMIN";
-
-    document.getElementById('modal-title').innerText = "📉 НОВОЕ СПИСАНИЕ ТОВАРА";
-    document.getElementById('order-info').innerHTML = `
-        <div class="modal-info-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; background: #fef2f2; padding: 15px; border-radius: 10px; border: 1px solid #fecdd3;">
-            <div><label>КТО СПИСЫВАЕТ</label><input type="text" id="write-off-user" class="form-control" value="${currentUser}" readonly></div>
-            <div><label>ДАТА СПИСАНИЯ</label><input type="date" id="write-off-date" class="form-control" value="${today}"></div>
-            <div><label>ПРИЧИНА СПИСАНИЯ</label><input type="text" id="write-off-comment" class="form-control" placeholder="Брак / Срок годности"></div>
-        </div>`;
-
-    renderItemsTable(tempItems, true);
-    // Скрываем Итого для списаний
-    const totalEl = document.getElementById('order-total-price');
-    if (totalEl) totalEl.style.display = 'none'; // Правильно скрываем элемент
-
-    document.getElementById('order-footer-actions').innerHTML = `
-        <button class="btn-primary" style="background:#ef4444" onclick="submitWriteOff()">✅ ПОДТВЕРДИТЬ СПИСАНИЕ</button>
-        <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-order-view')">ОТМЕНА</button>`;
-    openModal('modal-order-view');
-}
-
-
-
-// УНИВЕРСАЛЬНЫЙ СБОРЩИК ТОВАРОВ ИЗ ТАБЛИЦЫ
-function collectItemsFromUI() {
-    const items = {};
-    // Проверяем обе возможные таблицы (для создания и для редактирования)
-    const selectors = ['#manual-order-items-body tr', '#order-items-body tr'];
-
-    selectors.forEach(selector => {
-        document.querySelectorAll(selector).forEach(row => {
-            // Случай А: Строка с выпадающим списком (Создание)
-            const select = row.querySelector('.product-select');
-            const qtyInput = row.querySelector('.qty-input-active');
-
-            if (select && select.value && qtyInput) {
-                const qty = parseInt(qtyInput.value);
-                if (qty > 0) items[select.value] = qty;
-            }
-            // Случай Б: Строка с фиксированным ID товара в инпуте (Редактирование)
-            else if (qtyInput && qtyInput.id.includes('input-qty-')) {
-                const pId = qtyInput.id.replace('input-qty-', '');
-                const qty = parseInt(qtyInput.value);
-                if (qty > 0) items[pId] = qty;
-            }
-        });
-    });
-    return items;
-}
-
-
-
-
-
-
-
-//async function saveFullChanges(id) {
-//    const shopInput = document.getElementById('edit-shop');
-//    const shopName = shopInput?.value.trim();
-//    const deliveryDate = document.getElementById('edit-delivery')?.value;
-//
-//    if (!shopName || !deliveryDate) {
-//        return showToast("Заполните магазин и дату!", "info");
-//    }
-//
-//    const itemsToSave = collectItemsFromUI();
-//
-//    if (Object.keys(itemsToSave).length === 0) {
-//        return showToast("Заказ не может быть пустым!", "error");
-//    }
-//
-//
-//
-//    checkAndApplyPromos(itemsToSave, (selectedPromos) => {
-//        const promoMap = {};
-//        selectedPromos.forEach(promo => {
-//            Object.entries(promo.items).forEach(([pId, promoPercent]) => {
-//                if (itemsToSave[pId]) promoMap[pId] = promoPercent;
-//            });
-//        });
-//
-//        // Отправка на бэкенд для редактирования
-//        performEditSubmit(id, shopName, deliveryDate, itemsToSave, promoMap);
-//    });
-//}
-
-
 async function saveFullChanges(id) {
     const shopInput = document.getElementById('edit-shop');
     const shopName = shopInput?.value.trim();
     const deliveryDate = document.getElementById('edit-delivery')?.value;
 
     if (!shopName || !deliveryDate) {
-        return showToast("Заполните магазин и дату!", "info");
+        return showToast("Магазин и дата доставки обязательны", "info");
     }
 
-    const itemsToSave = collectItemsFromUI();
+    // 1. Сбор товаров из UI
+    const itemsToSave = {};
+    document.querySelectorAll('.qty-input-active').forEach(input => {
+        const pId = input.id.replace('input-qty-', '');
+        const val = parseInt(input.value);
+        if (!isNaN(val) && val > 0) {
+            itemsToSave[pId] = val;
+            tempItems[pId] = val;
+        } else {
+            delete tempItems[pId];
+        }
+    });
 
     if (Object.keys(itemsToSave).length === 0) {
-        return showToast("Заказ не может быть пустым!", "error");
+        return showToast("Нельзя сохранить пустой заказ", "info");
     }
 
-    // ВЫЗЫВАЕМ ПРОВЕРКУ АКЦИЙ ОДИН РАЗ ДЛЯ ВСЕГО СПИСКА
-    checkAndApplyPromos(itemsToSave, (selectedPromos) => {
-        const promoMap = {};
+    // Блокируем кнопку сохранения
+    const saveBtn = event?.target;
+    if (saveBtn && saveBtn.tagName === 'BUTTON') saveBtn.disabled = true;
 
-        // Формируем карту акций только для тех товаров, которые выбрал пользователь
+    // 2. ВЫЗЫВАЕМ ПРОВЕРКУ АКЦИЙ (ОТКРОЕТ ОКНО)
+    checkAndApplyPromos(itemsToSave, async (selectedPromos) => {
+
+        // Формируем карту акций для сервера
+        const promoMap = {};
         selectedPromos.forEach(promo => {
             if (promo.items) {
                 Object.entries(promo.items).forEach(([pId, promoPercent]) => {
-                    if (itemsToSave[pId]) {
-                        promoMap[pId] = promoPercent;
-                    }
+                    if (itemsToSave[pId]) promoMap[pId] = promoPercent;
                 });
             }
         });
 
-        // Обновляем глобальный объект, чтобы бэкенд получил верные данные
-        window.currentOrderPromos = promoMap;
+        // 3. ПОДГОТОВКА ДАННЫХ ДЛЯ ОТПРАВКИ
+        const percentInput = document.getElementById('order-discount-percent') || document.getElementById('new-op-percent');
+        let discountPercent = percentInput ? parseFloat(percentInput.value) || 0 : 0;
 
-        // Отправка на бэкенд для редактирования
-        performEditSubmit(id, shopName, deliveryDate, itemsToSave, promoMap);
+        const data = {
+            id: id,
+            shopName: shopName,
+            deliveryDate: deliveryDate,
+            paymentMethod: document.getElementById('edit-payment').value,
+            needsSeparateInvoice: document.getElementById('edit-invoice-type').value === "true",
+            carNumber: document.getElementById('edit-car-number').value,
+            discountPercent: discountPercent,
+            comment: document.getElementById('edit-comment')?.value || "",
+            items: itemsToSave,
+            appliedPromoItems: promoMap // ПЕРЕДАЕМ ВЫБРАННЫЕ АКЦИИ
+        };
+
+        try {
+            // Проверка магазина
+            const checkRes = await fetch(`/api/clients/search-fast?keyword=${encodeURIComponent(shopName)}`);
+            const clients = await checkRes.json();
+            const foundClient = clients.find(c => c.name.toLowerCase() === shopName.toLowerCase());
+
+            if (!foundClient) {
+                shopInput.style.border = "2px solid #ef4444";
+                if (saveBtn) saveBtn.disabled = false;
+                return showToast(`Ошибка: Магазин "${shopName}" не найден!`, "error");
+            }
+            data.shopName = foundClient.name;
+
+            // ФИНАЛЬНЫЙ ЗАПРОС НА СОХРАНЕНИЕ
+            const response = await fetch(`/api/admin/orders/${id}/full-edit`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                let rawMsg = result.message || result.error || "Ошибка сервера";
+                let cleanMessage = rawMsg.replace(/^\d+\s+[A-Z_]+\s+"?|"?$/g, '').trim();
+                showToast(cleanMessage, "error");
+
+                if (cleanMessage.includes("Недостаточно")) {
+                    document.querySelectorAll('#order-items-body tr').forEach(row => {
+                        const productNameInRow = row.cells[0]?.innerText || "";
+                        if (cleanMessage.includes(productNameInRow.trim())) {
+                            row.style.backgroundColor = "#fee2e2";
+                            row.style.border = "2px solid #ef4444";
+                            row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }
+                    });
+                }
+                if (saveBtn) saveBtn.disabled = false;
+                return;
+            }
+
+            showToast("Заказ успешно обновлен", "success");
+            setTimeout(() => { window.location.reload(); }, 800);
+
+        } catch (e) {
+            console.error("Ошибка при сохранении заказа:", e);
+            showToast("Критическая ошибка: " + e.message, "error");
+            if (saveBtn) saveBtn.disabled = false;
+        }
     });
 }
 
+// Универсальный метод отправки изменений
+async function executeEditRequest(data, btn) {
+    try {
+        const response = await fetch(`/api/admin/orders/${data.id}/edit`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('input[name="_csrf"]')?.value || ""
+            },
+            body: JSON.stringify(data)
+        });
 
+        if (response.ok) {
+            showToast("Изменения сохранены", "success");
+            setTimeout(() => location.reload(), 600);
+        } else {
+            const err = await response.json();
+            showToast(err.error || "Ошибка при сохранении", "error");
+            if (btn) { btn.disabled = false; btn.innerText = "💾 Сохранить"; }
+        }
+    } catch (e) {
+        showToast("Ошибка сети", "error");
+        if (btn) { btn.disabled = false; btn.innerText = "💾 Сохранить"; }
+    }
+}
 
 
 
@@ -3133,41 +3181,48 @@ async function saveReturnChanges(id) {
     const shopInput = document.getElementById('edit-ret-shop');
     const shopName = shopInput.value.trim();
 
-    // 1. ЖЕСТКАЯ ВАЛИДАЦИЯ МАГАЗИНА (Как в создании)
+    // 1. ЖЕСТКАЯ ВАЛИДАЦИЯ МАГАЗИНА
     try {
         const checkRes = await fetch(`/api/clients/search-fast?keyword=${encodeURIComponent(shopName)}`);
         const clients = await checkRes.json();
 
-        // Ищем точное совпадение (без учета регистра)
         const foundClient = clients.find(c => c.name.toLowerCase() === shopName.toLowerCase());
 
         if (!foundClient) {
             shopInput.style.border = "2px solid #ef4444";
             shopInput.focus();
-            return showToast(`Ошибка: Магазин "${shopName}" не найден! Выберите из списка.`, "error");
+            return showToast(`Ошибка: Магазин "${shopName}" не найден!`, "error");
         }
 
-        // Если валидация прошла — сбрасываем стили ошибки и используем эталонное имя
         shopInput.style.border = "";
 
-        // 2. Актуализация товаров из инпутов таблицы
-        document.querySelectorAll('.qty-input-active').forEach(input => {
-            const pId = input.id.replace('input-qty-', '');
-            const val = parseInt(input.value);
-            if (!isNaN(val) && val > 0) {
-                tempItems[pId] = val;
-            } else {
-                delete tempItems[pId];
+        // 2. СБОР ТОВАРОВ И КАСТОМНЫХ ЦЕН ИЗ ТАБЛИЦЫ
+        const itemsToSave = {};
+        const itemPricesToSave = {};
+
+        // Проходим по строкам таблицы, чтобы собрать и кол-во, и цену
+        document.querySelectorAll('#order-items-body tr[data-base-price]').forEach(row => {
+            const pId = row.id.replace('row-', '');
+            const qtyInput = row.querySelector('.qty-input-active');
+            const priceInput = row.querySelector('.item-price-input'); // Наш новый инпут цены
+
+            const qty = qtyInput ? parseInt(qtyInput.value) || 0 : 0;
+            // Берем цену из инпута, если его нет (режим просмотра) - из атрибута строки
+            const price = priceInput ? parseFloat(priceInput.value) || 0 : parseFloat(row.dataset.basePrice) || 0;
+
+            if (qty > 0) {
+                itemsToSave[pId] = qty;
+                itemPricesToSave[pId] = price; // Сохраняем индивидуальную цену для товара
             }
         });
 
-        if (Object.keys(tempItems).length === 0) {
+        if (Object.keys(itemsToSave).length === 0) {
             return showToast("Состав возврата не может быть пустым", "info");
         }
 
         const originalReturn = returnsData.find(r => r.id == id);
 
-        // 3. Сбор данных для отправки (используем найденное имя foundClient.name)
+        // 3. Сбор данных для отправки
         const data = {
             id: id,
             shopName: foundClient.name,
@@ -3176,28 +3231,32 @@ async function saveReturnChanges(id) {
             returnReason: document.getElementById('edit-ret-reason').value,
             carNumber: document.getElementById('edit-ret-car').value.trim(),
             comment: document.getElementById('edit-ret-comment').value.trim(),
-            items: tempItems,
+            items: itemsToSave,
+            itemPrices: itemPricesToSave, // ОТПРАВЛЯЕМ КАРТУ КАСТОМНЫХ ЦЕН
             discountPercent: 0
         };
 
         // 4. Отправка на сервер
-        await secureFetch(`/api/admin/returns/${id}/edit`, {
+        const response = await fetch(`/api/admin/returns/${id}/edit`, {
             method: 'PUT',
-            body: data
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
         });
 
-        // 5. Обновление локальных данных
-        if (originalReturn) {
-            originalReturn.carNumber = data.carNumber;
-            originalReturn.comment = data.comment;
-            originalReturn.shopName = data.shopName;
-            originalReturn.returnReason = data.returnReason;
-            originalReturn.items = {...tempItems};
-            originalReturn.discountPercent = 0;
-        }
+        if (response.ok) {
+            // 5. Обновление локальных данных (по желанию, так как ниже reload)
+            if (originalReturn) {
+                originalReturn.items = { ...itemsToSave };
+                originalReturn.itemPrices = { ...itemPricesToSave };
+                originalReturn.shopName = data.shopName;
+            }
 
-        showToast("Возврат успешно сохранен", "success");
-        setTimeout(() => location.reload(), 600);
+            showToast("Возврат успешно сохранен с учетом цен", "success");
+            setTimeout(() => location.reload(), 600);
+        } else {
+            const err = await response.json();
+            showToast(err.error || "Ошибка сохранения", "error");
+        }
 
     } catch (e) {
         console.error("Ошибка при сохранении возврата:", e);
@@ -3211,8 +3270,12 @@ function enableReturnEdit(id) {
     const ret = returnsData.find(r => r.id == id);
     if (!ret) return showToast("Ошибка: Возврат не найден", "error");
 
-    // 2. Синхронизация состава товаров
+    // 2. СИНХРОНИЗАЦИЯ ТОВАРОВ И ЦЕН
     tempItems = syncTempItems(ret.items);
+
+    // ИСПРАВЛЕНО: Копируем сохраненные цены в буфер редактирования
+    // Если цен в документе еще нет (старый возврат), renderItemsTable возьмет базовые
+    window.tempItemPrices = ret.itemPrices ? { ...ret.itemPrices } : {};
 
     // КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: СБРОС ПРОЦЕНТА
     const percentInput = document.getElementById('order-discount-percent') || document.getElementById('new-op-percent');
@@ -3232,7 +3295,6 @@ function enableReturnEdit(id) {
         <div class="modal-info-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; background: #fff1f2; padding: 15px; border-radius: 10px; border: 1px solid #fecdd3;">
             <div style="grid-column: span 2;">
                 <label style="font-size:11px; font-weight:800; color:#9f1239;">МАГАЗИН (Поиск)</label>
-                <!-- ИСПРАВЛЕНО: input + datalist вместо select -->
                 <input type="text" id="edit-ret-shop" class="form-control"
                        list="edit-ret-clients-datalist"
                        value="${ret.shopName}"
@@ -3265,13 +3327,12 @@ function enableReturnEdit(id) {
                 <input type="text" id="edit-ret-comment" class="form-control" value="${ret.comment || ''}" placeholder="Заметка...">
             </div>
         </div>
-        <!-- Скрытое поле для гарантии отсутствия скидок -->
         <input type="hidden" id="order-discount-percent" value="0">`;
 
-    // 4. АКТИВАЦИЯ ПОИСКА: Инициализируем живой поиск для нового поля
+    // 4. АКТИВАЦИЯ ПОИСКА
     initSmartClientSearch('edit-ret-shop', 'edit-ret-clients-datalist');
 
-    // 5. Рендерим состав товаров
+    // 5. Рендерим состав товаров (второй параметр true включает редактирование и input-ы для цен)
     renderItemsTable(tempItems, true);
 
     document.getElementById('order-footer-actions').innerHTML = `
@@ -3286,12 +3347,13 @@ function openReturnDetails(id) {
     if (!ret) return showToast("Возврат не найден", "error");
 
     tempItems = syncTempItems(ret.items);
+    window.tempItemPrices = ret.itemPrices ? { ...ret.itemPrices } : {};
+
     const isConfirmed = ret.status === 'CONFIRMED';
 
-    // --- КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: СБРОС ПРОЦЕНТА ДЛЯ ВОЗВРАТА ---
     const percentInput = document.getElementById('order-discount-percent') || document.getElementById('new-op-percent');
     if (percentInput) {
-        percentInput.value = "0"; // Обнуляем, чтобы renderItemsTable не видела остатков от заказов
+        percentInput.value = "0";
     }
 
     document.getElementById('modal-title').innerHTML = `
@@ -3302,38 +3364,59 @@ function openReturnDetails(id) {
         <span class="badge" style="margin-left:5px; background-color: #64748b;">ВОЗВРАТ №${ret.id}</span>
     `;
 
-    // Сетка: Верх (Магазин, Менеджер, Авто), Низ (Причина, Доставка, Коммент)
     document.getElementById('order-info').innerHTML = `
         <div class="modal-info-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; background-color: #fff1f2; padding: 15px; border-radius: 10px; margin-top: 15px; border: 1px solid #fecdd3;">
             <div><small style="color: #9f1239; font-weight: 700;">МАГАЗИН:</small><br><b>${ret.shopName}</b></div>
             <div><small style="color: #9f1239; font-weight: 700;">МЕНЕДЖЕР:</small><br><b>${ret.managerId || '---'}</b></div>
             <div><small style="color: #9f1239; font-weight: 700;">НОМЕР АВТО:</small><br><b>${ret.carNumber || '---'}</b></div>
-
             <div style="border-top: 1px solid #fecdd3; padding-top: 10px;"><small style="color: #9f1239; font-weight: 700;">ПРИЧИНА:</small><br><b style="color:#ef4444;">${translateReason(ret.returnReason)}</b></div>
             <div style="border-top: 1px solid #fecdd3; padding-top: 10px;"><small style="color: #9f1239; font-weight: 700;">ДОСТАВКА:</small><br><b>${formatDate(ret.returnDate || ret.createdAt).split(' ')[0]}</b></div>
             <div style="border-top: 1px solid #fecdd3; padding-top: 10px;"><small style="color: #9f1239; font-weight: 700;">КОММЕНТАРИЙ:</small><br><i>${ret.comment || '---'}</i></div>
         </div>
-        <!-- Скрытое поле для страховки -->
         <input type="hidden" id="order-discount-percent" value="0">
     `;
 
-    // Теперь renderItemsTable увидит в заголовке слово "ВОЗВРАТ"
-    // и в поле "order-discount-percent" значение 0.
     renderItemsTable(tempItems, false);
 
+    // --- ИСПРАВЛЕНИЕ ОТОБРАЖЕНИЯ СУММЫ И КНОПОК ---
     const footer = document.getElementById('order-footer-actions');
-    const commonBtns = `<button class="btn-primary" style="background-color:#475569" onclick="printReturn(${ret.id})">🖨 Печать</button>
-                        <button class="btn-primary" style="background-color:#64748b" onclick="closeModal('modal-order-view')">Закрыть</button>`;
+    const totalEl = document.getElementById('order-total-price');
 
-    footer.innerHTML = !isConfirmed ? `
-        <button class="btn-primary" style="background-color:#10b981" onclick="confirmReturn(${ret.id})">✅ Провести</button>
-        <button class="btn-primary" onclick="enableReturnEdit(${ret.id})">✏️ Изменить</button>
-        <button class="btn-primary" style="background-color:#ef4444" onclick="deleteReturnOrder(${ret.id})">❌ Удалить</button>
-        ${commonBtns}` : `<div style="flex: 1; color: #166534; font-weight: bold;">✓ Операция проведена</div>${commonBtns}`;
+    // Настраиваем блок Итого, чтобы он не переносился и всегда был слева
+    if (totalEl) {
+        totalEl.style.display = 'flex';
+        totalEl.style.alignItems = 'center';
+        totalEl.style.whiteSpace = 'nowrap';
+        totalEl.style.marginRight = 'auto'; // Отталкивает кнопки вправо
+    }
+
+    const commonBtns = `
+        <button class="btn-primary" style="background-color:#475569" onclick="printReturn(${ret.id})">🖨 Печать</button>
+        <button class="btn-primary" style="background-color:#64748b" onclick="closeModal('modal-order-view')">Закрыть</button>
+    `;
+
+    if (!isConfirmed) {
+        footer.innerHTML = `
+            <button class="btn-primary" style="background-color:#10b981" onclick="confirmReturn(${ret.id})">✅ Провести</button>
+            <button class="btn-primary" onclick="enableReturnEdit(${ret.id})">✏️ Изменить</button>
+            <button class="btn-primary" style="background-color:#ef4444" onclick="deleteReturnOrder(${ret.id})">❌ Удалить</button>
+            ${commonBtns}
+        `;
+    } else {
+        // Убираем flex:1 у статуса, чтобы он не занимал всё место и не разрывал строку
+        footer.innerHTML = `
+            <div style="color: #166534; font-weight: bold; margin-right: 15px; white-space: nowrap;">✓ Операция проведена</div>
+            ${commonBtns}
+        `;
+    }
+
+    // Гарантируем выравнивание всего футера
+    footer.style.display = 'flex';
+    footer.style.justifyContent = 'flex-end';
+    footer.style.alignItems = 'center';
 
     openModal('modal-order-view');
 }
-
 
 
 function handleClientChangeInEdit(clientName) {
@@ -3359,7 +3442,6 @@ function handleClientChangeInEdit(clientName) {
         }
     }
 }
-
 
 
 async function saveClientChanges(id) {
@@ -3418,7 +3500,6 @@ async function saveClientChanges(id) {
 }
 
 
-
 function applyClientCategoryFilter(category) {
     // Получаем текущие параметры URL
     const url = new URL(window.location.href);
@@ -3431,8 +3512,6 @@ function applyClientCategoryFilter(category) {
     // Переходим по новой ссылке
     window.location.href = url.toString();
 }
-
-
 
 
 function filterTable(inputId, tableBodyId) {
@@ -3671,7 +3750,6 @@ function initDeliveryDateLogic() {
 }
 
 
-// Функция открытия окна акции
 function openPromoModal(productId) {
     const p = productsData.find(prod => prod.id == productId);
     if (!p) return;
@@ -3708,7 +3786,6 @@ function openPromoModal(productId) {
     openModal('modal-order-view');
 }
 
-// Сохранение акции
 async function savePromo(productId) {
     const data = {
         productId: productId,
@@ -3730,7 +3807,6 @@ async function savePromo(productId) {
     }
 }
 
-// Функция обратного отсчета дней
 function updatePromoTimers() {
     const today = new Date();
     // Предположим, у нас есть данные об акциях
@@ -3756,7 +3832,6 @@ function updatePromoTimers() {
         }
     });
 }
-
 
 
 function openCreatePromoModal() {
@@ -3787,7 +3862,6 @@ function openCreatePromoModal() {
     `;
     openModal('modal-order-view');
 }
-
 
 
 async function checkPromosBeforeSave(items) {
@@ -3823,7 +3897,6 @@ async function checkPromosBeforeSave(items) {
     }
 }
 
-// Загрузка акций по фильтру периода
 async function loadPromosByPeriod() {
     const startInput = document.getElementById('promo-filter-start');
     const endInput = document.getElementById('promo-filter-end');
@@ -3876,7 +3949,6 @@ async function loadPromosByPeriod() {
     }
 }
 
-// Дополнительная функция для отрисовки (если она еще не полная)
 function renderPromosList(promos) {
     const tbody = document.getElementById('promos-table-body');
     if (promos.length === 0) {
@@ -3905,7 +3977,6 @@ function renderPromosList(promos) {
     `).join('');
 }
 
-// Вспомогательная функция для стилей статуса
 function getStatusClass(status) {
     switch(status) {
         case 'ACTIVE': return 'bg-success';
@@ -3949,8 +4020,6 @@ async function deletePromoAction(id) {
         }
     });
 }
-
-
 
 
 async function openPromoDetails(id) {
@@ -4018,28 +4087,45 @@ async function checkAndApplyPromos(orderItems, onApplied) {
     const overlay = document.getElementById('promo-checker-overlay');
     const container = document.getElementById('promo-list-container');
 
+    // Кнопки для сброса состояния при ошибке
+    const saveBtn = document.querySelector('button[onclick*="saveFullChanges"], button[onclick*="saveNewManualOperation"]');
+
     try {
         const response = await fetch('/api/admin/promos/check-active-for-items', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('input[name="_csrf"]')?.value || ""
+            },
             body: JSON.stringify(productIds)
         });
+
+        if (!response.ok) throw new Error("Server error");
 
         const activePromos = await response.json();
 
         // 1. Если акций нет — сразу сохраняем
-        if (!activePromos || activePromos.length === 0) return onApplied([]);
+        if (!activePromos || activePromos.length === 0) {
+            return onApplied([]);
+        }
 
-        // 2. Рендерим компактные карточки
+        // 2. Рендерим карточки с динамическим стилем свитча
         container.innerHTML = activePromos.map(p => `
-            <label class="promo-card" for="p-${p.id}">
-                <div style="flex-grow: 1;">
-                    <div style="font-weight: 700; font-size: 13px; color: #1e293b;">${p.title}</div>
-                    <div style="font-size: 11px; color: #64748b;">Заменяет скидку магазина</div>
-                </div>
-                <input type="checkbox" class="promo-checkbox" id="p-${p.id}" data-id="${p.id}" checked style="display: none;">
-                <div class="custom-switch"></div>
-            </label>
+            <div style="margin-bottom: 8px;">
+                <input type="checkbox" class="promo-checkbox" id="p-${p.id}" data-id="${p.id}" checked
+                       onchange="this.nextElementSibling.querySelector('.custom-switch-ui').style.background = this.checked ? '#6366f1' : '#cbd5e1';
+                                 this.nextElementSibling.querySelector('.switch-circle').style.right = this.checked ? '2px' : '22px';"
+                       style="display:none;">
+                <label class="promo-card" for="p-${p.id}" style="display: flex; align-items: center; justify-content: space-between; padding: 10px; background: #f8fafc; border-radius: 12px; cursor: pointer; border: 1px solid #e2e8f0; transition: 0.2s;">
+                    <div style="flex-grow: 1;">
+                        <div style="font-weight: 700; font-size: 13px; color: #1e293b;">${p.title}</div>
+                        <div style="font-size: 11px; color: #f59e0b;">🔥 Применяет спец. цены</div>
+                    </div>
+                    <div class="custom-switch-ui" style="width: 40px; height: 20px; background: #6366f1; border-radius: 20px; position: relative; transition: 0.3s;">
+                        <div class="switch-circle" style="width: 16px; height: 16px; background: white; border-radius: 50%; position: absolute; right: 2px; top: 2px; transition: 0.3s;"></div>
+                    </div>
+                </label>
+            </div>
         `).join('');
 
         // 3. Логика кнопок
@@ -4056,11 +4142,17 @@ async function checkAndApplyPromos(orderItems, onApplied) {
             onApplied([]);
         };
 
-        // Показываем оверлей
         overlay.style.display = 'flex';
 
     } catch (e) {
-        console.error("Promo check error:", e);
+        console.error("Отказ проверки акций:", e);
+        // Сбрасываем визуальное состояние кнопок сохранения
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            if (saveBtn.innerHTML.includes("Проверка")) {
+                saveBtn.innerHTML = saveBtn.getAttribute('onclick').includes('saveFullChanges') ? "💾 Сохранить" : "Создать";
+            }
+        }
         onApplied([]);
     }
 }
@@ -4191,8 +4283,6 @@ function enablePromoEdit(id) {
     `;
 }
 
-
-// 1. Основная функция отрисовки таблицы в акции
 function renderPromoItemsTable(isEdit) {
     const body = document.getElementById('order-items-body');
     if (!body) return;
@@ -4256,7 +4346,6 @@ function renderPromoItemsTable(isEdit) {
     body.innerHTML = html;
 }
 
-// 2. Вспомогательная функция: Обновление процента в памяти
 function updatePromoPercent(pId, value) {
     let val = parseFloat(value);
     if (isNaN(val) || val < 0) val = 0;
@@ -4264,7 +4353,6 @@ function updatePromoPercent(pId, value) {
     tempPromoItems[pId] = val;
 }
 
-// 3. Вспомогательная функция: Добавление строки
 function addPromoItemRow() {
     const select = document.getElementById('add-promo-p-id');
     const pId = select.value;
@@ -4279,15 +4367,11 @@ function addPromoItemRow() {
     showToast("Товар добавлен в список акции", "success");
 }
 
-// 4. Вспомогательная функция: Удаление строки
 function deletePromoItem(pId) {
     delete tempPromoItems[pId];
     renderPromoItemsTable(true);
 }
 
-
-
-//3
 function printPromoAct(promoId) {
     const promo = currentPromoData;
     if (!promo || promo.id != promoId) return showToast("Ошибка данных для печати", "error");
@@ -4378,8 +4462,6 @@ function printPromoAct(promoId) {
     printWindow.document.close();
 }
 
-
-
 function saveOrderWithPromos(selectedPromos, baseData, submitFunction) {
     const promoMap = {};
 
@@ -4400,7 +4482,6 @@ function saveOrderWithPromos(selectedPromos, baseData, submitFunction) {
     submitFunction(baseData);
 }
 
-// Вспомогательная функция для обновления базовой цены в строке при выборе товара
 function updateRowBasePrice(selectEl, rowId) {
     const selectedOption = selectEl.options[selectEl.selectedIndex];
     const price = selectedOption.dataset.price || 0;
@@ -4449,7 +4530,6 @@ function addItemRowToOrder() {
 }
 
 
-
 function updateRowPrice(selectEl, rowId) {
     const selected = selectEl.options[selectEl.selectedIndex];
     const price = selected.dataset.price || 0;
@@ -4458,17 +4538,18 @@ function updateRowPrice(selectEl, rowId) {
     recalculateAllPricesByPercent();
 }
 
-//4
 function recalculateAllPricesByPercent() {
     const percentInput = document.getElementById('new-op-percent') || document.getElementById('order-discount-percent');
     let percent = percentInput ? parseFloat(percentInput.value) : 0;
     if (isNaN(percent)) percent = 0;
 
-    // Настройки формата: всегда 1 знак после запятой
+    // Настройки формата: всегда 1 знак после запятой для вывода текста
     const f = { minimumFractionDigits: 1, maximumFractionDigits: 1 };
 
     // Определяем активную таблицу (создание или редактирование)
-    const isCreateModal = document.getElementById('modal-order-create').style.display === 'block';
+    const modalCreate = document.getElementById('modal-order-create');
+    const isCreateModal = modalCreate && modalCreate.style.display === 'block';
+
     const bodyId = isCreateModal ? 'manual-order-items-body' : 'order-items-body';
     const totalId = isCreateModal ? 'manual-order-total-price' : 'order-total-price';
 
@@ -4480,35 +4561,38 @@ function recalculateAllPricesByPercent() {
         const qtyInput = row.querySelector('.qty-input-active');
         const qty = qtyInput ? parseInt(qtyInput.value) || 0 : 0;
 
-        // --- ИСПРАВЛЕННЫЙ РАСЧЕТ (0.1 точность) ---
-        // Цена со скидкой
-        const modifiedPrice = parseFloat((basePrice * (1 - percent / 100)).toFixed(1));
-        // Сумма строки
-        const rowSum = parseFloat((modifiedPrice * qty).toFixed(1));
+        // --- ПРАВИЛЬНЫЙ РАСЧЕТ (HALF_UP) ---
+        // 1. Цена со скидкой за 1 единицу
+        const modifiedPrice = roundHalfUp(basePrice * (1 - percent / 100));
+
+        // 2. Сумма строки (Цена * Кол-во)
+        const rowSum = roundHalfUp(modifiedPrice * qty);
 
         const priceCell = row.querySelector('.item-price-cell');
         const subtotalCell = row.querySelector('.item-subtotal-cell') || row.querySelector(`[id^="total-row-"]`);
 
-        // ИСПРАВЛЕНО: Вывод с одним знаком после запятой
-        if (priceCell) priceCell.innerText = modifiedPrice.toLocaleString(undefined, f) + " ֏";
-        if (subtotalCell) subtotalCell.innerText = rowSum.toLocaleString(undefined, f) + " ֏";
+        // Вывод в интерфейс с разделителями тысяч и одним знаком
+        if (priceCell) {
+            priceCell.innerText = modifiedPrice.toLocaleString(undefined, f) + " ֏";
+        }
+        if (subtotalCell) {
+            subtotalCell.innerText = rowSum.toLocaleString(undefined, f) + " ֏";
+        }
 
         totalOrderSum += rowSum;
     });
 
-    // Округляем итоговую сумму
-    totalOrderSum = parseFloat(totalOrderSum.toFixed(1));
+    // Округляем финальную сумму заказа
+    totalOrderSum = roundHalfUp(totalOrderSum);
 
     const totalEl = document.getElementById(totalId);
     if (totalEl) {
-        // ИСПРАВЛЕНО: Вывод итога с одним знаком
         totalEl.innerHTML = `<span style="font-size: 14px; color: #64748b; font-weight: normal;">Итого:</span> ${totalOrderSum.toLocaleString(undefined, f)} ֏`;
     }
 
-    // Обновляем глобальную переменную, если она используется
+    // Синхронизируем с глобальной переменной
     window.currentOrderTotal = totalOrderSum;
 }
-
 
 
 document.addEventListener("DOMContentLoaded", async () => {

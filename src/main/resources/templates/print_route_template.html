@@ -3,58 +3,64 @@
 <head>
     <meta charset="UTF-8">
     <style>
-        body { font-family: 'Inter', sans-serif; font-size: 12px; }
+        body { font-family: 'Inter', sans-serif; font-size: 12px; margin: 0; }
         table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        th, td { border: 1px solid #000; padding: 8px; text-align: left; }
-        .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; }
-        .summary { margin-top: 20px; font-weight: bold; text-align: right; font-size: 14px; }
+        th, td { border: 1px solid #000; padding: 8px; text-align: left; vertical-align: top; }
+        th { background-color: #f2f2f2 !important; -webkit-print-color-adjust: exact; }
+        .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 10px; }
+        .summary { margin-top: 20px; font-weight: bold; text-align: right; font-size: 14px; border-top: 2px solid #000; padding-top: 5px; }
 
         @media print {
-    @page {
-        margin: 0; /* Убирает отступы, где печатаются колонтитулы */
-    }
-    body {
-        margin: 1.5cm; /* Добавляет отступ уже самому контенту, чтобы текст не прилипал к краю листа */
-    }
-}
-
+            @page { margin: 0; }
+            body { margin: 1.5cm; }
+        }
     </style>
 </head>
 <body>
-<div class="header">
-    <h2 th:text="${title}"></h2>
-    <p>Дата доставки: <span th:text="${date}"></span> | Печать: <span th:text="${#temporals.format(#temporals.createNow(), 'HH:mm')}"></span></p>
+<div th:if="${orders != null}">
+    <div class="header">
+        <h2 th:text="${title != null ? title : 'МАРШРУТНЫЙ ЛИСТ'}"></h2>
+        <p>Менеджер: <b th:text="${managerId != null ? managerId : '---'}"></b> |
+            Дата доставки: <span th:text="${date != null ? date : '---'}"></span> |
+            Печать: <span th:text="${#temporals.format(#temporals.createNow(), 'HH:mm')}"></span></p>
+    </div>
+    <table>
+        <thead>
+        <tr>
+            <th style="width: 30px;">№</th>
+            <th>Магазин / Адрес</th>
+            <th style="width: 100px;">Сумма</th>
+            <th style="width: 90px;">Оплата</th>
+            <th>Комментарий</th>
+            <th style="width: 100px;">Подпись</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="o, stat : ${orders}" th:if="${o != null}">
+            <td th:text="${stat.count}"></td>
+            <td>
+                <strong th:text="${o.shopName != null ? o.shopName : '---'}"></strong><br>
+                <!-- БЕЗОПАСНОЕ ПОЛУЧЕНИЕ АДРЕСА -->
+                <small th:with="clientOpt=${clientRepo.findByName(o.shopName)}"
+                       th:text="${clientOpt != null && clientOpt.isPresent() ? clientOpt.get().address : 'Адрес не найден'}"></small>
+            </td>
+            <td th:text="${#numbers.formatDecimal(o.totalAmount != null ? o.totalAmount : 0, 1, 'WHITESPACE', 0, 'POINT') + ' ֏'}"></td>
+            <td th:text="${o.paymentMethod != null ? o.paymentMethod.displayName : '---'}"></td>
+            <td th:text="${o.comment}"></td>
+            <td></td>
+        </tr>
+        <tr th:if="${#lists.isEmpty(orders)}">
+            <td colspan="6" style="text-align: center; padding: 20px;">Нет заказов на выбранную дату</td>
+        </tr>
+        </tbody>
+    </table>
+    <div class="summary">
+        ИТОГО К СДАЧЕ: <span th:text="${#numbers.formatDecimal(routeTotal != null ? routeTotal : 0, 1, 'WHITESPACE', 0, 'POINT') + ' ֏'}"></span>
+    </div>
 </div>
-<table>
-    <thead>
-    <tr>
-        <th>№</th>
-        <th>Магазин / Адрес</th>
-        <th>Сумма</th>
-        <th>Оплата</th>
-        <th>Комментарий</th>
-        <th>Подпись</th>
-    </tr>
-    </thead>
-    <tbody>
-    <tr th:each="o, stat : ${orders}">
-        <td th:text="${stat.index + 1}"></td>
-        <td>
-            <strong th:text="${o.shopName}"></strong><br>
-            <!-- Безопасное получение адреса через сохраненный в модели репозиторий -->
-            <small th:text="${clientRepo.findByName(o.shopName).isPresent() ? clientRepo.findByName(o.shopName).get().address : 'Адрес не указан'}"></small>
-        </td>
 
-
-        <td th:text="${#numbers.formatInteger(o.totalAmount, 1, 'WHITESPACE') + ' ֏'}"></td>
-        <td th:text="${o.paymentMethod.displayName}"></td>
-        <td th:text="${o.comment}"></td>
-        <td style="width: 100px;"></td>
-    </tr>
-    </tbody>
-</table>
-<div class="summary">
-    ИТОГО К СДАЧЕ: <span th:text="${#numbers.formatInteger(routeTotal, 1, 'WHITESPACE') + ' ֏'}"></span>
+<div th:if="${orders == null}" style="text-align: center; padding: 50px;">
+    <h2>Маршрут не сформирован</h2>
 </div>
 </body>
 </html>
