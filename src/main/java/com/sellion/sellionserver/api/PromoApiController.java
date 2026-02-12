@@ -1,7 +1,6 @@
 package com.sellion.sellionserver.api;
 
 import com.sellion.sellionserver.entity.PromoAction;
-import com.sellion.sellionserver.repository.ProductRepository;
 import com.sellion.sellionserver.repository.PromoActionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -18,6 +17,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
+
 @RestController
 @RequestMapping("/api/admin/promos")
 @RequiredArgsConstructor
@@ -25,7 +25,6 @@ import java.util.stream.Collectors;
 public class PromoApiController {
 
     private final PromoActionRepository promoRepository;
-    private final ProductRepository productRepository;
 
     @GetMapping("/filter")
     public List<PromoAction> getPromosByPeriod(
@@ -141,24 +140,6 @@ public class PromoApiController {
         return ResponseEntity.ok(Map.of("message", "Акция подтверждена"));
     }
 
-//    @PostMapping("/check-active-for-items")
-//    public List<PromoAction> checkActiveForItems(@RequestBody Map<String, Object> payload) {
-//        LocalDate today = LocalDate.now();
-//
-//        // Извлекаем данные из запроса
-//        List<Integer> productIdsInt = (List<Integer>) payload.get("productIds");
-//        List<Long> productIds = productIdsInt.stream().map(Long::valueOf).collect(Collectors.toList());
-//        String selectedManagerId = (String) payload.get("managerId");
-//
-//        // Ищем акции ТОЛЬКО для того менеджера, которого выбрали в списке на экране
-//        List<PromoAction> managerPromos = promoRepository.findActivePromosForManager(today, selectedManagerId);
-//
-//        // Фильтруем по товарам
-//        return managerPromos.stream()
-//                .filter(promo -> promo.getItems().keySet().stream().anyMatch(productIds::contains))
-//                .collect(Collectors.toList());
-//    }
-
 
     @PostMapping("/check-active-for-items")
     public List<PromoAction> checkActiveForItems(@RequestBody Object input, Principal principal) {
@@ -177,8 +158,7 @@ public class PromoApiController {
             if (principal != null) {
                 managerId = principal.getName();
             }
-        }
-        else if (input instanceof Map) {
+        } else if (input instanceof Map) {
             // ЭТО НОВАЯ ВЕБ-ПАНЕЛЬ (прислала {"productIds": [...], "managerId": "..."})
             Map<?, ?> payload = (Map<?, ?>) input;
 
@@ -199,7 +179,7 @@ public class PromoApiController {
 
         // 3. ЛОГИКА ФИЛЬТРАЦИИ (как мы договорились)
         boolean isAdmin = managerId.equalsIgnoreCase("ADMIN") ||
-                managerId.equalsIgnoreCase("admin") ||
+                managerId.equalsIgnoreCase("OPERATOR") ||
                 managerId.equalsIgnoreCase("Офис");
 
         List<PromoAction> activePromos;
@@ -214,8 +194,6 @@ public class PromoApiController {
                 .filter(promo -> promo.getItems().keySet().stream().anyMatch(productIds::contains))
                 .collect(Collectors.toList());
     }
-
-
 
 
     // 6. Удаление (с проверкой прав доступа)
