@@ -1198,3 +1198,30 @@ body {
 #users-table-body tr:hover {
     background-color: #f8fafc !important;
 }
+@keyframes blink-red {
+    0% { background-color: #ef4444; color: white; }
+    50% { background-color: transparent; color: #ef4444; }
+    100% { background-color: #ef4444; color: white; }
+}
+
+.last-day-alert {
+    animation: blink-red 1.5s infinite;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-weight: 800;
+}
+
+.input-group-custom {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+            @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+            .promo-card { display: flex; align-items: center; padding: 12px; background: #f8fafc; border-radius: 14px; margin-bottom: 8px; border: 1px solid #f1f5f9; cursor: pointer; transition: 0.2s; }
+            .promo-card:hover { border-color: #6366f1; background: #eff6ff; }
+            .promo-card.selected { border-color: #6366f1; background: #eff6ff; }
+            .custom-switch { width: 36px; height: 20px; background: #cbd5e1; border-radius: 20px; position: relative; transition: 0.3s; flex-shrink: 0; }
+            .custom-switch::after { content: ''; position: absolute; width: 16px; height: 16px; background: white; border-radius: 50%; top: 2px; left: 2px; transition: 0.3s; }
+            .promo-checkbox:checked + .custom-switch { background: #6366f1; }
+            .promo-checkbox:checked + .custom-switch::after { left: 18px; }

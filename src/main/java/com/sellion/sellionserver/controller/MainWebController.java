@@ -36,6 +36,7 @@ public class MainWebController {
     private final InvoiceRepository invoiceRepository;
     private final AuditLogRepository auditLogRepository;
     private final ManagerTargetRepository managerTargetRepository;
+    private final PromoActionRepository promoRepository;
 
     @GetMapping
     public String showDashboard(
@@ -51,6 +52,9 @@ public class MainWebController {
             @RequestParam(value = "invoiceEnd", required = false) String invoiceEnd,
             @RequestParam(value = "invoiceManager", required = false) String invoiceManager,
             @RequestParam(value = "invoiceStatus", required = false) String invoiceStatus,
+
+            @RequestParam(value = "promoStart", required = false) String promoStart,
+            @RequestParam(value = "promoEnd", required = false) String promoEnd,
 
             @RequestParam(value = "orderManagerId", required = false) String orderManagerId,
             @RequestParam(value = "returnManagerId", required = false) String returnManagerId,
@@ -92,9 +96,10 @@ public class MainWebController {
                 : orderRepository.findOrdersBetweenDates(oStartDT, oEndDT);
 
         BigDecimal totalOrdersSum = allOrdersForPeriod.stream()
-                .filter(o -> o != null && o.getStatus() != OrderStatus.CANCELLED && o.getType() != OrderType.WRITE_OFF)
+                .filter(o -> o != null && o.getStatus() != OrderStatus.CANCELLED)
                 .map(o -> o.getTotalAmount() != null ? o.getTotalAmount() : BigDecimal.ZERO)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                .setScale(1, RoundingMode.HALF_UP);
 
         BigDecimal rawSales = totalOrdersSum;
         BigDecimal rawPurchaseCost = allOrdersForPeriod.stream()
@@ -112,7 +117,8 @@ public class MainWebController {
                 .map(r -> r.getTotalAmount() != null ? r.getTotalAmount() : BigDecimal.ZERO)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        BigDecimal netProfitBD = rawSales.subtract(rawPurchaseCost).subtract(totalReturnsSum).setScale(0, RoundingMode.HALF_UP);
+        BigDecimal netProfitBD = rawSales.subtract(rawPurchaseCost).subtract(totalReturnsSum)
+                .setScale(1, RoundingMode.HALF_UP);
 
         // --- 4. ОБЩАЯ СТАТИСТИКА И СЧЕТА (ПАГИНАЦИЯ + ФИЛЬТРЫ) ---
         BigDecimal totalInvoiceDebt = Optional.ofNullable(invoiceRepository.calculateTotalDebt()).orElse(BigDecimal.ZERO);
@@ -147,6 +153,26 @@ public class MainWebController {
             managerStats.put(mName, dto);
         }
 
+
+        // Если даты не пришли в URL, ставим текущий месяц
+        LocalDate pStart = (promoStart != null && !promoStart.isEmpty())
+                ? LocalDate.parse(promoStart)
+                : LocalDate.now().withDayOfMonth(1);
+
+        LocalDate pEnd = (promoEnd != null && !promoEnd.isEmpty())
+                ? LocalDate.parse(promoEnd)
+                : LocalDate.now().withDayOfMonth(LocalDate.now().lengthOfMonth());
+
+        // Отдаем акции именно за этот период
+        model.addAttribute("promos", promoRepository.findByPeriod(pStart, pEnd));
+
+        // ПРИНЦИПИАЛЬНО: Отдаем даты обратно, чтобы инпуты их не теряли
+        model.addAttribute("promoStartDefault", pStart.toString());
+        model.addAttribute("promoEndDefault", pEnd.toString());
+
+
+
+
         addModel(page, orderManagerId, returnManagerId, model, ordersPage, totalOrdersSum, rawSales, rawPurchaseCost, netProfitBD, avgCheck, limitedLogs, invoicesList, totalInvoiceDebt, totalPaidSum, startD, endD, allReturns, totalReturnsSum, startR, endR);
 
         addInvModel(invoicePage, invoiceManager, invoiceStatus, model, invoicesList, invoicesPage, invStartD, invEndD);
@@ -173,10 +199,10 @@ public class MainWebController {
         model.addAttribute("totalOrdersCount", ordersPage.getTotalElements());
 
         model.addAttribute("totalOrdersSum", totalOrdersSum);
-        model.addAttribute("totalSales", rawSales.setScale(0, RoundingMode.HALF_UP));
-        model.addAttribute("totalPurchaseCost", rawPurchaseCost.setScale(0, RoundingMode.HALF_UP));
+        model.addAttribute("totalSales", rawSales.setScale(1, RoundingMode.HALF_UP));
+        model.addAttribute("totalPurchaseCost", rawPurchaseCost.setScale(1, RoundingMode.HALF_UP));
         model.addAttribute("netProfit", netProfitBD);
-        model.addAttribute("avgCheck", avgCheck);
+        model.addAttribute("avgCheck", avgCheck.setScale(1, RoundingMode.HALF_UP));
         model.addAttribute("auditLogs", limitedLogs);
 
         model.addAttribute("invoices", invoices);

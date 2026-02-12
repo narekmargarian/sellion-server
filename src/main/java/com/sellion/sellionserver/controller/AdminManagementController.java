@@ -45,17 +45,21 @@ public class AdminManagementController {
     @PutMapping("/orders/{id}/full-edit")
     @Transactional(rollbackFor = Exception.class)
     public ResponseEntity<?> fullEditOrder(@PathVariable Long id, @RequestBody Map<String, Object> payload) {
+        // 1. Поиск заказа
         Order order = orderRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ не найден: " + id));
 
+        // Запрет редактирования, если уже есть счет
         if (order.getInvoiceId() != null) {
             return ResponseEntity.badRequest().body(Map.of("error", "Заказ со счетом нельзя менять!"));
         }
 
-        // 1. Возврат старых товаров на склад
-        stockService.returnItemsToStock(order.getItems(), "Корректировка состава заказа #" + id, "ADMIN");
+        // 2. ВОЗВРАТ СТАРЫХ ТОВАРОВ НА СКЛАД
+        if (order.getItems() != null && !order.getItems().isEmpty()) {
+            stockService.returnItemsToStock(order.getItems(), "Корректировка (начало) состава заказа #" + id, "ADMIN");
+        }
 
-        // 2. Обновление полей
+        // 3. Обновление базовых полей заказа
         order.setShopName((String) payload.get("shopName"));
 
         if (payload.containsKey("discountPercent")) {
@@ -76,49 +80,96 @@ public class AdminManagementController {
         order.setCarNumber((String) payload.get("carNumber"));
         order.setComment((String) payload.get("comment"));
 
-        // 3. Конвертация товаров
-        Map<Long, Integer> newItems = new HashMap<>();
+        // 4. ПОЛУЧЕНИЕ АКЦИЙ
+        Map<Long, BigDecimal> promoItemsMap = new HashMap<>();
+        if (payload.get("appliedPromoItems") instanceof Map) {
+            Map<?, ?> rawPromo = (Map<?, ?>) payload.get("appliedPromoItems");
+            rawPromo.forEach((k, v) -> promoItemsMap.put(Long.valueOf(k.toString()), new BigDecimal(v.toString())));
+        }
+
+        // 5. КОНВЕРТАЦИЯ НОВОГО СОСТАВА
+        Map<Long, Integer> newItemsMap = new HashMap<>();
         Object itemsObj = payload.get("items");
         if (itemsObj instanceof Map) {
-            @SuppressWarnings("unchecked")
-            Map<Object, Object> rawItems = (Map<Object, Object>) itemsObj;
+            Map<?, ?> rawItems = (Map<?, ?>) itemsObj;
             rawItems.forEach((key, value) -> {
                 try {
                     Long productId = Long.valueOf(key.toString());
                     Integer qty = (value instanceof Number) ? ((Number) value).intValue() : Integer.parseInt(value.toString());
-                    if (qty > 0) newItems.put(productId, qty);
+                    if (qty > 0) newItemsMap.put(productId, qty);
                 } catch (Exception e) {
-                    log.error("Ошибка парсинга товара: " + key);
+                    log.error("Ошибка парсинга товара при редактировании: " + key);
                 }
             });
         }
 
-        // 4. РЕЗЕРВ НОВЫХ ТОВАРОВ С ЖЕСТКИМ ПРЕРЫВАНИЕМ ПРИ ОШИБКЕ
+        if (newItemsMap.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Заказ не может быть пустым");
+        }
+
+        // 6. РЕЗЕРВ ТОВАРОВ
         try {
-            stockService.reserveItemsFromStock(newItems, "Обновление состава заказа #" + id);
+            stockService.reserveItemsFromStock(newItemsMap, "Корректировка (финал) состава заказа #" + id);
         } catch (RuntimeException e) {
-            // КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: Бросаем ResponseStatusException вместо возврата ResponseEntity.
-            // Это предотвращает UnexpectedRollbackException, так как Spring сразу прекращает транзакцию.
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
         }
 
-        // 5. Расчет сумм
-        Map<String, BigDecimal> totals = calculateTotalSaleAndCostWithDiscount(newItems, order.getDiscountPercent());
+        // 7. РАСЧЕТ СУММ С УЧЕТОМ ПРИОРИТЕТА АКЦИЙ
+        BigDecimal totalAmount = BigDecimal.ZERO;
+        BigDecimal totalCost = BigDecimal.ZERO;
+        BigDecimal currentShopPercent = Optional.ofNullable(order.getDiscountPercent()).orElse(BigDecimal.ZERO);
 
-        order.setItems(newItems);
-        order.setTotalAmount(totals.get("totalSale"));
-        order.setTotalPurchaseCost(totals.get("totalCost"));
+        List<Product> products = productRepository.findAllByIdWithLock(newItemsMap.keySet());
+        Map<Long, Product> productMap = products.stream()
+                .collect(Collectors.toMap(Product::getId, Function.identity()));
+
+        for (Map.Entry<Long, Integer> entry : newItemsMap.entrySet()) {
+            Long pId = entry.getKey();
+            Product p = productMap.get(pId);
+            if (p == null) continue;
+
+            BigDecimal qty = BigDecimal.valueOf(entry.getValue());
+            BigDecimal basePrice = Optional.ofNullable(p.getPrice()).orElse(BigDecimal.ZERO);
+
+            BigDecimal itemPercent = promoItemsMap.containsKey(pId) ? promoItemsMap.get(pId) : currentShopPercent;
+
+            BigDecimal modifier = BigDecimal.ONE.subtract(
+                    itemPercent.divide(new BigDecimal("100"), 4, RoundingMode.HALF_UP)
+            );
+
+            // ИСПРАВЛЕНО: Установлен масштаб 1 вместо 0 для сохранения точности (напр. 1751.2)
+            BigDecimal discountedPrice = basePrice.multiply(modifier).setScale(1, RoundingMode.HALF_UP);
+
+            totalAmount = totalAmount.add(discountedPrice.multiply(qty));
+            totalCost = totalCost.add(Optional.ofNullable(p.getPurchasePrice()).orElse(BigDecimal.ZERO).multiply(qty));
+        }
+
+        // 8. СОХРАНЕНИЕ
+        order.setItems(newItemsMap);
+        order.setAppliedPromoItems(promoItemsMap);
+
+        // ИСПРАВЛЕНО: Устанавливаем итоговую сумму с точностью до 1 знака
+        order.setTotalAmount(totalAmount.setScale(1, RoundingMode.HALF_UP));
+        order.setTotalPurchaseCost(totalCost.setScale(2, RoundingMode.HALF_UP));
+        order.setPurchaseCost(totalCost.setScale(2, RoundingMode.HALF_UP));
 
         orderRepository.save(order);
 
+        // 9. АУДИТ
+        int promoCount = promoItemsMap.size();
+        String promoNote = promoCount > 0 ? " (Акционных позиций: " + promoCount + ")" : "";
         recordAudit(id, "ORDER", "РЕДАКТИРОВАНИЕ ЗАКАЗА",
-                "Заказ изменен. Скидка: " + order.getDiscountPercent() + "%. Итог: " + order.getTotalAmount() + " ֏");
+                String.format("Заказ изменен. Маг. скидка: %s%%%s. Новый итог: %s ֏",
+                        currentShopPercent, promoNote, order.getTotalAmount()));
 
         return ResponseEntity.ok(Map.of(
                 "finalSum", order.getTotalAmount(),
-                "message", "Заказ успешно обновлен"
+                "message", "Заказ #" + id + " успешно обновлен"
         ));
     }
+
+
+
 
 
     // В AdminManagementController.java
@@ -321,7 +372,6 @@ public class AdminManagementController {
         ));
     }
 
-
     @PostMapping("/orders/create-manual")
     @Transactional(rollbackFor = Exception.class)
     public ResponseEntity<?> createOrderManual(@RequestBody Order order) {
@@ -335,56 +385,71 @@ public class AdminManagementController {
                 return ResponseEntity.badRequest().body(Map.of("error", "Заказ не может быть пустым"));
             }
 
-            // --- ЛОГИКА СКИДКИ ---
+            // --- УЛУЧШЕННАЯ ЛОГИКА ОПРЕДЕЛЕНИЯ СКИДКИ ---
             if (order.getDiscountPercent() == null || order.getDiscountPercent().compareTo(BigDecimal.ZERO) == 0) {
                 clientRepository.findByName(order.getShopName()).ifPresent(client -> {
                     order.setDiscountPercent(client.getDefaultPercent());
                 });
             }
 
-            BigDecimal percent = Optional.ofNullable(order.getDiscountPercent()).orElse(BigDecimal.ZERO);
-            BigDecimal modifier = BigDecimal.ONE.subtract(
-                    percent.divide(new BigDecimal("100"), 4, RoundingMode.HALF_UP)
-            );
+            BigDecimal shopDefaultPercent = Optional.ofNullable(order.getDiscountPercent()).orElse(BigDecimal.ZERO);
 
-            // 3. Расчет сумм с учетом СКИДКИ
+            // 3. Расчет сумм с учетом ПРИОРИТЕТА АКЦИЙ
             BigDecimal totalAmount = BigDecimal.ZERO;
             BigDecimal totalCost = BigDecimal.ZERO;
+            int promoItemsCount = 0;
 
             List<Product> products = productRepository.findAllByIdWithLock(order.getItems().keySet());
             Map<Long, Product> productMap = products.stream()
                     .collect(Collectors.toMap(Product::getId, Function.identity()));
 
             for (Map.Entry<Long, Integer> entry : order.getItems().entrySet()) {
-                Product p = productMap.get(entry.getKey());
-                if (p == null) throw new RuntimeException("Товар ID " + entry.getKey() + " не найден");
+                Long productId = entry.getKey();
+                Product p = productMap.get(productId);
+                if (p == null) throw new RuntimeException("Товар ID " + productId + " не найден");
 
                 BigDecimal qty = BigDecimal.valueOf(entry.getValue());
                 BigDecimal basePrice = Optional.ofNullable(p.getPrice()).orElse(BigDecimal.ZERO);
-                BigDecimal discountedPrice = basePrice.multiply(modifier).setScale(0, RoundingMode.HALF_UP);
+
+                BigDecimal currentItemPercent;
+                if (order.getAppliedPromoItems() != null && order.getAppliedPromoItems().containsKey(productId)) {
+                    currentItemPercent = order.getAppliedPromoItems().get(productId);
+                    promoItemsCount++;
+                } else {
+                    currentItemPercent = shopDefaultPercent;
+                }
+
+                BigDecimal itemModifier = BigDecimal.ONE.subtract(
+                        currentItemPercent.divide(new BigDecimal("100"), 4, RoundingMode.HALF_UP)
+                );
+
+                // ИСПРАВЛЕНО: Установлен масштаб 1 вместо 0 для сохранения точности (напр. 1751.2)
+                BigDecimal discountedPrice = basePrice.multiply(itemModifier).setScale(1, RoundingMode.HALF_UP);
 
                 totalAmount = totalAmount.add(discountedPrice.multiply(qty));
                 totalCost = totalCost.add(Optional.ofNullable(p.getPurchasePrice()).orElse(BigDecimal.ZERO).multiply(qty));
             }
 
-            order.setTotalAmount(totalAmount);
-            order.setTotalPurchaseCost(totalCost);
+            // ИСПРАВЛЕНО: Устанавливаем итоговую сумму с точностью до 1 знака
+            order.setTotalAmount(totalAmount.setScale(1, RoundingMode.HALF_UP));
+            order.setTotalPurchaseCost(totalCost.setScale(2, RoundingMode.HALF_UP));
+            order.setPurchaseCost(totalCost.setScale(2, RoundingMode.HALF_UP));
 
-            // --- КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: ТОЧЕЧНЫЙ ПЕРЕХВАТ ОШИБКИ СКЛАДА ---
+            // 4. Резервирование товара
             try {
-                // 4. Резервирование
                 stockService.reserveItemsFromStock(order.getItems(), "Ручной заказ: " + order.getShopName());
             } catch (RuntimeException stockEx) {
-                // Если тут вылетит "Недостаточно товара", мы вернем 400 ошибку и транзакция не "умрет" с UnexpectedRollback
-                return ResponseEntity.badRequest().body(Map.of("error", stockEx.getMessage()));
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, stockEx.getMessage());
             }
 
-            // 5. Сохранение
+            // 5. Сохранение заказа
             Order saved = orderRepository.save(order);
 
             // 6. Аудит
-            recordAudit(saved.getId(), "ORDER", "СОЗДАНИЕ ЗАКАЗА",
-                    "Создан заказ со скидкой " + percent + "%. Итого: " + saved.getTotalAmount() + " ֏");
+            String auditDetails = String.format("Создан заказ. Скидка магазина: %s%%. Товаров по акции: %d. Итого: %s ֏",
+                    shopDefaultPercent, promoItemsCount, saved.getTotalAmount());
+
+            recordAudit(saved.getId(), "ORDER", "СОЗДАНИЕ ЗАКАЗА", auditDetails);
 
             return ResponseEntity.ok(Map.of(
                     "message", "Заказ успешно создан",
@@ -392,13 +457,17 @@ public class AdminManagementController {
                     "total", saved.getTotalAmount()
             ));
 
+        } catch (ResponseStatusException e) {
+            return ResponseEntity.status(e.getStatusCode()).body(Map.of("error", e.getReason()));
         } catch (Exception e) {
-            log.error("Ошибка при ручном создании заказа: {}", e.getMessage());
-            // Если ошибка не связана со складом, возвращаем общую ошибку
+            log.error("Критическая ошибка при создании заказа: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "Критическая ошибка: " + e.getMessage()));
+                    .body(Map.of("error", "Ошибка сервера: " + e.getMessage()));
         }
     }
+
+
+
 
 
     @PostMapping("/returns/{id}/confirm")
@@ -491,19 +560,21 @@ public class AdminManagementController {
             if (qtyInt == null) continue;
             BigDecimal qty = BigDecimal.valueOf(qtyInt);
 
-            // Цена продажи со скидкой, округленная до целых
+            // ИСПРАВЛЕНО: Установлен scale(1) вместо 0
             BigDecimal discountedPrice = Optional.ofNullable(p.getPrice()).orElse(BigDecimal.ZERO)
-                    .multiply(modifier).setScale(0, RoundingMode.HALF_UP);
+                    .multiply(modifier).setScale(1, RoundingMode.HALF_UP);
 
             totalSale = totalSale.add(discountedPrice.multiply(qty));
             totalCost = totalCost.add(Optional.ofNullable(p.getPurchasePrice()).orElse(BigDecimal.ZERO).multiply(qty));
         }
 
         return Map.of(
-                "totalSale", totalSale.setScale(0, RoundingMode.HALF_UP),
+                // ИСПРАВЛЕНО: Установлен scale(1) вместо 0
+                "totalSale", totalSale.setScale(1, RoundingMode.HALF_UP),
                 "totalCost", totalCost.setScale(2, RoundingMode.HALF_UP)
         );
     }
+
 
 
     private void recordAudit(Long entityId, String type, String action, String details) {

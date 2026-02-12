@@ -4,9 +4,11 @@ import com.sellion.sellionserver.dto.ApiResponse;
 import com.sellion.sellionserver.dto.CategoryGroupDto;
 import com.sellion.sellionserver.entity.AuditLog;
 import com.sellion.sellionserver.entity.Product;
+import com.sellion.sellionserver.entity.PromoAction;
 import com.sellion.sellionserver.entity.StockMovement;
 import com.sellion.sellionserver.repository.AuditLogRepository;
 import com.sellion.sellionserver.repository.ProductRepository;
+import com.sellion.sellionserver.repository.PromoActionRepository;
 import com.sellion.sellionserver.repository.StockMovementRepository;
 import com.sellion.sellionserver.services.StockService;
 import jakarta.validation.Valid;
@@ -22,11 +24,9 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.stream.Collectors;
 
 

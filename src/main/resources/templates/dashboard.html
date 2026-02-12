@@ -28,6 +28,10 @@
     </div>
     <div onclick="showTab('tab-delivery')" class="nav-link" id="btn-delivery"><i class="bi bi-truck"></i> Доставка</div>
     <div onclick="showTab('tab-clients')" class="nav-link" id="btn-clients"><i class="bi bi-people"></i> Клиенты</div>
+    <div onclick="showTab('tab-promos')" class="nav-link" id="btn-promos">
+        <i class="bi bi-megaphone"></i> Акции
+    </div>
+
 
     <div sec:authorize="hasRole('ADMIN')" onclick="showTab('tab-managers')" class="nav-link" id="btn-managers">
         <i class="bi bi-person-badge-fill"></i> Менеджеры
@@ -77,7 +81,7 @@
                 <div class="summary-item">
                     <small>Общая сумма:</small>
                     <span class="price-up"
-                          th:text="${(totalOrdersSum ?: 0) == 0 ? '0 ֏' : #numbers.formatInteger(totalOrdersSum, 1, 'WHITESPACE') + ' ֏'}">0 ֏</span>
+                          th:text="${(totalOrdersSum ?: 0) == 0 ? '0 ֏' : #numbers.formatDecimal(totalOrdersSum, 1, 'WHITESPACE', 1, 'POINT') + ' ֏'}">0 ֏</span>
                 </div>
             </div>
 
@@ -138,7 +142,8 @@
                         <td th:text="${o.managerId}" style="font-weight:600; color:var(--accent);"></td>
                         <td th:text="${o.shopName}" style="font-weight:700;"></td>
                         <td class="price-up"
-                            th:text="${o.totalAmount != null ? #numbers.formatInteger(o.totalAmount, 1, 'WHITESPACE') + ' ֏' : '0 ֏'}"></td>
+                            th:text="${o.totalAmount != null ? #numbers.formatDecimal(o.totalAmount, 1, 'WHITESPACE', 1, 'POINT') + ' ֏' : '0 ֏'}"></td>
+
 
                         <td class="js-date-format" th:text="${o.deliveryDate}"></td>
 
@@ -208,16 +213,17 @@
                 <div class="summary-item">
                     <small>Общий долг системы:</small><br>
                     <span class="price-down"
-                          th:text="${(totalInvoiceDebt ?: 0) == 0 ? '0 ֏' : #numbers.formatInteger(totalInvoiceDebt, 1, 'WHITESPACE') + ' ֏'}">
-            </span>
+                          th:text="${(totalInvoiceDebt ?: 0) == 0 ? '0 ֏' : #numbers.formatDecimal(totalInvoiceDebt, 1, 'WHITESPACE', 1, 'POINT') + ' ֏'}">
+        </span>
                 </div>
                 <div class="summary-item">
                     <small>Всего оплачено:</small><br>
                     <span class="price-up"
-                          th:text="${(totalPaidSum ?: 0) == 0 ? '0 ֏' : #numbers.formatInteger(totalPaidSum, 1, 'WHITESPACE') + ' ֏'}">
-            </span>
+                          th:text="${(totalPaidSum ?: 0) == 0 ? '0 ֏' : #numbers.formatDecimal(totalPaidSum, 1, 'WHITESPACE', 1, 'POINT') + ' ֏'}">
+        </span>
                 </div>
             </div>
+
 
             <!-- БАР ФИЛЬТРОВ -->
             <div class="filter-bar">
@@ -274,9 +280,11 @@
                     <tr th:each="inv : ${invoices}" th:data-manager="${inv.managerId}">
                         <td th:text="${inv.invoiceNumber}"></td>
                         <td th:text="${inv.shopName}" style="font-weight:700;"></td>
-                        <td th:text="${#numbers.formatInteger(inv.totalAmount, 1, 'WHITESPACE') + ' ֏'}"></td>
+                        <td th:text="${#numbers.formatDecimal(inv.totalAmount, 1, 'WHITESPACE', 1, 'POINT') + ' ֏'}"></td>
                         <td class="price-up"
-                            th:text="${#numbers.formatInteger(inv.paidAmount, 1, 'WHITESPACE') + ' ֏'}"></td>
+                            th:text="${#numbers.formatDecimal(inv.paidAmount, 1, 'WHITESPACE', 1, 'POINT') + ' ֏'}"></td>
+
+
                         <td>
                     <span th:with="isFullyPaid=(${inv.paidAmount} >= ${inv.totalAmount}),
                                    isPartial=(${inv.paidAmount} > 0 and ${inv.paidAmount} < ${inv.totalAmount})"
@@ -335,7 +343,7 @@
                 <div class="summary-item">
                     <small>Сумма возвратов:</small>
                     <span class="price-down"
-                          th:text="${(totalReturnsSum ?: 0) == 0 ? '0 ֏' : #numbers.formatInteger(totalReturnsSum, 1, 'WHITESPACE') + ' ֏'}">0 ֏</span>
+                          th:text="${(totalReturnsSum ?: 0) == 0 ? '0 ֏' : #numbers.formatDecimal(totalReturnsSum, 1, 'WHITESPACE', 1, 'POINT') + ' ֏'}">0 ֏</span>
                 </div>
             </div>
 
@@ -409,7 +417,7 @@
                         </td>
 
                         <td class="price-down"
-                            th:text="${r.totalAmount != null ? #numbers.formatInteger(r.totalAmount, 1, 'WHITESPACE') + ' ֏' : '0 ֏'}"></td>
+                            th:text="${r.totalAmount != null ? #numbers.formatDecimal(r.totalAmount, 1, 'WHITESPACE', 1, 'POINT') + ' ֏' : '0 ֏'}"></td>
 
                         <td>
                             <span class="js-status-translate" th:text="${r.status.name()}"></span>
@@ -458,9 +466,14 @@
                         <td th:text="${c.name}" style="font-weight:700;"></td>
                         <td th:text="${c.address}"></td>
                         <td th:text="${c.category ?: '---'}"></td> <!-- ОТОБРАЖЕНИЕ КАТЕГОРИИ -->
-                        <td class="price-down" th:text="${#numbers.formatInteger(c.debt, 1, 'WHITESPACE') + ' ֏'}"></td>
+
+                        <!-- ИСПРАВЛЕНО: добавлена проверка на null (?: 0), чтобы избежать ошибок отображения -->
+                        <td class="price-down"
+                            th:text="${#numbers.formatDecimal(c.debt ?: 0, 1, 'WHITESPACE', 1, 'POINT') + ' ֏'}">
+                        </td>
                     </tr>
                     </tbody>
+
                 </table>
             </div>
 
@@ -549,7 +562,7 @@
                             </td>
 
                             <td style="font-weight: 700; color: #0f172a;"
-                                th:text="${p.price != null ? #numbers.formatInteger(p.price, 1, 'WHITESPACE') + ' ֏' : '0 ֏'}">
+                                th:text="${p.price != null ? #numbers.formatDecimal(p.price, 1, 'WHITESPACE', 1, 'POINT') + ' ֏' : '0 ֏'}">
                             </td>
 
                             <td>
@@ -570,6 +583,41 @@
                                 th:text="${p.expiryDate != null ? #temporals.format(p.expiryDate, 'dd.MM.yyyy') : '---'}"></td>
                         </tr>
                     </th:block>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="tab-promos" class="tab-pane">
+            <div class="filter-bar">
+                <div class="d-flex gap-2 align-items-center">
+                    <small>Период:</small>
+                    <input type="date" id="promo-filter-start" class="form-control" style="width:150px;"
+                           th:value="${promoStartDefault}"> <!-- ДОБАВЛЕНО -->
+                    <input type="date" id="promo-filter-end" class="form-control" style="width:150px;"
+                           th:value="${promoEndDefault}">   <!-- ДОБАВЛЕНО -->
+                    <button class="btn-primary" onclick="loadPromosByPeriod()">🔍 Показать</button>
+                </div>
+
+                <button class="btn-primary" onclick="openCreatePromoModal()" style="background:#f59e0b">+ Новая Акция
+                </button>
+            </div>
+
+            <div class="table-container">
+                <table class="table">
+                    <thead>
+                    <tr>
+                        <th>Название акции</th>
+                        <th>Менеджер</th>
+                        <th>ОТ</th>
+                        <th>ДО</th>
+                        <th>Дней осталось</th>
+                        <th>Товаров</th>
+                        <th>Статус</th>
+                    </tr>
+                    </thead>
+                    <tbody id="promos-table-body">
+                    <!-- Сюда JS отрисует список акций -->
                     </tbody>
                 </table>
             </div>
@@ -604,7 +652,7 @@
                             <div style="background: #eef2ff; padding: 12px; border-radius: 12px; margin-bottom: 15px;">
                                 <div style="display: flex; justify-content: space-between; align-items: center;">
                                     <b style="font-size: 15px; color: #4f46e5;"
-                                       th:text="${(stats != null and stats.targetAmount != null) ? #numbers.formatInteger(stats.targetAmount, 1, 'WHITESPACE') + ' ֏' : '0 ֏'}">
+                                       th:text="${(stats != null and stats.targetAmount != null) ? #numbers.formatDecimal(stats.targetAmount, 1, 'WHITESPACE', 1, 'POINT') + ' ֏' : '0 ֏'}">
                                         0 ֏
                                     </b>
                                     <button class="btn-ghost" th:data-manager-id="${m}"
@@ -617,16 +665,16 @@
                                 <div style="flex: 1; background: #f0fdf4; padding: 12px; border-radius: 12px;">
                                     <small style="display:block; color: #166534; font-size: 10px; font-weight: 700; text-transform: uppercase;">Продано</small>
                                     <b style="font-size: 15px; color: #166534;">
-                                <span th:if="${stats != null and stats.totalSales != null}"
-                                      th:text="${#numbers.formatInteger(stats.totalSales, 1, 'WHITESPACE')} + ' ֏'"></span>
+                                                        <span th:if="${stats != null and stats.totalSales != null}"
+                                                             th:text="${#numbers.formatDecimal(stats.totalSales, 1, 'WHITESPACE', 1, 'POINT')} + ' ֏'"></span>
                                         <span th:unless="${stats != null and stats.totalSales != null}">0 ֏</span>
                                     </b>
                                 </div>
                                 <div style="flex: 1; background: #fff1f2; padding: 12px; border-radius: 12px;">
                                     <small style="display:block; color: #991b1b; font-size: 10px; font-weight: 700; text-transform: uppercase;">Возвраты</small>
                                     <b style="font-size: 15px; color: #991b1b;">
-                                <span th:if="${stats != null and stats.totalReturns != null}"
-                                      th:text="${#numbers.formatInteger(stats.totalReturns, 1, 'WHITESPACE')} + ' ֏'"></span>
+                                            <span th:if="${stats != null and stats.totalReturns != null}"
+                                                 th:text="${#numbers.formatDecimal(stats.totalReturns, 1, 'WHITESPACE', 1, 'POINT')} + ' ֏'"></span>
                                         <span th:unless="${stats != null and stats.totalReturns != null}">0 ֏</span>
                                     </b>
                                 </div>
@@ -752,8 +800,9 @@
                                       th:text="${inv.order != null ? (inv.order.carNumber ?: 'Не указан') : '---'}"></span>
 
                             </td>
-                            <td th:text="${#numbers.formatInteger(inv.totalAmount, 1, 'WHITESPACE') + ' ֏'}"
+                            <td th:text="${#numbers.formatDecimal(inv.totalAmount, 1, 'WHITESPACE', 1, 'POINT') + ' ֏'}"
                                 style="font-weight: 600;"></td>
+
                             <td style="text-align: center;">
                                 <span class="badge" style="background: #dcfce7; color: #166534;">ГОТОВ К ОТГРУЗКЕ</span>
                             </td>
@@ -931,7 +980,8 @@
                                 <td th:text="${r.shopName}" style="font-weight:700;"></td>
                                 <td><span class="badge bg-info" th:text="${r.returnReason.displayName}"></span></td>
                                 <td class="price-down"
-                                    th:text="${#numbers.formatInteger(r.totalAmount, 1, 'WHITESPACE') + ' ֏'}"></td>
+                                    th:text="${r.totalAmount != null ? #numbers.formatDecimal(r.totalAmount, 1, 'WHITESPACE', 1, 'POINT') + ' ֏' : '0 ֏'}"></td>
+
                             </tr>
                         </th:block>
                         <!-- Сообщение если пусто -->
@@ -1043,9 +1093,10 @@
                         <span class="dot dot-accent"></span>Средний чек
                     </div>
                     <div style="font-size: 22px; font-weight: 800; letter-spacing: -0.5px;" id="stat-avg-check"
-                         th:text="${(totalOrdersCount != null and totalOrdersCount > 0) ? #numbers.formatInteger(totalOrdersSum / totalOrdersCount, 1, 'WHITESPACE') + ' ֏' : '0 ֏'}">
+                         th:text="${(totalOrdersCount != null and totalOrdersCount > 0) ? #numbers.formatDecimal(totalOrdersSum / totalOrdersCount, 1, 'WHITESPACE', 1, 'POINT') + ' ֏' : '0 ֏'}">
                         0 ֏
                     </div>
+
                     <div style="font-size: 11px; color: #64748b; margin-top: 2px;">
                         Ожидает: <span id="stat-pending-orders" style="font-weight: 700;"
                                        th:text="${pendingOrdersCount ?: 0}">0</span>
@@ -1058,9 +1109,10 @@
                         <span class="dot" style="background: #22c55e;"></span>Прибыль
                     </div>
                     <div style="font-size: 22px; font-weight: 800; color: #15803d; letter-spacing: -0.5px;"
-                         th:text="${netProfit != null ? #numbers.formatInteger(netProfit, 1, 'WHITESPACE') + ' ֏' : '0 ֏'}">
+                         th:text="${netProfit != null ? #numbers.formatDecimal(netProfit, 1, 'WHITESPACE', 1, 'POINT') + ' ֏' : '0 ֏'}">
                         0 ֏
                     </div>
+
                 </div>
 
 
@@ -1125,16 +1177,21 @@
                 </div>
                 <div id="table-scroll-container">
                     <table class="table">
+
+
                         <thead>
                         <tr>
                             <th>Товар</th>
                             <th>Кол-во</th>
                             <th>Прайс</th>
                             <th>Прайс - %</th>
+                            <th style="color: #f59e0b;">Промо %</th> <!-- НОВАЯ КОЛОНКА -->
                             <th>Итого</th>
                             <th>Кат.</th>
                         </tr>
                         </thead>
+
+
                         <tbody id="order-items-body"></tbody>
                     </table>
                 </div>
@@ -1149,7 +1206,7 @@
         <div id="modal-order-create" class="modal">
             <div class="modal-content" style="width: 650px; max-height: 90vh; overflow-y: auto;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                    <h2 style="margin: 0;">🛒 Создание нового заказа</h2>
+                    <h2 id="create-modal-title" style="margin: 0;">🛒 Создание нового заказа</h2>
                     <button onclick="closeModal('modal-order-create')"
                             style="background:none; border:none; font-size:24px; cursor:pointer;">&times;
                     </button>
@@ -1158,70 +1215,93 @@
                 <div class="row">
                     <div class="col-md-6">
                         <label style="font-size: 11px; font-weight: 800; color: #64748b;">МАГАЗИН</label>
-                        <!-- Вместо select используем input + datalist -->
-                        <input type="text" id="new-order-client-name"
-                               class="form-control"
-                               list="clients-list"
+                        <input type="text" id="new-op-shop" class="form-control"
+                               list="clients-list-new"
+                               onfocus="initSmartClientSearch('new-op-shop', 'clients-list-new')"
                                placeholder="Вводите название ...">
-
-                        <datalist id="clients-list">
+                        <datalist id="clients-list-new">
                             <option th:each="name : ${allClientNames}" th:value="${name}" th:text="${name}"></option>
                         </datalist>
                     </div>
                     <div class="col-md-6">
                         <label style="font-size: 11px; font-weight: 800; color: #64748b;">МЕНЕДЖЕР</label>
-                        <select id="new-order-manager-id" class="form-select">
+                        <select id="new-op-manager" class="form-select">
                             <option th:each="m : ${managers}" th:value="${m}" th:text="${m}"></option>
                         </select>
                     </div>
                 </div>
 
                 <div class="row mt-3">
-                    <div class="col-md-6">
+                    <div class="col-md-4">
                         <label style="font-size: 11px; font-weight: 800; color: #64748b;">ТИП НАКЛАДНОЙ</label>
-                        <select id="new-order-separate-invoice" class="form-select" style="border: 2px solid #6366f1;">
-                            <option value="false">Общая накладная (сводная)</option>
-                            <option value="true">Раздельная фактура (отдельный лист)</option>
+                        <select id="new-op-separate" class="form-select">
+                            <option value="false">Общая накладная</option>
+                            <option value="true">Раздельная фактура</option>
                         </select>
                     </div>
-                    <div class="col-md-6">
+                    <div class="col-md-4">
                         <label style="font-size: 11px; font-weight: 800; color: #64748b;">МЕТОД ОПЛАТЫ</label>
-                        <select id="new-order-payment-method" class="form-select">
+                        <select id="new-op-payment" class="form-select">
                             <option th:each="pm : ${paymentMethods}" th:value="${pm}"
                                     th:text="${pm.displayName}"></option>
                         </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label style="font-size: 11px; font-weight: 800; color: #6366f1;">СКИДКА (%)</label>
+                        <input type="number" id="new-op-percent" class="form-control" value="0"
+                               oninput="recalculateAllPricesByPercent()">
                     </div>
                 </div>
 
                 <div class="row mt-3">
                     <div class="col-md-6">
                         <label style="font-size: 11px; font-weight: 800; color: #64748b;">ДАТА ДОСТАВКИ</label>
-                        <input type="date" id="new-order-delivery-date" class="form-control">
+                        <!-- Использование текущей даты если пусто -->
+                        <input type="date" id="new-op-date" class="form-control"
+                               th:value="${#temporals.format(#temporals.createNow(), 'yyyy-MM-dd')}">
                     </div>
                     <div class="col-md-6">
                         <label style="font-size: 11px; font-weight: 800; color: #64748b;">НОМЕР АВТО</label>
-                        <input type="text" id="new-order-car" class="form-control" placeholder="Напр: 35XX000">
+                        <input type="text" id="new-op-car" class="form-control" placeholder="Напр: 35XX000">
                     </div>
                 </div>
-
 
                 <div style="margin-top: 20px; border-top: 1px solid #eee; padding-top: 1rem;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                        <h4 style="font-size: 14px; margin: 0;">Товары в заказе</h4>
-                        <button type="button" class="btn-primary" style="padding: 4px 12px; font-size: 11px;"
-                                onclick="addItemRowToOrder()">+ Добавить товар
+                        <h4 style="font-size: 14px; margin: 0;">Товары</h4>
+                        <button type="button" class="btn-primary" onclick="addItemRowToOrder()">+ Добавить товар
                         </button>
                     </div>
-                    <div id="new-order-items-list" style="margin-top: 10px; max-height: 150px; overflow-y: auto;"></div>
+                    <div style="max-height: 250px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px;">
+                        <table class="table" style="margin: 0;">
+                            <thead style="background: #f8fafc; position: sticky; top: 0; z-index: 10;">
+                            <tr style="font-size: 11px;">
+                                <th>Товар</th>
+                                <th style="width: 80px;">Кол-во</th>
+                                <th>Цена</th>
+                                <th>Итого</th>
+                                <th></th>
+                            </tr>
+                            </thead>
+                            <!-- УНИКАЛЬНЫЙ ID: manual-order-items-body -->
+                            <tbody id="manual-order-items-body"></tbody>
+                        </table>
+                    </div>
                 </div>
 
-                <div style="display: flex; gap: 10px; margin-top: 25px; justify-content: flex-end;">
-                    <button class="btn-primary" onclick="submitCreateOrder()"
-                            style="background-color: #10b981; padding: 10px 25px;">СОЗДАТЬ ЗАКАЗ
-                    </button>
-                    <button class="btn-primary" style="background-color: #64748b;"
-                            onclick="closeModal('modal-order-create')">ОТМЕНА
-                    </button>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 20px;">
+                    <!-- УНИКАЛЬНЫЙ ID: manual-order-total-price -->
+                    <div id="manual-order-total-price" style="font-size: 18px; font-weight: 800; color: #6366f1;">Итого:
+                        0 ֏
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn-primary" onclick="saveNewManualOperation('order')"
+                                style="background: #10b981;">СОЗДАТЬ
+                        </button>
+                        <button class="btn-primary" onclick="closeModal('modal-order-create')"
+                                style="background: #64748b;">ОТМЕНА
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1601,6 +1681,27 @@
                 </div>
             </div>
         </div>
+
+        <!-- СОВРЕМЕННЫЙ ПРЕДЧЕК АКЦИЙ -->
+        <div id="promo-checker-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); z-index: 20000; align-items: center; justify-content: center; animation: fadeIn 0.2s ease;">
+            <div style="width: 380px; background: white; border-radius: 20px; padding: 24px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04); border: 1px solid #e2e8f0; animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);">
+                <div style="text-align: center; margin-bottom: 20px;">
+                    <div style="width: 50px; height: 50px; background: #fff7ed; border-radius: 14px; display: flex; align-items: center; justify-content: center; margin: 0 auto 12px; color: #f97316; font-size: 24px;">🔥</div>
+                    <h3 style="margin: 0; color: #1e293b; font-size: 18px; font-weight: 800;">Нашли акции!</h3>
+                    <p style="margin: 4px 0 0; color: #64748b; font-size: 13px;">Применить спец. цены для заказа?</p>
+                </div>
+
+                <div id="promo-list-container" style="max-height: 220px; overflow-y: auto; margin-bottom: 20px; padding-right: 4px;">
+                    <!-- Сюда вставим компактные карточки акций -->
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <button id="promo-skip-btn" style="background: #f1f5f9; color: #64748b; border: none; padding: 12px; border-radius: 12px; font-weight: 600; cursor: pointer; transition: 0.2s;">Пропустить</button>
+                    <button id="promo-apply-btn" style="background: #6366f1; color: white; border: none; padding: 12px; border-radius: 12px; font-weight: 600; cursor: pointer; transition: 0.2s; box-shadow: 0 4px 6px -1px rgba(99, 102, 241, 0.4);">Применить</button>
+                </div>
+            </div>
+        </div>
+
 
 
         <dialog id="confirm-modal" class="confirm-modal-image-style">

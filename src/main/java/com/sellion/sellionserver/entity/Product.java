@@ -30,6 +30,7 @@ public class Product {
     private String unit;
     private String hsnCode;
     private LocalDate expiryDate;
+    private BigDecimal promoPercent = BigDecimal.ZERO;
 
 
 }

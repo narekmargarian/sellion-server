@@ -73,6 +73,15 @@ public class Order {
     private OrderType type = OrderType.SALE;
 
 
+    // Найди это поле и замени @Transient на @ElementCollection
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "order_applied_promos", joinColumns = @JoinColumn(name = "order_id"))
+    @MapKeyColumn(name = "product_id")
+    @Column(name = "promo_percent")
+    private Map<Long, BigDecimal> appliedPromoItems = new HashMap<>();
+
+
+
     @PrePersist
     protected void onCreate() {
         if (this.createdAt == null) {
