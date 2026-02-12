@@ -16,9 +16,7 @@ import java.math.BigDecimal;
 import java.security.Principal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/admin/promos")
@@ -37,11 +35,6 @@ public class PromoApiController {
 
         String currentUser = (principal != null) ? principal.getName() : "ANONYMOUS";
 
-        // ЭТИ СТРОКИ ПОЯВЯТСЯ В КОНСОЛИ ПРИ НАЖАТИИ КНОПКИ "ПОКАЗАТЬ"
-        log.info("=== ЗАПРОС АКЦИЙ ===");
-        log.info("Пользователь: [{}]", currentUser);
-        log.info("Период: {} - {}", start, end);
-
         boolean isAdmin = currentUser.equalsIgnoreCase("ADMIN") ||
                 currentUser.equalsIgnoreCase("admin") ||
                 currentUser.equalsIgnoreCase("Офис");
@@ -55,8 +48,6 @@ public class PromoApiController {
             result = promoRepository.findByPeriodAndManager(start, end, currentUser);
         }
 
-        log.info("Найдено акций: {}", result.size());
-        log.info("====================");
 
         return result;
     }
@@ -150,23 +141,80 @@ public class PromoApiController {
         return ResponseEntity.ok(Map.of("message", "Акция подтверждена"));
     }
 
+//    @PostMapping("/check-active-for-items")
+//    public List<PromoAction> checkActiveForItems(@RequestBody Map<String, Object> payload) {
+//        LocalDate today = LocalDate.now();
+//
+//        // Извлекаем данные из запроса
+//        List<Integer> productIdsInt = (List<Integer>) payload.get("productIds");
+//        List<Long> productIds = productIdsInt.stream().map(Long::valueOf).collect(Collectors.toList());
+//        String selectedManagerId = (String) payload.get("managerId");
+//
+//        // Ищем акции ТОЛЬКО для того менеджера, которого выбрали в списке на экране
+//        List<PromoAction> managerPromos = promoRepository.findActivePromosForManager(today, selectedManagerId);
+//
+//        // Фильтруем по товарам
+//        return managerPromos.stream()
+//                .filter(promo -> promo.getItems().keySet().stream().anyMatch(productIds::contains))
+//                .collect(Collectors.toList());
+//    }
+
+
     @PostMapping("/check-active-for-items")
-    public List<PromoAction> checkActiveForItems(@RequestBody Map<String, Object> payload) {
+    public List<PromoAction> checkActiveForItems(@RequestBody Object input, Principal principal) {
         LocalDate today = LocalDate.now();
+        List<Long> productIds = new ArrayList<>();
+        String managerId = null;
 
-        // Извлекаем данные из запроса
-        List<Integer> productIdsInt = (List<Integer>) payload.get("productIds");
-        List<Long> productIds = productIdsInt.stream().map(Long::valueOf).collect(Collectors.toList());
-        String selectedManagerId = (String) payload.get("managerId");
+        // 1. ПРОВЕРКА: Что прислал клиент?
+        if (input instanceof List) {
+            // ЭТО СТАРОЕ ПРИЛОЖЕНИЕ (прислало просто [1, 2, 3])
+            List<?> list = (List<?>) input;
+            for (Object item : list) {
+                productIds.add(Long.valueOf(item.toString()));
+            }
+            // Для старого приложения берем ID того, кто залогинен (Principal)
+            if (principal != null) {
+                managerId = principal.getName();
+            }
+        }
+        else if (input instanceof Map) {
+            // ЭТО НОВАЯ ВЕБ-ПАНЕЛЬ (прислала {"productIds": [...], "managerId": "..."})
+            Map<?, ?> payload = (Map<?, ?>) input;
 
-        // Ищем акции ТОЛЬКО для того менеджера, которого выбрали в списке на экране
-        List<PromoAction> managerPromos = promoRepository.findActivePromosForManager(today, selectedManagerId);
+            Object pIdsRaw = payload.get("productIds");
+            if (pIdsRaw instanceof List) {
+                for (Object item : (List<?>) pIdsRaw) {
+                    productIds.add(Long.valueOf(item.toString()));
+                }
+            }
+            managerId = (String) payload.get("managerId");
+        }
 
-        // Фильтруем по товарам
-        return managerPromos.stream()
+        // 2. БЕЗОПАСНОСТЬ: Если менеджер не определен, возвращаем пустой список
+        if (managerId == null || productIds.isEmpty()) {
+            log.warn("Не удалось определить managerId или список товаров пуст. Запрос отклонен.");
+            return Collections.emptyList();
+        }
+
+        // 3. ЛОГИКА ФИЛЬТРАЦИИ (как мы договорились)
+        boolean isAdmin = managerId.equalsIgnoreCase("ADMIN") ||
+                managerId.equalsIgnoreCase("admin") ||
+                managerId.equalsIgnoreCase("Офис");
+
+        List<PromoAction> activePromos;
+        if (isAdmin) {
+            activePromos = promoRepository.findActivePromos(today);
+        } else {
+            activePromos = promoRepository.findActivePromosForManager(today, managerId);
+        }
+
+        // 4. ФИНАЛЬНАЯ ФИЛЬТРАЦИЯ ПО ТОВАРАМ
+        return activePromos.stream()
                 .filter(promo -> promo.getItems().keySet().stream().anyMatch(productIds::contains))
                 .collect(Collectors.toList());
     }
+
 
 
 

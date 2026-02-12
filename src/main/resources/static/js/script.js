@@ -4579,22 +4579,36 @@ function recalculateAllPricesByPercent() {
 
 
 
+// 1. Обработка клика по вкладкам
 document.querySelectorAll('.tab-link, [data-tab]').forEach(tab => {
     tab.addEventListener('click', function() {
-        const targetId = this.getAttribute('href') || this.getAttribute('data-tab');
-        if (targetId === '#tab-promos' || targetId === 'tab-promos') {
+        // Учитываем разные варианты атрибутов (href или data-tab)
+        const targetId = this.getAttribute('href')?.replace('#', '') || this.getAttribute('data-tab');
+
+        if (targetId === 'tab-promos') {
+            // Небольшая задержка, чтобы браузер успел отрисовать вкладку
             setTimeout(() => {
-                loadPromosByPeriod();
-            }, 100);
+                if (typeof loadPromosByPeriod === 'function') {
+                    loadPromosByPeriod();
+                }
+            }, 150);
         }
     });
 });
 
-window.addEventListener('load', () => {
-    if (document.getElementById('tab-promos')?.classList.contains('active')) {
-        loadPromosByPeriod();
+// 2. Автозагрузка при старте страницы (если вкладка Акции открыта по умолчанию)
+window.addEventListener('DOMContentLoaded', () => {
+    const promoTab = document.getElementById('tab-promos');
+    // Проверяем: либо у вкладки есть класс 'active', либо в URL есть метка этой вкладки
+    const isActive = promoTab?.classList.contains('active') || window.location.hash === '#tab-promos';
+
+    if (isActive) {
+        setTimeout(() => {
+            loadPromosByPeriod();
+        }, 300); // Даем время для инициализации дат в инпутах
     }
 });
+
 
 
 document.addEventListener("DOMContentLoaded", async () => {
