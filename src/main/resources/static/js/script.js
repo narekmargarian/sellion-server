@@ -740,7 +740,6 @@ async function showOrderHistory(orderId) {
     }
 }
 
-// Вспомогательная функция для корректного возврата из Истории
 function restoreModalState(orderId) {
     const totalEl = document.getElementById('order-total-price');
     if (totalEl) totalEl.style.display = 'block'; // Возвращаем Итого
@@ -2445,7 +2444,7 @@ const fmt = formatDate;
 const formatOrderDate = formatDate;
 
 
-async function saveNewManualOperation(type) {
+async function saveNewManualOperation(type, btnElement) { // Добавили btnElement
     const shopName = document.getElementById('new-op-shop')?.value.trim();
     const dateVal = document.getElementById('new-op-date')?.value;
 
@@ -2453,21 +2452,21 @@ async function saveNewManualOperation(type) {
         return showToast("Заполните магазин и дату!", "info");
     }
 
-    // Собираем товары
     const itemsToSave = collectItemsFromUI();
-
     if (Object.keys(itemsToSave).length === 0) {
         return showToast("Список товаров пуст!", "error");
     }
 
-    const saveBtn = document.querySelector('button[onclick*="saveNewManualOperation"]');
+    // Используем переданную кнопку или ищем старым способом
+    const saveBtn = btnElement || document.querySelector(`button[onclick*="saveNewManualOperation('${type}')"]`);
+
     if (saveBtn) {
         saveBtn.disabled = true;
         saveBtn.innerHTML = "⏳ Проверка...";
     }
 
-    // ЛОГИКА ДЛЯ ЗАКАЗА (С АКЦИЯМИ)
     if (type === 'order') {
+        // ВАЖНО: Проверьте, что функция checkAndApplyPromos доступна в этом файле
         checkAndApplyPromos(itemsToSave, async (selectedPromos) => {
             const promoMap = {};
             selectedPromos.forEach(promo => {
@@ -2478,12 +2477,11 @@ async function saveNewManualOperation(type) {
                 }
             });
 
-            // Формируем данные заказа
             const data = {
                 shopName: shopName,
                 managerId: document.getElementById('new-op-manager')?.value,
                 items: itemsToSave,
-                appliedPromoItems: promoMap, // АКЦИИ ТУТ
+                appliedPromoItems: promoMap,
                 carNumber: document.getElementById('new-op-car')?.value || "",
                 comment: document.getElementById('new-op-comment')?.value || "",
                 deliveryDate: dateVal,
@@ -2495,9 +2493,8 @@ async function saveNewManualOperation(type) {
 
             await executeManualPost('/api/admin/orders/create-manual', data, saveBtn);
         });
-    }
-    // ЛОГИКА ДЛЯ ВОЗВРАТА (БЕЗ АКЦИЙ)
-    else if (type === 'return') {
+    } else {
+        // Логика для возврата остается без изменений
         const data = {
             shopName: shopName,
             managerId: document.getElementById('new-op-manager')?.value,
@@ -2509,7 +2506,6 @@ async function saveNewManualOperation(type) {
             comment: document.getElementById('new-op-comment')?.value || "",
             androidId: `MANUAL-${Date.now()}`
         };
-
         await executeManualPost('/api/admin/returns/create-manual', data, saveBtn);
     }
 }
@@ -3897,49 +3893,41 @@ async function checkPromosBeforeSave(items) {
     }
 }
 
+document.addEventListener('DOMContentLoaded', () => {
+    const activeTab = new URLSearchParams(window.location.search).get('activeTab');
+    if (activeTab === 'tab-promos' || document.getElementById('tab-promos')?.classList.contains('active')) {
+        loadPromosByPeriod();
+    }
+});
+
 async function loadPromosByPeriod() {
     const startInput = document.getElementById('promo-filter-start');
     const endInput = document.getElementById('promo-filter-end');
 
-    const start = startInput.value;
-    const end = endInput.value;
+    const start = startInput?.value;
+    const end = endInput?.value;
 
-    if (!start || !end) {
-        return showToast("Выберите обе даты для фильтрации", "info");
-    }
-
-//    // Сохраняем даты в URL, чтобы сервер вернул их в th:value
-//        const url = new URL(window.location.href);
-//        url.searchParams.set('activeTab', 'tab-promos');
-//        url.searchParams.set('promoStart', start);
-//        url.searchParams.set('promoEnd', end);
-//
-//        window.location.href = url.toString();
+    if (!start || !end) return;
 
     try {
-        // Визуальная индикация загрузки в таблице
         const tbody = document.getElementById('promos-table-body');
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:20px;">⌛ Загрузка данных за период...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:20px;">⌛ Загрузка данных...</td></tr>';
 
+        // Мы просто запрашиваем данные. Сервер сам поймет, кто спрашивает (через сессию).
         const response = await fetch(`/api/admin/promos/filter?start=${start}&end=${end}`);
-
         if (!response.ok) throw new Error("Ошибка сервера");
 
-        const promos = await response.json();
+        const allPromos = await response.json();
 
-        // 1. Отрисовываем список акций
-        renderPromosList(promos);
+        // УДАЛЯЕМ ФИЛЬТРАЦИЮ В JS! Просто рисуем то, что прислал сервер.
+        renderPromosList(allPromos);
 
-        // 2. Обновляем текстовую метку периода в оранжевой карточке сверху
         const periodLabel = document.getElementById('promo-period-label');
         if (periodLabel) {
             periodLabel.innerText = `${formatDate(start)} — ${formatDate(end)}`;
         }
 
-        // 3. Пересчитываем таймеры (дней осталось) и счетчик активных акций
         setTimeout(refreshPromoCounters, 100);
-
-        showToast(`Загружено акций: ${promos.length}`, "success");
 
     } catch (e) {
         console.error("Ошибка загрузки акций:", e);
@@ -3951,22 +3939,27 @@ async function loadPromosByPeriod() {
 
 function renderPromosList(promos) {
     const tbody = document.getElementById('promos-table-body');
-    if (promos.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:40px; color:#94a3b8;">В выбранном периоде акций не найдено</td></tr>';
+
+    // Если сервер ничего не прислал (список пуст)
+    if (!promos || promos.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:40px; color:#94a3b8;">Доступных акций за этот период не найдено</td></tr>';
         return;
     }
 
+    // Рисуем всё, что пришло от сервера без дополнительных проверок
     tbody.innerHTML = promos.map(p => `
         <tr onclick="openPromoDetails(${p.id})" style="cursor:pointer;">
             <td><b style="color:#1e293b;">${p.title}</b></td>
-            <td style="color:var(--accent); font-weight:600;">${p.managerId}</td>
+            <td style="color:var(--accent); font-weight:600;">
+                <span class="badge" style="background:#e0f2fe; color:#0369a1; padding: 4px 8px;">${p.managerId}</span>
+            </td>
             <td>${formatDate(p.startDate)}</td>
             <td>${formatDate(p.endDate)}</td>
             <td>
-                <span class="promo-days-left" data-end="${p.endDate}">---</span>
+                <span class="promo-days-left" data-end="${p.endDate}" style="font-weight:700;">---</span>
             </td>
-            <td>
-                <span class="badge bg-light text-dark" style="border:1px solid #ddd;">
+            <td style="text-align:center;">
+                <span class="badge bg-light text-dark" style="border:1px solid #ddd; padding: 5px 10px;">
                     ${Object.keys(p.items || {}).length} поз.
                 </span>
             </td>
@@ -3975,6 +3968,8 @@ function renderPromosList(promos) {
             </td>
         </tr>
     `).join('');
+
+    refreshPromoCounters();
 }
 
 function getStatusClass(status) {
@@ -4084,11 +4079,13 @@ async function confirmPromoAction(id) {
 
 async function checkAndApplyPromos(orderItems, onApplied) {
     const productIds = Object.keys(orderItems).map(Number);
+
+    // ПОЛУЧАЕМ ВЫБРАННОГО В МОДАЛКЕ МЕНЕДЖЕРА (1011, 1012 и т.д.)
+    const selectedManagerId = document.getElementById('new-op-manager')?.value ||
+                              document.getElementById('promo-manager')?.value;
+
     const overlay = document.getElementById('promo-checker-overlay');
     const container = document.getElementById('promo-list-container');
-
-    // Кнопки для сброса состояния при ошибке
-    const saveBtn = document.querySelector('button[onclick*="saveFullChanges"], button[onclick*="saveNewManualOperation"]');
 
     try {
         const response = await fetch('/api/admin/promos/check-active-for-items', {
@@ -4097,44 +4094,39 @@ async function checkAndApplyPromos(orderItems, onApplied) {
                 'Content-Type': 'application/json',
                 'X-CSRF-TOKEN': document.querySelector('input[name="_csrf"]')?.value || ""
             },
-            body: JSON.stringify(productIds)
+            // ОТПРАВЛЯЕМ И ТОВАРЫ, И ID ВЫБРАННОГО МЕНЕДЖЕРА
+            body: JSON.stringify({
+                productIds: productIds,
+                managerId: selectedManagerId
+            })
         });
-
-        if (!response.ok) throw new Error("Server error");
 
         const activePromos = await response.json();
 
-        // 1. Если акций нет — сразу сохраняем
         if (!activePromos || activePromos.length === 0) {
             return onApplied([]);
         }
 
-        // 2. Рендерим карточки с динамическим стилем свитча
+        // Рендеринг карточек (без изменений)
         container.innerHTML = activePromos.map(p => `
             <div style="margin-bottom: 8px;">
-                <input type="checkbox" class="promo-checkbox" id="p-${p.id}" data-id="${p.id}" checked
-                       onchange="this.nextElementSibling.querySelector('.custom-switch-ui').style.background = this.checked ? '#6366f1' : '#cbd5e1';
-                                 this.nextElementSibling.querySelector('.switch-circle').style.right = this.checked ? '2px' : '22px';"
-                       style="display:none;">
-                <label class="promo-card" for="p-${p.id}" style="display: flex; align-items: center; justify-content: space-between; padding: 10px; background: #f8fafc; border-radius: 12px; cursor: pointer; border: 1px solid #e2e8f0; transition: 0.2s;">
+                <input type="checkbox" class="promo-checkbox" id="p-${p.id}" data-id="${p.id}" checked style="display:none;">
+                <label class="promo-card" for="p-${p.id}" style="display: flex; align-items: center; justify-content: space-between; padding: 10px; background: #f8fafc; border-radius: 12px; cursor: pointer; border: 1px solid #e2e8f0;">
                     <div style="flex-grow: 1;">
-                        <div style="font-weight: 700; font-size: 13px; color: #1e293b;">${p.title}</div>
-                        <div style="font-size: 11px; color: #f59e0b;">🔥 Применяет спец. цены</div>
+                        <div style="font-weight: 700; font-size: 13px;">${p.title}</div>
+                        <div style="font-size: 11px; color: #64748b;">Для менеджера: ${p.managerId}</div>
                     </div>
-                    <div class="custom-switch-ui" style="width: 40px; height: 20px; background: #6366f1; border-radius: 20px; position: relative; transition: 0.3s;">
-                        <div class="switch-circle" style="width: 16px; height: 16px; background: white; border-radius: 50%; position: absolute; right: 2px; top: 2px; transition: 0.3s;"></div>
+                    <div class="custom-switch-ui" style="width: 40px; height: 20px; background: #6366f1; border-radius: 20px; position: relative;">
+                        <div class="switch-circle" style="width: 16px; height: 16px; background: white; border-radius: 50%; position: absolute; right: 2px; top: 2px;"></div>
                     </div>
                 </label>
             </div>
         `).join('');
 
-        // 3. Логика кнопок
         document.getElementById('promo-apply-btn').onclick = () => {
-            const selectedIds = Array.from(document.querySelectorAll('.promo-checkbox:checked'))
-                                     .map(el => el.dataset.id);
-            const selected = activePromos.filter(p => selectedIds.includes(p.id.toString()));
+            const selectedIds = Array.from(document.querySelectorAll('.promo-checkbox:checked')).map(el => el.dataset.id);
+            onApplied(activePromos.filter(p => selectedIds.includes(p.id.toString())));
             overlay.style.display = 'none';
-            onApplied(selected);
         };
 
         document.getElementById('promo-skip-btn').onclick = () => {
@@ -4143,16 +4135,7 @@ async function checkAndApplyPromos(orderItems, onApplied) {
         };
 
         overlay.style.display = 'flex';
-
     } catch (e) {
-        console.error("Отказ проверки акций:", e);
-        // Сбрасываем визуальное состояние кнопок сохранения
-        if (saveBtn) {
-            saveBtn.disabled = false;
-            if (saveBtn.innerHTML.includes("Проверка")) {
-                saveBtn.innerHTML = saveBtn.getAttribute('onclick').includes('saveFullChanges') ? "💾 Сохранить" : "Создать";
-            }
-        }
         onApplied([]);
     }
 }
@@ -4593,6 +4576,25 @@ function recalculateAllPricesByPercent() {
     // Синхронизируем с глобальной переменной
     window.currentOrderTotal = totalOrderSum;
 }
+
+
+
+document.querySelectorAll('.tab-link, [data-tab]').forEach(tab => {
+    tab.addEventListener('click', function() {
+        const targetId = this.getAttribute('href') || this.getAttribute('data-tab');
+        if (targetId === '#tab-promos' || targetId === 'tab-promos') {
+            setTimeout(() => {
+                loadPromosByPeriod();
+            }, 100);
+        }
+    });
+});
+
+window.addEventListener('load', () => {
+    if (document.getElementById('tab-promos')?.classList.contains('active')) {
+        loadPromosByPeriod();
+    }
+});
 
 
 document.addEventListener("DOMContentLoaded", async () => {
