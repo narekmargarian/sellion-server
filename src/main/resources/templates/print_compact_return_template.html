@@ -74,8 +74,9 @@
     </table>
 
     <div class="total">
-        ИТОГО ВОЗВРАТ: <span th:text="${#numbers.formatDecimal(op.totalAmount != null ? op.totalAmount : 0, 1, 'WHITESPACE', 0, 'POINT') + ' ֏'}"></span>
+        ИТОГО ВОЗВРАТ: <span th:text="${#numbers.formatDecimal((op.totalAmount != null ? op.totalAmount : 0), 1, 'WHITESPACE', 0, 'POINT') + ' ֏'}"></span>
     </div>
+
     <div th:if="${op.returnReason != null}" style="font-size: 9px; color: #666; margin-top: 3px;">
         Причина: <span th:text="${op.returnReason.displayName}"></span>
     </div>

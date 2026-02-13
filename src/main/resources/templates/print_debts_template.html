@@ -115,8 +115,12 @@
     </table>
 
     <div class="total-row">
-        ОБЩИЙ ДОЛГ: <span th:text="${#numbers.formatDecimal(totalDebt != null ? totalDebt : 0, 1, 'WHITESPACE', 0, 'POINT') + ' ֏'}"></span>
+        ОБЩИЙ ДОЛГ:
+        <span th:with="debt=${totalDebt != null ? totalDebt : 0}"
+              th:text="${#numbers.formatDecimal(debt, 1, 'WHITESPACE', 0, 'POINT') + ' ֏'}">
+    </span>
     </div>
+
 </div>
 
 <div th:if="${invoices == null}" style="text-align: center; padding: 50px;">

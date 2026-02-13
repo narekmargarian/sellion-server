@@ -65,7 +65,12 @@
         <tfoot>
         <tr class="total-row">
             <td colspan="3" class="text-right">ИТОГО ПО РЕЕСТРУ:</td>
-            <td class="text-right" th:text="${#numbers.formatDecimal(finalTotal != null ? finalTotal : 0, 1, 'WHITESPACE', 0, 'POINT') + ' ֏'}"></td>
+
+            <td class="text-right"
+                th:with="val=${finalTotal != null ? finalTotal : 0}"
+                th:text="${#numbers.formatDecimal(val, 1, 'WHITESPACE', 0, 'POINT') + ' ֏'}">
+            </td>
+
             <td></td>
         </tr>
         </tfoot>

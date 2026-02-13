@@ -44,7 +44,8 @@
                 <small th:with="clientOpt=${clientRepo.findByName(o.shopName)}"
                        th:text="${clientOpt != null && clientOpt.isPresent() ? clientOpt.get().address : 'Адрес не найден'}"></small>
             </td>
-            <td th:text="${#numbers.formatDecimal(o.totalAmount != null ? o.totalAmount : 0, 1, 'WHITESPACE', 0, 'POINT') + ' ֏'}"></td>
+            <td th:text="${#numbers.formatDecimal((o.totalAmount ?: 0), 1, 'WHITESPACE', 0, 'POINT') + ' ֏'}"></td>
+
             <td th:text="${o.paymentMethod != null ? o.paymentMethod.displayName : '---'}"></td>
             <td th:text="${o.comment}"></td>
             <td></td>
@@ -55,8 +56,13 @@
         </tbody>
     </table>
     <div class="summary">
-        ИТОГО К СДАЧЕ: <span th:text="${#numbers.formatDecimal(routeTotal != null ? routeTotal : 0, 1, 'WHITESPACE', 0, 'POINT') + ' ֏'}"></span>
+        ИТОГО К СДАЧЕ:
+        <span th:with="safeTotal=${routeTotal ?: 0}"
+              th:text="${#numbers.formatDecimal(safeTotal, 1, 'WHITESPACE', 0, 'POINT') + ' ֏'}">
+    </span>
     </div>
+
+
 </div>
 
 <div th:if="${orders == null}" style="text-align: center; padding: 50px;">

@@ -58,7 +58,12 @@
             <!-- Безопасная проверка типа и форматирование -->
             <td class="text-right" th:text="${#strings.toString(tx.type) == 'ORDER' ? #numbers.formatDecimal(tx.amount, 1, 'WHITESPACE', 0, 'POINT') : ''}"></td>
             <td class="text-right" th:text="${#strings.toString(tx.type) != 'ORDER' ? #numbers.formatDecimal(tx.amount, 1, 'WHITESPACE', 0, 'POINT') : ''}"></td>
-            <td class="text-right" style="font-weight: bold;" th:text="${#numbers.formatDecimal(tx.balanceAfter != null ? tx.balanceAfter : 0, 1, 'WHITESPACE', 0, 'POINT') + ' ֏'}"></td>
+            <td class="text-right"
+                style="font-weight: bold;"
+                th:with="balance=${tx.balanceAfter ?: 0}"
+                th:text="${#numbers.formatDecimal(balance, 1, 'WHITESPACE', 0, 'POINT') + ' ֏'}">
+            </td>
+
         </tr>
         <tr th:if="${#lists.isEmpty(transactions)}">
             <td colspan="5" style="text-align: center; padding: 20px;">Записей за указанный период не найдено.</td>
@@ -67,7 +72,10 @@
         <tfoot>
         <tr class="sum-row">
             <td colspan="4" class="text-right">ИТОГОВОЕ САЛЬДО:</td>
-            <td class="text-right" th:text="${#numbers.formatDecimal(client.balance != null ? client.balance : 0, 1, 'WHITESPACE', 0, 'POINT') + ' ֏'}"></td>
+            <td class="text-right"
+                th:with="cBalance=${client.balance ?: 0}"
+                th:text="${#numbers.formatDecimal(cBalance, 1, 'WHITESPACE', 0, 'POINT') + ' ֏'}">
+            </td>
         </tr>
         </tfoot>
     </table>

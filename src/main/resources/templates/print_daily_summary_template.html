@@ -78,11 +78,11 @@
   <tfoot>
   <tr style="background-color: #eee; font-weight: bold;">
     <td colspan="2" style="text-align: right;">ОБЩИЙ ИТОГ (ШТ):</td>
-    <!-- Исправленный безопасный расчет суммы -->
+
     <td class="qty-cell">
-        <span th:with="totalSum=${summary != null ? #aggregates.sum(summary.![totalQuantity]) : 0}"
-              th:text="${totalSum}">0</span>
+      <span th:text="${totalItemsCount}">0</span>
     </td>
+
   </tr>
   </tfoot>
 </table>

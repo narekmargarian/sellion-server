@@ -394,7 +394,13 @@ public class PrintController {
         summary.sort(Comparator.comparing(DailySummaryDto::getCategory)
                 .thenComparing(DailySummaryDto::getProductName));
 
+        // --- ДОБАВЛЕНО ТУТ: Считаем общую сумму всех количеств ---
+        int totalItemsCount = summary.stream()
+                .mapToInt(DailySummaryDto::getTotalQuantity)
+                .sum();
+
         model.addAttribute("summary", summary);
+        model.addAttribute("totalItemsCount", totalItemsCount); // Передаем готовую сумму
         model.addAttribute("date", "Сводка по " + ids.size() + " заказам");
         model.addAttribute("title", "СВОДНАЯ ВЕДОМОСТЬ (ПОГРУЗКА)");
 
