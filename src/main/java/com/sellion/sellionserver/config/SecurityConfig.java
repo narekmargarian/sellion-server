@@ -50,7 +50,7 @@ public class SecurityConfig {
                 .addFilterBefore(apiKeyAuthFilter(), UsernamePasswordAuthenticationFilter.class)
 
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/", "/login", "/css/**", "/js/**", "/ws-sellion/**").permitAll()
+                        .requestMatchers("/", "/login", "/css/**", "/js/**", "/ws-sellion/**","/img/**").permitAll()
                         .requestMatchers("/api/public/**").permitAll()
 
                         // Доступ к API управления ключами и пользователями — только ADMIN
