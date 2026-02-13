@@ -1534,7 +1534,7 @@ async function deleteProduct(id) {
             showToast("Товар успешно удален (скрыт)!", "success");
             location.reload();
         } else {
-            showToast("Ошибка удаления", "error");
+            showToast("Доступ запрещен", "error");
         }
     });
 }
@@ -1745,10 +1745,10 @@ async function submitInventoryAdjustment() {
             location.reload();
         } else {
             const error = await response.json();
-            showToast(error.message || "Ошибка при сохранении", "error");
+            showToast("Доступ запрещен или Ошибка при сохранении ", "error");
         }
     } catch (e) {
-        showToast("Ошибка сети", "error");
+        showToast("Ошибка ", "error");
     }
 }
 
@@ -4577,6 +4577,46 @@ function recalculateAllPricesByPercent() {
     window.currentOrderTotal = totalOrderSum;
 }
 
+function handleLogout() {
+    showConfirmModal('Подтвердите выход', 'Вы уверены, что хотите покинуть систему?', () => {
+        // Очищаем локальное состояние в браузере
+        localStorage.clear();
+        sessionStorage.clear();
+
+        // Отправляем форму
+        document.getElementById('logout-form').submit();
+    });
+}
+
+async function handleCreateInvoice(orderId) {
+    try {
+        const response = await fetch(`/admin/invoices/create-from-order/${orderId}`, {
+            method: 'POST',
+            headers: window.apiHeaders
+        });
+
+        // 1. Читаем ответ сервера
+        const result = await response.json().catch(() => ({}));
+
+        // 2. КРИТИЧЕСКАЯ ПРОВЕРКА: Если в ответе есть ошибка (её поймал наш перехватчик)
+        // Мы просто выходим из функции и НЕ показываем зеленый тост.
+        if (result.error) {
+            console.log("Действие отменено перехватчиком ошибок.");
+            return;
+        }
+
+        // 3. Только если ошибок НЕТ, показываем успех
+        if (response.ok) {
+            showToast("Счет успешно выставлен", "success");
+            setTimeout(() => location.reload(), 1000);
+        }
+
+    } catch (e) {
+        console.error("Ошибка при создании счета:", e);
+        // Ошибка сети будет обработана перехватчиком автоматически
+    }
+}
+
 
 
 // 1. Обработка клика по вкладкам
@@ -4614,6 +4654,42 @@ window.addEventListener('DOMContentLoaded', () => {
 document.addEventListener("DOMContentLoaded", async () => {
     console.log("🚀 Sellion ERP 2026: Инициализация системы...");
 
+// 1. ГЛОБАЛЬНЫЙ ПЕРЕХВАТЧИК (Ставим в самый верх файла)
+const originalFetch = window.fetch;
+window.fetch = async (...args) => {
+    try {
+        const response = await originalFetch(...args);
+
+        if (!response.ok) {
+            let errorMessage = "Произошла ошибка системы";
+
+            switch (response.status) {
+                case 400: errorMessage = "Некорректный запрос. Проверьте данные"; break;
+                case 403: errorMessage = "Доступ запрещен: Недостаточно прав"; break;
+                case 404: errorMessage = "Запрошенный ресурс не найден"; break;
+                case 408: errorMessage = "Время ожидания истекло"; break;
+                case 500: errorMessage = "Критическая ошибка сервера "; break;
+                case 503: errorMessage = "Сервис временно недоступен"; break;
+            }
+
+            if (typeof showToast === 'function') {
+                showToast(errorMessage, "error");
+            }
+
+            // Возвращаем "фальшивый" успешный ответ с пометкой об ошибке
+            return new Response(JSON.stringify({ error: true, message: errorMessage }), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+            });
+        }
+        return response;
+    } catch (error) {
+        if (typeof showToast === 'function') showToast("Ошибка сети: Проверьте соединение", "error");
+        throw error;
+    }
+};
+
+
     // --- 0. ФУНКЦИЯ УСТАНОВКИ ДАТ ПО УМОЛЧАНИЮ ---
     const setDefaultInvoiceDates = () => {
         const startInput = document.getElementById('inv-date-start');
@@ -4627,6 +4703,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (startInput) startInput.value = firstDay;
         if (endInput) endInput.value = today;
     };
+
 
     // --- 1. CSRF ЗАЩИТА ---
     const token = document.querySelector('input[name="_csrf"]')?.value;
@@ -4654,8 +4731,18 @@ document.addEventListener("DOMContentLoaded", async () => {
     };
     initData();
 
-    // --- 4. НАВИГАЦИЯ ---
-    const lastTab = localStorage.getItem('sellion_tab') || 'tab-main';
+    // --- 4. НАВИГАЦИЯ (ИСПРАВЛЕНО: Умный выбор вкладки) ---
+    // Проверяем, зашел ли пользователь только что (сессия браузера)
+    const isFirstLoadInSession = !sessionStorage.getItem('sellion_session_active');
+    let lastTab = localStorage.getItem('sellion_tab') || 'tab-orders';
+
+    if (isFirstLoadInSession) {
+        // Если это первый вход после открытия браузера/логина — всегда ЗАКАЗЫ
+        lastTab = 'tab-orders';
+        localStorage.setItem('sellion_tab', 'tab-orders');
+        sessionStorage.setItem('sellion_session_active', 'true');
+    }
+
     if (typeof showTab === 'function') showTab(lastTab);
 
     // --- 5. ФОРМАТИРОВАНИЕ И СЧЕТЧИКИ ---
@@ -4679,7 +4766,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
 
         if (typeof refreshReportCounters === 'function') refreshReportCounters();
-        // ОБНОВЛЕНИЕ ТАЙМЕРОВ АКЦИЙ
         if (typeof refreshPromoCounters === 'function') refreshPromoCounters();
     };
 
@@ -4689,7 +4775,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     document.body.addEventListener('click', function (e) {
         const navLink = e.target.closest('.nav-link');
         if (navLink) {
-            // При клике на любую вкладку обновляем форматы и счетчики акций
+            const tabId = navLink.id.replace('btn-', 'tab-');
+            localStorage.setItem('sellion_tab', tabId);
+
+            if (typeof showTab === 'function') showTab(tabId);
+
             requestAnimationFrame(() => {
                 setTimeout(runFormatting, 100);
             });

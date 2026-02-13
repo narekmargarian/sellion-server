@@ -48,7 +48,6 @@ public class ProductApiController {
         return ResponseEntity.ok(ApiResponse.ok("Список активных товаров", products));
     }
 
-    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/create") // Итоговый путь: /api/admin/products/create
     public ResponseEntity<?> createProduct(@RequestBody Product newProduct) {
         try {

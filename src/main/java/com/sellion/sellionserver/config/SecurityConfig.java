@@ -36,58 +36,73 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-                // 1. Настройки заголовков и CORS
+                // 1. Настройки заголовков: Добавлен запрет кэширования для защиты от просмотра страниц после Logout
                 .headers(headers -> headers
                         .frameOptions(frame -> frame.sameOrigin())
+                        .cacheControl(cache -> cache.disable()) // Запрещаем браузеру хранить страницы в кэше
                 )
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
 
-                // 2. ОТКЛЮЧЕНИЕ CSRF (ИСПРАВЛЕНО)
+                // 2. Отключение CSRF для WebSocket и API
                 .csrf(csrf -> csrf.ignoringRequestMatchers("/ws-sellion/**", "/api/**"))
 
                 // 3. Добавляем фильтр API-ключей ПЕРЕД стандартным логином
                 .addFilterBefore(apiKeyAuthFilter(), UsernamePasswordAuthenticationFilter.class)
 
                 .authorizeHttpRequests(auth -> auth
-                        // --- 1. ПУБЛИЧНЫЕ РЕСУРСЫ ---
                         .requestMatchers("/", "/login", "/css/**", "/js/**", "/ws-sellion/**").permitAll()
                         .requestMatchers("/api/public/**").permitAll()
 
-                        // --- 2. АДМИНСКИЕ API (КРИТИЧНО: ДОЛЖНЫ БЫТЬ ВЫШЕ ЧЕМ /api/**) ---
+                        // Доступ к API управления ключами и пользователями — только ADMIN
                         .requestMatchers("/api/admin/manager-keys/**").hasRole("ADMIN")
-                        .requestMatchers("/api/admin/returns/**").hasAnyRole("ADMIN", "OPERATOR")
                         .requestMatchers("/api/admin/settings/**", "/api/admin/users/**").hasRole("ADMIN")
 
-                        // --- 3. МОБИЛЬНОЕ API (Android) ---
-                        // ИДЕАЛЬНОЕ ИСПРАВЛЕНИЕ: Добавляем ROLE_ADMIN,
-                        // чтобы администратор мог использовать ВСЕ API
-                        .requestMatchers("/api/**").hasAnyAuthority("ROLE_MANAGER", "ROLE_ADMIN")
-
-                        // --- 4. ВЕБ-ИНТЕРФЕЙС АДМИНКИ (Thymeleaf страницы) ---
+                        // Настройки и статистика — только ADMIN
                         .requestMatchers("/admin/settings/**", "/admin/users/**").hasRole("ADMIN")
                         .requestMatchers("/admin/dashboard-stats/**").hasRole("ADMIN")
+
+                        // Доступ к операционным API
+                        .requestMatchers("/api/admin/returns/**").hasAnyRole("ADMIN", "OPERATOR")
+                        .requestMatchers("/api/admin/orders/**").hasAnyRole("ADMIN", "OPERATOR")
+
+                        .requestMatchers("/api/admin/**").hasAnyRole("ADMIN", "OPERATOR" , "ACCOUNTANT")
+                        .requestMatchers("/api/products/**").hasAnyRole("ADMIN", "OPERATOR" , "ACCOUNTANT")
+                        .requestMatchers("/api/reports/**").hasAnyRole("ADMIN", "OPERATOR" , "ACCOUNTANT")
+                        .requestMatchers("/api/clients/**").hasAnyRole("ADMIN", "OPERATOR" , "ACCOUNTANT")
+                        .requestMatchers("/api/register/**").hasAnyRole("ADMIN", "OPERATOR" , "ACCOUNTANT")
+
+                        // API для мобильных менеджеров
+                        .requestMatchers("/api/**").hasAnyAuthority("ROLE_MANAGER", "ROLE_ADMIN")
+
+                        // Доступ к Web-разделам по ролям
                         .requestMatchers("/admin/invoices/**", "/api/payments/**").hasAnyRole("ADMIN", "ACCOUNTANT")
-                        .requestMatchers("/admin/reports/**", "/api/reports/**").hasAnyRole("ADMIN", "ACCOUNTANT")
+                        .requestMatchers("/admin/reports/**", "/api/reports/**").hasAnyRole("ADMIN", "ACCOUNTANT", "OPERATOR")
                         .requestMatchers("/admin/**").hasAnyRole("ADMIN", "OPERATOR", "ACCOUNTANT")
 
-                        // Все остальные запросы должны быть аутентифицированы
                         .anyRequest().authenticated()
                 )
 
                 // 5. НАСТРОЙКИ ЛОГИНА
                 .formLogin(form -> form
                         .loginPage("/login")
-                        .defaultSuccessUrl("/admin", true)
+                        .defaultSuccessUrl("/admin", true) // Всегда редиректить на /admin после входа
                         .failureUrl("/login?error")
                         .permitAll()
                 )
+
+                // 6. НАСТРОЙКИ ВЫХОДА (Исправлено для полной очистки сессии)
                 .logout(logout -> logout
+                        .logoutUrl("/logout")
                         .logoutSuccessUrl("/login?logout")
-                        .deleteCookies("JSESSIONID")
+                        .invalidateHttpSession(true)    // Аннулировать текущую сессию
+                        .clearAuthentication(true)      // Стереть данные об аутентификации
+                        .deleteCookies("JSESSIONID")    // Удалить куки сессии
+                        .permitAll()
                 );
 
         return http.build();
     }
+
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {

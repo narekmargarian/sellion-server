@@ -15,7 +15,7 @@ import java.util.List;
 
 @Service
 @RequiredArgsConstructor
-@Slf4j // Используем Slf4j
+@Slf4j
 public class UserService {
 
     private final UserRepository userRepository;
@@ -27,12 +27,12 @@ public class UserService {
 
     @Transactional
     public User saveUser(User user) {
-        // 1. Проверка на дубликат логина (только для новых пользователей или при смене логина)
-        if (user.getId() == null) { // Если создаем нового
+        // 1. Проверка на дубликат логина
+        if (user.getId() == null) {
             if (userRepository.existsByUsername(user.getUsername())) {
                 throw new RuntimeException("Пользователь с логином '" + user.getUsername() + "' уже существует!");
             }
-        } else { // Если редактируем существующего
+        } else {
             userRepository.findByUsername(user.getUsername()).ifPresent(existingUser -> {
                 if (!existingUser.getId().equals(user.getId())) {
                     throw new RuntimeException("Логин '" + user.getUsername() + "' уже занят другим сотрудником!");
@@ -40,14 +40,15 @@ public class UserService {
             });
         }
 
-        // 2. Шифрование пароля
+        // 2. Шифрование пароля (ОДНОКРАТНОЕ)
+        // ВАЖНО: В UserApiController.editUser мы теперь передаем сырой пароль,
+        // и здесь он надежно шифруется перед сохранением в БД.
         if (user.getPassword() != null && !user.getPassword().isEmpty()) {
             user.setPassword(passwordEncoder.encode(user.getPassword()));
         }
 
         return userRepository.save(user);
     }
-
 
     @Transactional
     public void resetPassword(Long id, String newPassword) {
@@ -57,14 +58,15 @@ public class UserService {
         });
     }
 
-    // ИДЕАЛЬНО: Метод инициализации полностью удален по запросу пользователя.
-    // Теперь вы должны создать первого администратора вручную в вашей БД.
-
     @Transactional
     public void toggleUserStatus(Long id) {
         userRepository.findById(id).ifPresent(user -> {
-            user.setEnabled(!user.isEnabled());
+            // ИСПРАВЛЕНО: Для объекта Boolean геттер называется getEnabled()
+            // Также добавлена проверка на null для безопасности
+            boolean currentStatus = (user.getEnabled() != null) ? user.getEnabled() : true;
+            user.setEnabled(!currentStatus);
             userRepository.save(user);
+            log.info("Статус пользователя {} изменен на {}", user.getUsername(), user.getEnabled());
         });
     }
 }

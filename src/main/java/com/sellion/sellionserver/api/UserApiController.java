@@ -14,7 +14,6 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
 
-
 @RestController
 @RequestMapping("/api/admin/users")
 @RequiredArgsConstructor
@@ -22,8 +21,7 @@ import java.util.Map;
 public class UserApiController {
 
     private final UserService userService;
-    private final UserRepository userRepository; // Добавлено
-    private final PasswordEncoder passwordEncoder; // Добавлено
+    private final UserRepository userRepository;
 
     @GetMapping
     public List<User> getAllUsers() {
@@ -33,15 +31,19 @@ public class UserApiController {
     @PostMapping("/create")
     public ResponseEntity<?> createUser(@RequestBody User newUser) {
         try {
+            // ИСПРАВЛЕНО: Защита от ошибки Jackson "Cannot map null into type boolean"
+            // Если с фронтенда не пришло состояние активности, ставим true по умолчанию
+            if (newUser.getEnabled() == null) {
+                newUser.setEnabled(true);
+            }
+
             userService.saveUser(newUser);
             return ResponseEntity.ok(Map.of("message", "Пользователь создан"));
         } catch (RuntimeException e) {
-            // Отправляем текст ошибки (например: "Пользователь уже существует")
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(Map.of("message", e.getMessage()));
         }
     }
-
 
     @PostMapping("/reset-password/{id}")
     public ResponseEntity<?> resetPassword(@PathVariable Long id) {
@@ -58,19 +60,20 @@ public class UserApiController {
     @PutMapping("/edit/{id}")
     public ResponseEntity<?> editUser(@PathVariable Long id, @RequestBody Map<String, Object> payload) {
         try {
-            // Находим пользователя
             User user = userRepository.findById(id).orElseThrow(() -> new RuntimeException("Не найден"));
 
             user.setUsername((String) payload.get("username"));
             user.setFullName((String) payload.get("fullName"));
             user.setRole(Role.valueOf((String) payload.get("role")));
 
+            // ИСПРАВЛЕНО: Передаем пароль КАК ЕСТЬ.
+            // Убрали использование passwordEncoder здесь, чтобы UserService зашифровал его ОДИН РАЗ.
             String newPassword = (String) payload.get("password");
             if (newPassword != null && !newPassword.trim().isEmpty()) {
-                user.setPassword(passwordEncoder.encode(newPassword));
+                user.setPassword(newPassword);
             }
 
-            userService.saveUser(user); // Используем сервис для проверки логина
+            userService.saveUser(user);
             return ResponseEntity.ok(Map.of("message", "Данные обновлены"));
         } catch (RuntimeException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)

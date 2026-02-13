@@ -208,27 +208,6 @@ public class PrintController {
         return "print_list_template";
     }
 
-    // 5. Компактная печать для доставки (Чеки)
-//    @GetMapping("/logistic/print-compact")
-//    @Transactional(readOnly = true)
-//    public String printCompact(@RequestParam String managerId, @RequestParam String date, @RequestParam String type, Model model) {
-//        LocalDate deliveryDate = LocalDate.parse(date);
-//
-//        if ("order".equals(type)) {
-//            List<Order> orders = orderRepository.findDailyRouteOrders(managerId, deliveryDate);
-//            model.addAttribute("payload", orders);
-//            model.addAttribute("title", "РЕЕСТР НАКЛАДНЫХ");
-//        } else {
-//            List<ReturnOrder> returns = returnOrderRepository.findReturnsByManagerAndDateRange(managerId, deliveryDate.atStartOfDay(), deliveryDate.atTime(LocalTime.MAX));
-//            model.addAttribute("payload", returns);
-//            model.addAttribute("title", "РЕЕСТР ВОЗВРАТОВ");
-//        }
-//
-//        // Передаем правильные репозитории для отображения данных в компактном виде
-//        model.addAttribute("productRepo", productRepository);
-//        return "print_compact_template";
-//    }
-
 
 
     @GetMapping("/logistic/print-compact")

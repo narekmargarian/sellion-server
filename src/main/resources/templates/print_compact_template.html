@@ -47,7 +47,6 @@
             <th>№</th>
             <th>Наименование товара</th>
             <th>Кол-во</th>
-            <th>Ед.</th> <!-- Тут будет itemsPerBox или unit -->
             <th>Прайс</th>
             <th>%</th>
             <th>Цена</th>
@@ -67,8 +66,7 @@
             <td th:text="${p != null ? p.name : 'Товар #' + entry.key}"></td>
             <td th:text="${entry.value}"></td>
 
-            <!-- ИСПРАВЛЕНО: Если есть itemsPerBox, пишем его (напр. '12'), иначе пишем unit (напр. 'шт.') -->
-            <td th:text="${p != null ? (p.itemsPerBox != null ? p.itemsPerBox : p.unit) : '---'}"></td>
+
 
             <td th:text="${#numbers.formatDecimal(basePrice, 1, 'WHITESPACE', 0, 'POINT') + ' ֏'}"></td>
             <td th:text="${discount.doubleValue() > 0 ? (discount + '%') : '-'}"></td>

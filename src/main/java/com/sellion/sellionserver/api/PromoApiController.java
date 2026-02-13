@@ -29,24 +29,12 @@ public class PromoApiController {
     @GetMapping("/filter")
     public List<PromoAction> getPromosByPeriod(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate start,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate end,
-            Principal principal) {
-
-        String currentUser = (principal != null) ? principal.getName() : "ANONYMOUS";
-
-        boolean isAdmin = currentUser.equalsIgnoreCase("ADMIN") ||
-                currentUser.equalsIgnoreCase("admin") ||
-                currentUser.equalsIgnoreCase("Офис");
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate end) {
 
         List<PromoAction> result;
-        if (isAdmin) {
-            log.info("Режим: АДМИНИСТРАТОР (поиск всех акций)");
-            result = promoRepository.findByPeriod(start, end);
-        } else {
-            log.info("Режим: МЕНЕДЖЕР (поиск для ID: {})", currentUser);
-            result = promoRepository.findByPeriodAndManager(start, end, currentUser);
-        }
 
+        log.info("Режим: Офис (поиск всех акций)");
+        result = promoRepository.findByPeriod(start, end);
 
         return result;
     }
@@ -124,7 +112,6 @@ public class PromoApiController {
         return ResponseEntity.ok(promoRepository.save(promo));
     }
 
-    // 4. ПОДТВЕРЖДЕНИЕ АКЦИИ
     @PostMapping("/{id}/confirm")
     @Transactional
     public ResponseEntity<?> confirmPromo(@PathVariable Long id) {
