@@ -233,7 +233,7 @@ async function confirmReturn(id) {
                     // Формируем детальное сообщение
                     let successMsg = `Возврат #${id} проведен. `;
                     if (result.stockUpdated) {
-                        successMsg += "📦 Товар возвращен на склад.";
+                        successMsg += "Товар возвращен на склад.";
                     }
 
                     showToast(successMsg, "success");
@@ -759,7 +759,7 @@ function openOrderDetails(id) {
 
     // 1. Заголовок
     document.getElementById('modal-title').innerHTML = isWriteOff
-        ? `<span style="color: #ef4444;">📉 СПИСАНИЕ №${order.id}</span>`
+        ? `<span style="color: #ef4444;">СПИСАНИЕ №${order.id}</span>`
         : `ЗАКАЗ №${order.id} <span class="badge" style="background: #6366f1; margin-left: 10px;">${discountPercent}%</span>`;
 
     const info = document.getElementById('order-info');
@@ -898,7 +898,7 @@ function enableOrderEdit(id) {
     renderItemsTable(tempItems, true);
 
     document.getElementById('order-footer-actions').innerHTML = `
-        <button class="btn-primary" style="background:#10b981" onclick="saveFullChanges(${id})">💾 Сохранить</button>
+        <button class="btn-primary" style="background:#10b981" onclick="saveFullChanges(${id})">Сохранить</button>
         <button class="btn-primary" style="background:#64748b" onclick="openOrderDetails(${id})">Отмена</button>`;
 }
 
@@ -1606,7 +1606,7 @@ function enableProductEdit() {
     `;
 
     document.getElementById('product-footer-actions').innerHTML = `
-        <button class="btn-primary" style="background:#10b981" onclick="saveProductChanges(${p.id})">💾 Сохранить</button>
+        <button class="btn-primary" style="background:#10b981" onclick="saveProductChanges(${p.id})">Сохранить</button>
         <button class="btn-primary" style="background:#64748b" onclick="openProductDetails(${p.id})">Отмена</button>
     `;
 }
@@ -2601,9 +2601,7 @@ function updateQtyAndRecalculate(pId, shouldRedraw = false) {
         }
         return;
     }
-    // ----------------------------------------------
 
-    // 3. Определяем режим (Возврат или Заказ)
     const modalTitleEl = document.getElementById('modal-title');
     const modalTitle = modalTitleEl ? modalTitleEl.innerText.toUpperCase() : "";
     const isReturnOrWriteOff = modalTitle.includes("ВОЗВРАТ") || modalTitle.includes("СПИСАНИЕ") || modalTitle.includes("🔄");
@@ -3134,11 +3132,11 @@ async function executeEditRequest(data, btn) {
         } else {
             const err = await response.json();
             showToast(err.error || "Ошибка при сохранении", "error");
-            if (btn) { btn.disabled = false; btn.innerText = "💾 Сохранить"; }
+            if (btn) { btn.disabled = false; btn.innerText = "Сохранить"; }
         }
     } catch (e) {
         showToast("Ошибка сети", "error");
-        if (btn) { btn.disabled = false; btn.innerText = "💾 Сохранить"; }
+        if (btn) { btn.disabled = false; btn.innerText = "Сохранить"; }
     }
 }
 
@@ -3332,7 +3330,7 @@ function enableReturnEdit(id) {
     renderItemsTable(tempItems, true);
 
     document.getElementById('order-footer-actions').innerHTML = `
-        <button class="btn-primary" style="background:#10b981; padding: 10px 25px;" onclick="saveReturnChanges(${id})">💾 Сохранить</button>
+        <button class="btn-primary" style="background:#10b981; padding: 10px 25px;" onclick="saveReturnChanges(${id})">Сохранить</button>
         <button class="btn-primary" style="background:#64748b; padding: 10px 25px;" onclick="openReturnDetails(${id})">Отмена</button>
     `;
 }
@@ -3739,7 +3737,7 @@ function initDeliveryDateLogic() {
     dateInput.addEventListener('change', function() {
         const selected = new Date(this.value);
         if (selected.getDay() === 0) {
-            alert("⚠️ Воскресенье — выходной. Пожалуйста, выберите рабочий день.");
+            showToast("Воскресенье — выходной. Пожалуйста, выберите рабочий день.", "info");
             this.value = finalDateStr;
         }
     });
@@ -3775,7 +3773,7 @@ function openPromoModal(productId) {
     document.getElementById('order-total-price').innerText = "";
 
     document.getElementById('order-footer-actions').innerHTML = `
-        <button class="btn-primary" style="background:#ff9800" onclick="savePromo(${productId})">💾 СОХРАНИТЬ АКЦИЮ</button>
+        <button class="btn-primary" style="background:#ff9800" onclick="savePromo(${productId})">СОХРАНИТЬ</button>
         <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-order-view')">ЗАКРЫТЬ</button>
     `;
 
@@ -3853,7 +3851,7 @@ function openCreatePromoModal() {
     renderPromoItemsTable(true); // true = режим редактирования
 
     document.getElementById('order-footer-actions').innerHTML = `
-        <button class="btn-primary" style="background:#10b981" onclick="submitPromo(false)">💾 СОХРАНИТЬ</button>
+        <button class="btn-primary" style="background:#10b981" onclick="submitPromo(false)">СОХРАНИТЬ</button>
         <button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-order-view')">ЗАКРЫТЬ</button>
     `;
     openModal('modal-order-view');
@@ -4261,7 +4259,7 @@ function enablePromoEdit(id) {
     renderPromoItemsTable(true); // Включаем режим добавления товаров
 
     document.getElementById('order-footer-actions').innerHTML = `
-        <button class="btn-primary" style="background:#10b981" onclick="submitPromo(true, ${id})">💾 СОХРАНИТЬ ИЗМЕНЕНИЯ</button>
+        <button class="btn-primary" style="background:#10b981" onclick="submitPromo(true, ${id})">СОХРАНИТЬ ИЗМЕНЕНИЯ</button>
         <button class="btn-primary" style="background:#64748b" onclick="openPromoDetails(${id})">ОТМЕНА</button>
     `;
 }
@@ -4638,14 +4636,20 @@ document.querySelectorAll('.tab-link, [data-tab]').forEach(tab => {
 
 // 2. Автозагрузка при старте страницы (если вкладка Акции открыта по умолчанию)
 window.addEventListener('DOMContentLoaded', () => {
+    // 1. Проверяем вкладку через localStorage (так как вы сохраняете её там при клике)
+    const currentTab = localStorage.getItem('sellion_tab');
+
+    // 2. Проверяем также физическое наличие класса active или хеша в URL
     const promoTab = document.getElementById('tab-promos');
-    // Проверяем: либо у вкладки есть класс 'active', либо в URL есть метка этой вкладки
-    const isActive = promoTab?.classList.contains('active') || window.location.hash === '#tab-promos';
+    const isActive = (currentTab === 'tab-promos') ||
+        promoTab?.classList.contains('active') ||
+        window.location.hash === '#tab-promos';
 
     if (isActive) {
+        // Увеличим задержку до 500мс, чтобы Thymeleaf (th:value) точно успел проставить даты
         setTimeout(() => {
             loadPromosByPeriod();
-        }, 300); // Даем время для инициализации дат в инпутах
+        }, 500);
     }
 });
 
@@ -4780,10 +4784,18 @@ window.fetch = async (...args) => {
 
             if (typeof showTab === 'function') showTab(tabId);
 
+            // --- ДОБАВЬТЕ ЭТОТ БЛОК ---
+            if (tabId === 'tab-promos') {
+                setTimeout(() => {
+                    loadPromosByPeriod();
+                }, 50);
+            }
+
             requestAnimationFrame(() => {
                 setTimeout(runFormatting, 100);
             });
         }
+
 
         const categoryHeader = e.target.closest('.js-category-toggle');
         if (categoryHeader) {
