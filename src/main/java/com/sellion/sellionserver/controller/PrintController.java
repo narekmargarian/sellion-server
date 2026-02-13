@@ -318,8 +318,12 @@ public class PrintController {
             dto.name = (p != null) ? p.getName() : "Товар (ID: " + pId + ") удален";
             dto.quantity = qty;
 
-            // ПРИОРИТЕТ: Акция на товар > Скидка магазина
-            BigDecimal discount = order.getAppliedPromoItems().getOrDefault(pId, order.getDiscountPercent());
+            // ПРИОРИТЕТ: Акция на товар > Скидка магазина (с защитой от null)
+            BigDecimal discount = order.getAppliedPromoItems().get(pId);
+            if (discount == null) {
+                discount = Optional.ofNullable(order.getDiscountPercent()).orElse(BigDecimal.ZERO);
+            }
+
             BigDecimal basePrice = (p != null) ? p.getPrice() : BigDecimal.ZERO;
 
             // Считаем цену со скидкой
