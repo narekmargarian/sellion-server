@@ -50,37 +50,41 @@ public class SecurityConfig {
                 .addFilterBefore(apiKeyAuthFilter(), UsernamePasswordAuthenticationFilter.class)
 
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/", "/login", "/css/**", "/js/**", "/ws-sellion/**","/img/**").permitAll()
+                        // 1. ПУБЛИЧНЫЕ РЕСУРСЫ (Доступны всем)
+                        .requestMatchers("/", "/login", "/css/**", "/js/**", "/img/**", "/ws-sellion/**").permitAll()
                         .requestMatchers("/api/public/**").permitAll()
 
-                        // Доступ к API управления ключами и пользователями — только ADMIN
-                        .requestMatchers("/api/admin/manager-keys/**").hasRole("ADMIN")
-                        .requestMatchers("/api/admin/settings/**", "/api/admin/users/**").hasRole("ADMIN")
+                        // 2. ДОСТУП ДЛЯ ВСЕХ СОТРУДНИКОВ (И мобилка, и офис)
+                        // Эти API нужны всем ролям, включая менеджера
+                        .requestMatchers("/api/products/**", "/api/clients/**")
+                        .hasAnyRole("ADMIN", "OPERATOR", "ACCOUNTANT", "MANAGER")
 
-                        // Настройки и статистика — только ADMIN
-                        .requestMatchers("/admin/settings/**", "/admin/users/**").hasRole("ADMIN")
-                        .requestMatchers("/admin/dashboard-stats/**").hasRole("ADMIN")
+                        // 3. ОПЕРАЦИОННЫЕ API (Заказы и возвраты)
+                        // Менеджеры отправляют, операторы обрабатывают
+                        .requestMatchers("/api/orders/**", "/api/returns/**", "/api/admin/orders/**", "/api/admin/returns/**")
+                        .hasAnyRole("ADMIN", "OPERATOR", "MANAGER")
 
-                        // Доступ к операционным API
-                        .requestMatchers("/api/admin/returns/**").hasAnyRole("ADMIN", "OPERATOR")
-                        .requestMatchers("/api/admin/orders/**").hasAnyRole("ADMIN", "OPERATOR")
+                        // 4. СПЕЦИФИЧЕСКИЕ API ОФИСА (Только для бухгалтеров и админов)
+                        // Сюда мобильное приложение (MANAGER) не попадет
+                        .requestMatchers("/api/payments/**", "/api/reports/**", "/admin/invoices/**")
+                        .hasAnyRole("ADMIN", "ACCOUNTANT")
 
-                        .requestMatchers("/api/admin/**").hasAnyRole("ADMIN", "OPERATOR" , "ACCOUNTANT")
-                        .requestMatchers("/api/products/**").hasAnyRole("ADMIN", "OPERATOR" , "ACCOUNTANT")
-                        .requestMatchers("/api/reports/**").hasAnyRole("ADMIN", "OPERATOR" , "ACCOUNTANT")
-                        .requestMatchers("/api/clients/**").hasAnyRole("ADMIN", "OPERATOR" , "ACCOUNTANT")
-                        .requestMatchers("/api/register/**").hasAnyRole("ADMIN", "OPERATOR" , "ACCOUNTANT")
+                        .requestMatchers("/api/admin/settings/**", "/api/admin/users/**", "/api/admin/manager-keys/**")
+                        .hasRole("ADMIN")
 
-                        // API для мобильных менеджеров
+                        // 5. ГЛАВНЫЙ ЗОНТИК ДЛЯ МОБИЛКИ
+                        // Любой другой запрос к /api/, не попавший под правила выше,
+                        // разрешен только менеджерам и админам.
                         .requestMatchers("/api/**").hasAnyAuthority("ROLE_MANAGER", "ROLE_ADMIN")
 
-                        // Доступ к Web-разделам по ролям
-                        .requestMatchers("/admin/invoices/**", "/api/payments/**").hasAnyRole("ADMIN", "ACCOUNTANT")
-                        .requestMatchers("/admin/reports/**", "/api/reports/**").hasAnyRole("ADMIN", "ACCOUNTANT", "OPERATOR")
+                        // 6. WEB-ИНТЕРФЕЙС (Панель управления)
                         .requestMatchers("/admin/**").hasAnyRole("ADMIN", "OPERATOR", "ACCOUNTANT")
 
+                        // 7. ВСЕ ОСТАЛЬНОЕ
                         .anyRequest().authenticated()
                 )
+
+
 
                 // 5. НАСТРОЙКИ ЛОГИНА
                 .formLogin(form -> form
