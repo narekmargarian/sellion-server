@@ -4,6 +4,7 @@ import com.sellion.sellionserver.repository.ManagerApiKeyRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -36,76 +37,75 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-                // 1. Настройки заголовков: Добавлен запрет кэширования для защиты от просмотра страниц после Logout
                 .headers(headers -> headers
                         .frameOptions(frame -> frame.sameOrigin())
-                        .cacheControl(cache -> cache.disable()) // Запрещаем браузеру хранить страницы в кэше
+                        .cacheControl(cache -> cache.disable())
                 )
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-
-                // 2. Отключение CSRF для WebSocket и API
                 .csrf(csrf -> csrf.ignoringRequestMatchers("/ws-sellion/**", "/api/**"))
-
-                // 3. Добавляем фильтр API-ключей ПЕРЕД стандартным логином
                 .addFilterBefore(apiKeyAuthFilter(), UsernamePasswordAuthenticationFilter.class)
 
                 .authorizeHttpRequests(auth -> auth
-                        // 1. ПУБЛИЧНЫЕ РЕСУРСЫ (Доступны всем)
+                        // 1. ПУБЛИЧНЫЕ РЕСУРСЫ
                         .requestMatchers("/", "/login", "/css/**", "/js/**", "/img/**", "/ws-sellion/**").permitAll()
                         .requestMatchers("/api/public/**").permitAll()
 
-                        // 2. ДОСТУП ДЛЯ ВСЕХ СОТРУДНИКОВ (И мобилка, и офис)
-                        // Эти API нужны всем ролям, включая менеджера
-                        .requestMatchers("/api/products/**", "/api/clients/**")
-                        .hasAnyRole("ADMIN", "OPERATOR", "ACCOUNTANT", "MANAGER")
+                        // 2. СКЛАД (ПРОСМОТР И ИСТОРИЯ)
+                        // Разрешаем просмотр (GET) всем ролям офиса и мобилки
+                        .requestMatchers(HttpMethod.GET, "/api/products/**").hasAnyRole("ADMIN", "OPERATOR", "ACCOUNTANT", "MANAGER")
 
-                        // 3. ОПЕРАЦИОННЫЕ API (Заказы и возвраты)
-                        // Менеджеры отправляют, операторы обрабатывают
-                        .requestMatchers("/api/orders/**", "/api/returns/**", "/api/admin/orders/**", "/api/admin/returns/**")
-                        .hasAnyRole("ADMIN", "OPERATOR", "MANAGER")
+                        // ИНВЕНТАРИЗАЦИЯ, СОЗДАНИЕ, УДАЛЕНИЕ, ИМПОРТ — ТОЛЬКО АДМИН
+                        .requestMatchers("/api/admin/products/*/inventory", "/api/products/create", "/api/products/import").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.DELETE, "/api/products/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/products/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.PUT, "/api/products/**").hasRole("ADMIN")
 
-                        // 4. СПЕЦИФИЧЕСКИЕ API ОФИСА (Только для бухгалтеров и админов)
-                        // Сюда мобильное приложение (MANAGER) не попадет
-                        .requestMatchers("/api/payments/**", "/api/reports/**", "/admin/invoices/**")
-                        .hasAnyRole("ADMIN", "ACCOUNTANT")
+                        // 3. АКЦИИ (ПРОСМОТР ДЛЯ ВСЕХ, УДАЛЕНИЕ ДЛЯ АДМИНА И ОПЕРАТОРА)
+                        .requestMatchers("/api/admin/promos/filter", "/api/admin/promos/check-active-for-items").hasAnyRole("ADMIN", "OPERATOR", "ACCOUNTANT", "MANAGER")
+                        .requestMatchers(HttpMethod.DELETE, "/api/admin/promos/**").hasAnyRole("ADMIN", "OPERATOR")
+                        .requestMatchers("/api/admin/promos/**").hasAnyRole("ADMIN", "MANAGER", "OPERATOR")
 
-                        .requestMatchers("/api/admin/settings/**", "/api/admin/users/**", "/api/admin/manager-keys/**")
-                        .hasRole("ADMIN")
+                        // 4. КЛИЕНТЫ (ПРОСМОТР И РЕДАКТИРОВАНИЕ)
+                        .requestMatchers(HttpMethod.GET, "/api/clients/**").hasAnyRole("ADMIN", "OPERATOR", "ACCOUNTANT", "MANAGER")
+                        .requestMatchers(HttpMethod.PUT, "/api/admin/clients/*/edit").hasAnyRole("ADMIN", "OPERATOR")
 
-                        // 5. ГЛАВНЫЙ ЗОНТИК ДЛЯ МОБИЛКИ
-                        // Любой другой запрос к /api/, не попавший под правила выше,
-                        // разрешен только менеджерам и админам.
-                        .requestMatchers("/api/**").hasAnyAuthority("ROLE_MANAGER", "ROLE_ADMIN")
+                        // 5. ОПЕРАЦИОННЫЕ API (ЗАКАЗЫ И ВОЗВРАТЫ)
+                        // СПИСАНИЕ ТОВАРА (Write-off) — ТОЛЬКО АДМИН
+                        .requestMatchers("/api/admin/orders/write-off").hasRole("ADMIN")
+                        // Остальные операции заказов/возвратов
+                        .requestMatchers("/api/orders/**", "/api/returns/**", "/api/admin/orders/**", "/api/admin/returns/**").hasAnyRole("ADMIN", "OPERATOR", "MANAGER")
 
-                        // 6. WEB-ИНТЕРФЕЙС (Панель управления)
+                        // 6. ПЕЧАТЬ И ИНВОЙСЫ
+                        .requestMatchers("/admin/invoices/print/**", "/admin/orders/print/**", "/admin/returns/print/**", "/admin/logistic/**").hasAnyRole("ADMIN", "OPERATOR", "ACCOUNTANT")
+                        .requestMatchers("/api/payments/**", "/api/reports/**", "/admin/invoices/**").hasAnyRole("ADMIN", "ACCOUNTANT", "OPERATOR")
+
+                        // 7. АДМИНИСТРИРОВАНИЕ (ТОЛЬКО АДМИН)
+                        .requestMatchers("/api/admin/settings/**", "/api/admin/users/**", "/api/admin/manager-keys/**").hasRole("ADMIN")
+
+                        // 8. WEB-ИНТЕРФЕЙС (ПАНЕЛЬ УПРАВЛЕНИЯ)
                         .requestMatchers("/admin/**").hasAnyRole("ADMIN", "OPERATOR", "ACCOUNTANT")
 
-                        // 7. ВСЕ ОСТАЛЬНОЕ
                         .anyRequest().authenticated()
                 )
 
-
-
-                // 5. НАСТРОЙКИ ЛОГИНА
                 .formLogin(form -> form
                         .loginPage("/login")
-                        .defaultSuccessUrl("/admin", true) // Всегда редиректить на /admin после входа
+                        .defaultSuccessUrl("/admin", true)
                         .failureUrl("/login?error")
                         .permitAll()
                 )
-
-                // 6. НАСТРОЙКИ ВЫХОДА (Исправлено для полной очистки сессии)
                 .logout(logout -> logout
                         .logoutUrl("/logout")
                         .logoutSuccessUrl("/login?logout")
-                        .invalidateHttpSession(true)    // Аннулировать текущую сессию
-                        .clearAuthentication(true)      // Стереть данные об аутентификации
-                        .deleteCookies("JSESSIONID")    // Удалить куки сессии
+                        .invalidateHttpSession(true)
+                        .clearAuthentication(true)
+                        .deleteCookies("JSESSIONID")
                         .permitAll()
                 );
 
         return http.build();
     }
+
 
 
     @Bean

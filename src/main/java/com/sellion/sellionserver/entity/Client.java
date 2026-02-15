@@ -21,15 +21,15 @@ public class Client {
     private Long id;
 
     @Column(nullable = false)
-    private String name;    // Название магазина (например, "Զովք Շրջանային")
-    private String address; // Адрес
-    private String ownerName; // ИП или владелец (например, "ИП Акопян")
-    private String inn;     // ИНН предприятия
-    private String phone;   // Номер телефона для связи
-    private String routeDay; // День маршрута (Понедельник, Вторник и т.д.)
+    private String name;
+    private String address;
+    private String ownerName;
+    private String inn;
+    private String phone;
+    private String routeDay;
     private BigDecimal debt = BigDecimal.ZERO;
     private String managerId;
-    private boolean isDeleted = false; // Флаг мягкого удаления
+    private boolean isDeleted = false;
     private String bankAccount;
     private String bankName;
     private String category;

@@ -221,11 +221,97 @@ public class MainWebController {
         model.addAttribute("selectedReturnManager", returnManagerId);
     }
 
+//
+//    private void groupAndWarehouse(String activeTab, int clientPage, String clientCategory,
+//                                   String clientSearch, Model model, List<String> managersForUI,
+//                                   Map<String, ManagerKpiDTO> managerStats, List<Invoice> invoices) {
+//        // 1. Склад: Получаем активные товары с сортировкой
+//        List<Product> activeProducts = Optional.ofNullable(productRepository.findAllByIsDeletedFalse()).orElse(new ArrayList<>());
+//
+//        Map<String, List<Product>> groupedProducts = activeProducts.stream()
+//                .filter(Objects::nonNull)
+//                .peek(p -> {
+//                    if (p.getCategory() == null || p.getCategory().isBlank()) p.setCategory("Без категории");
+//                })
+//                .collect(Collectors.groupingBy(
+//                        Product::getCategory,
+//                        TreeMap::new,
+//                        Collectors.collectingAndThen(Collectors.toList(), list -> {
+//                            list.sort(Comparator.comparing(Product::getName));
+//                            return list;
+//                        })
+//                ));
+//
+//        model.addAttribute("groupedProducts", groupedProducts);
+//        model.addAttribute("products", activeProducts);
+//
+//        // 2. Логика PAGE + SEARCH для Клиентов (Исправлено)
+//        int pageSize = 50;
+//        Pageable pageable = PageRequest.of(clientPage, pageSize, Sort.by("name").ascending());
+//        Page<Client> clientsPage;
+//
+//        // Очистка параметров для поиска
+//        String searchKeyword = (clientSearch != null && !clientSearch.trim().isEmpty()) ? clientSearch.trim() : null;
+//        String categoryFilter = (clientCategory != null && !clientCategory.trim().isEmpty()) ? clientCategory.trim() : null;
+//
+//        // Глобальный поиск по базе через репозиторий
+//        if (searchKeyword != null || categoryFilter != null) {
+//            // Вызываем новый метод поиска, который ищет по имени И адресу И категории
+//            clientsPage = clientRepository.searchClients(searchKeyword, categoryFilter, pageable);
+//        } else {
+//            clientsPage = clientRepository.findAllByIsDeletedFalse(pageable);
+//        }
+//
+//        model.addAttribute("clients", clientsPage.getContent());
+//        model.addAttribute("clientCurrentPage", clientPage);
+//        model.addAttribute("clientTotalPages", clientsPage.getTotalPages());
+//        model.addAttribute("clientTotalElements", clientsPage.getTotalElements());
+//        model.addAttribute("selectedCategory", clientCategory);
+//        model.addAttribute("clientSearch", clientSearch); // Чтобы значение осталось в инпуте
+//        model.addAttribute("clientCategories", clientRepository.findUniqueCategories());
+//
+//        // 3. Персонал и KPI
+//        model.addAttribute("users", Optional.ofNullable(userRepository.findAll()).orElse(new ArrayList<>()));
+//        model.addAttribute("managers", managersForUI);
+//        model.addAttribute("managersKPI", managersForUI);
+//        model.addAttribute("managerStats", managerStats);
+//
+//
+//
+//        // 4. Логика просрочки
+//        LocalDateTime limitDate = LocalDateTime.now().minusDays(30);
+//        Set<String> overdueClients = invoices.stream()
+//                .filter(inv -> inv != null && !"PAID".equals(inv.getStatus()))
+//                .filter(inv -> inv.getCreatedAt() != null && inv.getCreatedAt().isBefore(limitDate))
+//                .map(Invoice::getShopName)
+//                .filter(Objects::nonNull)
+//                .collect(Collectors.toSet());
+//        model.addAttribute("overdueClients", overdueClients);
+//
+//        // 5. Карта долгов для JS
+//        List<Client> allActiveForMap = clientRepository.findAllByIsDeletedFalse();
+//        Map<String, BigDecimal> clientDebts = allActiveForMap.stream()
+//                .filter(c -> c != null && c.getName() != null)
+//                .collect(Collectors.toMap(
+//                        Client::getName,
+//                        c -> c.getDebt() != null ? c.getDebt() : BigDecimal.ZERO,
+//                        (existing, replacement) -> existing
+//                ));
+//
+//        model.addAttribute("clientDebts", clientDebts);
+//        model.addAttribute("paymentMethods", PaymentMethod.values());
+//        model.addAttribute("returnReasons", ReasonsReturn.values());
+//        model.addAttribute("activeTab", activeTab);
+//    }
 
-    private void groupAndWarehouse(String activeTab, int clientPage, String clientCategory, String clientSearch, Model model, List<String> managersForUI, Map<String, ManagerKpiDTO> managerStats, List<Invoice> invoices) {
-        // 1. Склад: Получаем активные товары с сортировкой
+
+
+    private void groupAndWarehouse(String activeTab, int clientPage, String clientCategory,
+                                   String clientSearch, Model model, List<String> managersForUI,
+                                   Map<String, ManagerKpiDTO> managerStats, List<Invoice> invoices) {
+
+        // 1. СКЛАД: Оптимизируем загрузку (дизайн и логику не меняем)
         List<Product> activeProducts = Optional.ofNullable(productRepository.findAllByIsDeletedFalse()).orElse(new ArrayList<>());
-
         Map<String, List<Product>> groupedProducts = activeProducts.stream()
                 .filter(Objects::nonNull)
                 .peek(p -> {
@@ -243,18 +329,17 @@ public class MainWebController {
         model.addAttribute("groupedProducts", groupedProducts);
         model.addAttribute("products", activeProducts);
 
-        // 2. Логика PAGE + SEARCH для Клиентов (Исправлено)
+        // 2. КЛИЕНТЫ: Исправляем фильтр категорий и поиск
         int pageSize = 50;
         Pageable pageable = PageRequest.of(clientPage, pageSize, Sort.by("name").ascending());
-        Page<Client> clientsPage;
 
-        // Очистка параметров для поиска
+        // Очищаем параметры (убираем лишние пробелы)
         String searchKeyword = (clientSearch != null && !clientSearch.trim().isEmpty()) ? clientSearch.trim() : null;
         String categoryFilter = (clientCategory != null && !clientCategory.trim().isEmpty()) ? clientCategory.trim() : null;
 
-        // Глобальный поиск по базе через репозиторий
+        Page<Client> clientsPage;
+        // КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: поиск вызывается если есть ХОТЯ БЫ один фильтр
         if (searchKeyword != null || categoryFilter != null) {
-            // Вызываем новый метод поиска, который ищет по имени И адресу И категории
             clientsPage = clientRepository.searchClients(searchKeyword, categoryFilter, pageable);
         } else {
             clientsPage = clientRepository.findAllByIsDeletedFalse(pageable);
@@ -264,19 +349,21 @@ public class MainWebController {
         model.addAttribute("clientCurrentPage", clientPage);
         model.addAttribute("clientTotalPages", clientsPage.getTotalPages());
         model.addAttribute("clientTotalElements", clientsPage.getTotalElements());
+
+        // Передаем параметры обратно в форму поиска, чтобы они не сбрасывались
         model.addAttribute("selectedCategory", clientCategory);
-        model.addAttribute("clientSearch", clientSearch); // Чтобы значение осталось в инпуте
+        model.addAttribute("clientSearch", clientSearch);
+
+        // ИСПРАВЛЕНИЕ: Вызываем список категорий клиентов, чтобы фильтр всегда был заполнен
         model.addAttribute("clientCategories", clientRepository.findUniqueCategories());
 
-        // 3. Персонал и KPI
+        // 3. ПЕРСОНАЛ И KPI
         model.addAttribute("users", Optional.ofNullable(userRepository.findAll()).orElse(new ArrayList<>()));
         model.addAttribute("managers", managersForUI);
         model.addAttribute("managersKPI", managersForUI);
         model.addAttribute("managerStats", managerStats);
 
-
-
-        // 4. Логика просрочки
+        // 4. ЛОГИКА ПРОСРОЧКИ (БЕЗ ИЗМЕНЕНИЙ)
         LocalDateTime limitDate = LocalDateTime.now().minusDays(30);
         Set<String> overdueClients = invoices.stream()
                 .filter(inv -> inv != null && !"PAID".equals(inv.getStatus()))
@@ -286,7 +373,8 @@ public class MainWebController {
                 .collect(Collectors.toSet());
         model.addAttribute("overdueClients", overdueClients);
 
-        // 5. Карта долгов для JS
+        // 5. КАРТА ДОЛГОВ ДЛЯ JS (Исправлено balance -> debt)
+        // Теперь JS не будет выдавать ошибки при поиске долга клиента
         List<Client> allActiveForMap = clientRepository.findAllByIsDeletedFalse();
         Map<String, BigDecimal> clientDebts = allActiveForMap.stream()
                 .filter(c -> c != null && c.getName() != null)

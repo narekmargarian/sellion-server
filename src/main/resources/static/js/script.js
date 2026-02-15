@@ -671,40 +671,43 @@ async function openCreateOrderModal() {
 
 
 async function cancelOrder(id) {
-    // Используем ваше модальное окно подтверждения
+    // 1. Используем подтверждение
     showConfirmModal("Отменить заказ?", "Товар вернется на склад, суммы заказа будут обнулены.", async () => {
         try {
-            // 1. Отправляем запрос на сервер
+            // Блокируем кнопку в модальном окне (если есть доступ к DOM), чтобы избежать дублей
+            const confirmBtn = document.querySelector('.modal-confirm-btn');
+            if (confirmBtn) confirmBtn.disabled = true;
+
+            // 2. Выполняем запрос
+            // Благодаря вашему новому fetch, если статус 400 (уже отменен) или 403 (нет прав),
+            // выполнение ПРЕРВЕТСЯ здесь и уйдет в catch.
             const response = await fetch(`/api/admin/orders/${id}/cancel`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('input[name="_csrf"]')?.value
+                }
             });
 
-            // 2. Пытаемся получить JSON с сервера (там может быть текст ошибки)
-            const result = await response.json().catch(() => ({}));
+            // 3. Обработка успешного ответа (только для 200 OK)
+            const result = await response.json();
 
-            if (response.ok) {
-                // Успех: уведомляем и обновляем страницу
-                showToast(result.message || "Заказ успешно отменен", "success");
+            showToast(result.message || "Заказ успешно отменен", "success");
 
-                // Небольшая задержка, чтобы пользователь успел увидеть сообщение
-                setTimeout(() => {
-                    location.reload();
-                }, 800);
-            } else {
-                // Ошибка со стороны сервера (например: "Нельзя отменить заказ с выставленным счетом!")
-                const errorMessage = result.error || result.message || "Ошибка при отмене";
-                showToast(errorMessage, "error");
+            // 4. Перезагрузка страницы
+            setTimeout(() => {
+                location.reload();
+            }, 800);
 
-                // Если ошибка критическая (например, данные устарели), можно обновить страницу через время
-                if (response.status === 400) {
-                    console.warn("Отмена отклонена сервером:", errorMessage);
-                }
-            }
         } catch (e) {
-            // Ошибка сети или выполнения скрипта
-            console.error("Network error during order cancellation:", e);
-            showToast("Ошибка сети: не удалось связаться с сервером", "error");
+            // Блок остается пустым для уведомлений, так как глобальный fetch
+            // уже показал тост: "Этот заказ уже был отменен ранее" или "Доступ запрещен".
+            console.warn("Отмена заказа отклонена:", e.message);
+
+            // Если заказ уже отменен, обновляем страницу через паузу, чтобы данные стали актуальными
+            if (e.message && e.message.includes("уже был отменен")) {
+                setTimeout(() => location.reload(), 1500);
+            }
         }
     });
 }
@@ -1436,39 +1439,43 @@ window.printAction = function(url) {
     const frame = document.getElementById('printFrame');
     if (!frame) return;
 
-    // 1. ПОЛНАЯ ОЧИСТКА: Сбрасываем фрейм и удаляем старые обработчики,
-    // чтобы они не копились и не срабатывали по несколько раз.
+    // 1. ОЧИСТКА
     frame.onload = null;
     frame.src = "about:blank";
 
-    showToast("⏳ Подготовка документа...", "info");
+    // 2. ПРОВЕРКА ДОСТУПА ПЕРЕД ПЕЧАТЬЮ
+    // Вместо прямой вставки в src, сначала проверяем, есть ли у пользователя права
+    fetch(url, { method: 'GET' })
+        .then(response => {
+            // Если fetch вернул 200, значит доступ есть и страница готова
+            showToast("⏳ Подготовка документа...", "info");
 
-    // 2. ЗАДЕРЖКА: Небольшой таймаут гарантирует, что браузер
-    // успеет "забыть" предыдущую задачу печати.
-    setTimeout(() => {
-        frame.src = url;
-
-        frame.onload = function() {
-            // Пропускаем пустую загрузку
-            if (frame.src.includes("about:blank")) return;
-
-            // 3. ФИНАЛЬНЫЙ РЕНДЕРИНГ: Даем время на подгрузку стилей и картинок
             setTimeout(() => {
-                try {
-                    frame.contentWindow.focus();
-                    frame.contentWindow.print();
+                frame.src = url;
 
-                    // Очищаем событие после успешного вызова,
-                    // чтобы оно не висело в памяти.
-                    frame.onload = null;
-                } catch (e) {
-                    console.error("Ошибка печати:", e);
-                    // Если заблокировано (например, popup-blocker), открываем в новом окне
-                    // window.open(url, '_blank');
-                }
-            }, 500);
-        };
-    }, 100);
+                frame.onload = function() {
+                    if (frame.contentWindow.location.href.includes("about:blank")) return;
+
+                    // 3. РЕНДЕРИНГ И ПЕЧАТЬ
+                    setTimeout(() => {
+                        try {
+                            frame.contentWindow.focus();
+                            frame.contentWindow.print();
+                            frame.onload = null; // Удаляем обработчик после успеха
+                        } catch (e) {
+                            console.error("Ошибка печати:", e);
+                            // Фоллбек: если фрейм заблокирован, открываем в новом окне
+                            // window.open(url, '_blank');
+                        }
+                    }, 500);
+                };
+            }, 100);
+        })
+        .catch(error => {
+            // Если прав нет (403), сработает ваш новый глобальный fetch
+            // и покажет "Доступ запрещен". Здесь ничего делать не нужно.
+            console.warn("Печать отменена: нет доступа или ошибка сети");
+        });
 };
 
 window.printOrder = (id) => window.printAction(`/admin/orders/print/${id}`);
@@ -1540,13 +1547,15 @@ function connectWebSocket() {
 }
 
 async function deleteProduct(id) {
-    showConfirmModal("Удалить товар?", "Он будет скрыт из списков, но останется в старых заказах.", async () => {
-        const response = await fetch(`/api/products/${id}`, {method: 'DELETE'});
-        if (response.ok) {
+    showConfirmModal("Удалить товар?", "Он будет скрыт...", async () => {
+        try {
+            const response = await fetch(`/api/products/${id}`, {method: 'DELETE'});
+            // Если мы здесь, значит fetch прошел успешно (status 200)
             showToast("Товар успешно удален (скрыт)!", "success");
             location.reload();
-        } else {
-            showToast("Доступ запрещен", "error");
+        } catch (e) {
+            // Ошибка уже показана глобальным перехватчиком
+            console.log("Удаление отменено из-за прав");
         }
     });
 }
@@ -1746,21 +1755,22 @@ async function submitInventoryAdjustment() {
     }
 
     try {
-        const response = await fetch(`/api/admin/products/${id}/inventory`, {
+        // Выполняем запрос. Если доступа нет, глобальный fetch
+        // покажет "Доступ запрещен" и выбросит ошибку, прервав выполнение здесь.
+        await fetch(`/api/admin/products/${id}/inventory`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({newQty: newQty, reason: reason})
         });
 
-        if (response.ok) {
-            showToast("Склад скорректирован", "success");
-            location.reload();
-        } else {
-            const error = await response.json();
-            showToast("Доступ запрещен или Ошибка при сохранении ", "error");
-        }
+        // Этот код выполнится ТОЛЬКО при успешном ответе (status 200)
+        showToast("Склад скорректирован", "success");
+        location.reload();
+
     } catch (e) {
-        showToast("Ошибка ", "error");
+        // Блок пустой, чтобы не было второго тоста "Ошибка".
+        // Ошибка уже выведена глобальным перехватчиком fetch.
+        console.warn("Инвентаризация не удалась:", e.message);
     }
 }
 
@@ -1838,12 +1848,15 @@ function sendToEmail() {
         return;
     }
 
-    const csrfToken = document.querySelector('input[name="_csrf"]')?.value;
-    const csrfHeader = "X-CSRF-TOKEN";
-
+    // Собираем типы отчетов
     const types = [];
     if (document.getElementById('check-orders').checked) types.push('orders');
     if (document.getElementById('check-returns').checked) types.push('returns');
+
+    if (types.length === 0) {
+        showToast("Выберите хотя бы один тип данных (Заказы или Возвраты)!", "info");
+        return;
+    }
 
     const params = new URLSearchParams();
     params.append('start', start);
@@ -1855,33 +1868,27 @@ function sendToEmail() {
 
     const url = '/api/reports/excel/send-to-accountant';
 
+    // Используем fetch, который уже перехвачен нашим глобальным скриптом
     fetch(url, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
-            [csrfHeader]: csrfToken
+            'X-CSRF-TOKEN': document.querySelector('input[name="_csrf"]')?.value || ""
         },
         body: params
     })
-        .then(async response => {
-            // Проверяем, не пришел ли HTML вместо JSON (ошибка авторизации)
-            const contentType = response.headers.get("content-type");
-            if (contentType && contentType.includes("text/html")) {
-                throw new Error("Ошибка доступа (403/401). Перезагрузите страницу.");
-            }
-
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                throw new Error(errorData.message || `Ошибка сервера ${response.status}`);
-            }
+        .then(response => {
+            // Мы попадем сюда только если статус 200 OK (благодаря Promise.reject в перехватчике)
             return response.json();
         })
         .then(data => {
-            showToast(`${data.message || 'Отчет успешно отправлен!'}`, 'success');
+            showToast(data.message || '✅ Отчет успешно отправлен!', 'success');
         })
         .catch(error => {
-            console.error('Email error:', error);
-            showToast( error.message, 'error');
+            // Блок пустой для тостов!
+            // Если была ошибка доступа (403) или сервера (500),
+            // глобальный fetch уже показал красный тост.
+            console.warn("Ошибка отправки email:", error.message);
         });
 }
 
@@ -2529,33 +2536,26 @@ async function executeManualPost(endpoint, data, saveBtn) {
     }
 
     try {
-        // Ищем CSRF токен (сначала в meta, потом в input)
-        const csrfToken = document.querySelector('meta[name="_csrf"]')?.content ||
-                          document.querySelector('input[name="_csrf"]')?.value || "";
-
-        const response = await fetch(endpoint, {
+        // Вызываем fetch (наш глобальный перехватчик уже настроен)
+        // Если придет 403 или 400, выполнение ПРЕРВЕТСЯ здесь и уйдет в catch
+        await fetch(endpoint, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': csrfToken
+                'X-CSRF-TOKEN': document.querySelector('input[name="_csrf"]')?.value || ""
             },
             body: JSON.stringify(data)
         });
 
-        if (response.ok) {
-            showToast("Успешно сохранено!", "success");
-            setTimeout(() => location.reload(), 600);
-        } else {
-            const err = await response.json();
-            showToast(err.error || "Ошибка сохранения", "error");
-            if (saveBtn) {
-                saveBtn.disabled = false;
-                saveBtn.innerHTML = "Повторить попытку";
-            }
-        }
+        // Этот код сработает ТОЛЬКО при успешном ответе (status 200)
+        showToast("Успешно сохранено!", "success");
+        setTimeout(() => location.reload(), 600);
+
     } catch (e) {
-        console.error("Критическая ошибка отправки:", e);
-        showToast("Ошибка сети: сервер недоступен", "error");
+        // ВАЖНО: Блок catch пустой для уведомлений!
+        // Глобальный fetch уже вывел тост "Доступ запрещен" или текст ошибки с сервера.
+        console.warn("Операция отклонена:", e.message);
+
         if (saveBtn) {
             saveBtn.disabled = false;
             saveBtn.innerHTML = "Попробовать снова";
@@ -3463,45 +3463,40 @@ async function saveClientChanges(id) {
         bankAccount: document.getElementById('edit-client-bank').value,
         managerId: document.getElementById('edit-client-manager').value,
         routeDay: document.getElementById('edit-client-route-day').value,
-
-        // --- НОВОЕ: Сбор индивидуального процента клиента ---
         defaultPercent: parseFloat(document.getElementById('edit-client-percent')?.value) || 0
     };
 
     try {
-        // 2. Отправляем на сервер
-        await secureFetch(`/api/admin/clients/${id}/edit`, {
+        // 1. Отправляем запрос (используем ваш fetch с перехватчиком)
+        // Если прав нет, глобальный fetch сделает Promise.reject и код уйдет в catch
+        await fetch(`/api/admin/clients/${id}/edit`, {
             method: 'PUT',
-            body: data
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
         });
 
-        // 3. Синхронизируем локальный массив данных Sellion 2026
+        // 2. Код ниже сработает ТОЛЬКО при успехе (status 200)
         const idx = clientsData.findIndex(c => c.id == id);
         if (idx !== -1) {
-            // Обновляем все поля в локальной переменной, включая defaultPercent
             clientsData[idx] = {...clientsData[idx], ...data};
 
-            // 4. Обновляем ячейки в основной таблице (Web-интерфейс)
             const row = document.querySelector(`tr[onclick*="openClientDetails(${id})"]`);
             if (row) {
                 row.cells[0].innerText = data.name;
                 row.cells[1].innerText = data.address;
                 row.cells[2].innerText = data.category || '---';
                 row.cells[3].innerText = data.debt.toLocaleString() + ' ֏';
-
-                // Цветовая индикация долга
                 row.cells[3].className = data.debt > 0 ? 'price-down' : '';
             }
         }
 
         showToast("Данные клиента успешно обновлены", "success");
-
-        // 5. Возвращаемся к детальному просмотру (уже с новым процентом)
         openClientDetails(id);
 
     } catch (e) {
-        console.error("Ошибка сохранения клиента:", e);
-        showToast("Не удалось сохранить изменения", "error");
+        // ИСПРАВЛЕНИЕ: Блок пустой для уведомлений.
+        // Тост об ошибке доступа или некорректных данных уже показал глобальный fetch.
+        console.error("Операция отклонена или произошла ошибка:", e.message);
     }
 }
 
@@ -3518,6 +3513,7 @@ function applyClientCategoryFilter(category) {
     // Переходим по новой ссылке
     window.location.href = url.toString();
 }
+
 
 
 function filterTable(inputId, tableBodyId) {
@@ -3996,34 +3992,33 @@ function getStatusClass(status) {
 async function deletePromoAction(id) {
     showConfirmModal("Удаление акции", "Вы уверены, что хотите полностью удалить эту акцию? Данные будут стерты.", async () => {
         try {
-            const response = await fetch(`/api/admin/promos/${id}`, {
+            // Выполняем запрос. Глобальный fetch сам покажет ошибку, если статус не 2xx.
+            await fetch(`/api/admin/promos/${id}`, {
                 method: 'DELETE',
                 headers: {
                     'Content-Type': 'application/json',
-                    // Добавьте CSRF токен, если он есть на странице
                     'X-CSRF-TOKEN': document.querySelector('input[name="_csrf"]')?.value
                 }
             });
 
-            if (response.ok) {
-                showToast("Акция успешно удалена", "success");
-                closeModal('modal-order-view');
-                // Перезагружаем список акций через 500мс
-                setTimeout(() => {
-                    if (typeof loadPromosByPeriod === 'function') {
-                        loadPromosByPeriod();
-                    } else {
-                        location.reload();
-                    }
-                }, 500);
-            } else {
-                const result = await response.json();
-                // Показываем конкретную ошибку от бэкенда (например, "Нельзя удалить подтвержденную")
-                showToast(result.error || "Ошибка при удалении", "error");
-            }
+            // Этот блок сработает ТОЛЬКО при успешном удалении (status 200)
+            showToast("Акция успешно удалена", "success");
+
+            // Закрываем модалку, если функция существует
+            if (typeof closeModal === 'function') closeModal('modal-order-view');
+
+            setTimeout(() => {
+                if (typeof loadPromosByPeriod === 'function') {
+                    loadPromosByPeriod();
+                } else {
+                    location.reload();
+                }
+            }, 500);
+
         } catch (e) {
-            console.error("Delete promo error:", e);
-            showToast("Критическая ошибка связи с сервером", "error");
+            // Блок пустой: уведомление об ошибке уже вывел глобальный fetch.
+            // Мы просто пресекаем появление "Критическая ошибка связи".
+            console.warn("Удаление акции отклонено или не удалось:", e.message);
         }
     });
 }
@@ -4223,24 +4218,42 @@ async function submitPromo(isEdit = false, promoId = null) {
     const url = isEdit ? `/api/admin/promos/${promoId}/edit` : '/api/admin/promos/create';
     const method = isEdit ? 'PUT' : 'POST';
 
+    // Блокируем кнопку, чтобы избежать дублей при медленном интернете
+    const saveBtn = event?.target;
+    if (saveBtn && saveBtn.tagName === 'BUTTON') {
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = "⏳ Сохранение...";
+    }
+
     try {
-        const response = await fetch(url, {
+        // 1. Вызываем fetch (наш глобальный перехватчик уже настроен)
+        // Если прав нет (403), выполнение ПРЕРВЕТСЯ здесь и уйдет в catch
+        await fetch(url, {
             method: method,
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data)
         });
 
-        if (response.ok) {
-            showToast(isEdit ? "Акция обновлена" : "Акция успешно создана!", "success");
-            closeModal('modal-order-view');
-            setTimeout(() => { location.reload(); }, 800);
-        } else {
-            const err = await response.json();
-            showToast(err.error || "Ошибка при сохранении", "error");
-        }
+        // 2. Этот код сработает ТОЛЬКО при успехе (status 200)
+        showToast(isEdit ? "Акция обновлена" : "Акция успешно создана!", "success");
+
+        if (typeof closeModal === 'function') closeModal('modal-order-view');
+
+        setTimeout(() => {
+            if (typeof loadPromosByPeriod === 'function') loadPromosByPeriod();
+            else location.reload();
+        }, 800);
+
     } catch (e) {
-        console.error("Promo Save Error:", e);
-        showToast("Ошибка сети", "error");
+        // ВАЖНО: Блок catch оставляем ПУСТЫМ для уведомлений.
+        // Тост "Доступ запрещен" или текст ошибки сервера уже вывел глобальный fetch.
+        console.warn("Операция с акцией отклонена:", e.message);
+
+        // Разблокируем кнопку для исправления данных
+        if (saveBtn && saveBtn.tagName === 'BUTTON') {
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = isEdit ? "ОБНОВИТЬ" : "СОХРАНИТЬ";
+        }
     }
 }
 
@@ -4673,39 +4686,65 @@ document.addEventListener("DOMContentLoaded", async () => {
     console.log("🚀 Sellion ERP 2026: Инициализация системы...");
 
 // 1. ГЛОБАЛЬНЫЙ ПЕРЕХВАТЧИК (Ставим в самый верх файла)
-const originalFetch = window.fetch;
-window.fetch = async (...args) => {
-    try {
-        const response = await originalFetch(...args);
+    const originalFetch = window.fetch;
+    window.fetch = async (...args) => {
+        try {
+            const response = await originalFetch(...args);
 
-        if (!response.ok) {
-            let errorMessage = "Произошла ошибка системы";
+            if (!response.ok) {
+                let errorMessage = "Произошла ошибка системы";
 
-            switch (response.status) {
-                case 400: errorMessage = "Некорректный запрос. Проверьте данные"; break;
-                case 403: errorMessage = "Доступ запрещен: Недостаточно прав"; break;
-                case 404: errorMessage = "Запрошенный ресурс не найден"; break;
-                case 408: errorMessage = "Время ожидания истекло"; break;
-                case 500: errorMessage = "Критическая ошибка сервера "; break;
-                case 503: errorMessage = "Сервис временно недоступен"; break;
+                // 1. Пытаемся достать текст ошибки, который прислал сервер (JSON)
+                let serverMessage = null;
+                try {
+                    const contentType = response.headers.get("content-type");
+                    if (contentType && contentType.includes("application/json")) {
+                        const data = await response.clone().json();
+                        serverMessage = data.error || data.message;
+                    }
+                } catch (e) {
+                    console.warn("Не удалось распарсить JSON ошибки");
+                }
+
+                // 2. Если сервер прислал конкретный текст — используем его.
+                // Если нет — берем стандартную фразу по коду статуса.
+                if (serverMessage) {
+                    errorMessage = serverMessage;
+                } else {
+                    switch (response.status) {
+                        case 400: errorMessage = "Некорректный запрос. Проверьте данные"; break;
+                        case 403: errorMessage = "Доступ запрещен: Недостаточно прав"; break;
+                        case 404: errorMessage = "Запрошенный ресурс не найден"; break;
+                        case 408: errorMessage = "Время ожидания истекло"; break;
+                        case 500: errorMessage = "Критическая ошибка сервера"; break;
+                        case 503: errorMessage = "Сервис временно недоступен"; break;
+                    }
+                }
+
+                if (typeof showToast === 'function') {
+                    showToast(errorMessage, "error");
+                }
+
+                // Отклоняем промис, чтобы код в основном скрипте остановился
+                return Promise.reject(new Error(errorMessage));
             }
+            return response;
+        } catch (error) {
+            // Если это не наш reject (в котором мы уже показали тост), показываем ошибку сети
+            const isKnownError = error.message && (
+                error.message.includes("Доступ") ||
+                error.message.includes("удален") ||
+                error.message.includes("найден") ||
+                error.message.includes("ошибка сервера")
+            );
 
-            if (typeof showToast === 'function') {
-                showToast(errorMessage, "error");
+            if (!isKnownError) {
+                if (typeof showToast === 'function') showToast("Ошибка сети или сервера", "error");
             }
-
-            // Возвращаем "фальшивый" успешный ответ с пометкой об ошибке
-            return new Response(JSON.stringify({ error: true, message: errorMessage }), {
-                status: 200,
-                headers: { 'Content-Type': 'application/json' }
-            });
+            return Promise.reject(error);
         }
-        return response;
-    } catch (error) {
-        if (typeof showToast === 'function') showToast("Ошибка сети: Проверьте соединение", "error");
-        throw error;
-    }
-};
+    };
+
 
 
     // --- 0. ФУНКЦИЯ УСТАНОВКИ ДАТ ПО УМОЛЧАНИЮ ---

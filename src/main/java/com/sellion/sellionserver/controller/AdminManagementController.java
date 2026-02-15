@@ -173,37 +173,90 @@ public class AdminManagementController {
 
 
     // В AdminManagementController.java
+//    @PostMapping("/orders/{id}/cancel")
+//    @Transactional(rollbackFor = Exception.class)
+//    public ResponseEntity<?> cancelOrder(@PathVariable Long id) {
+//        // 1. Поиск заказа с проверкой на существование
+//        Order order = orderRepository.findById(id)
+//                .orElseThrow(() -> new RuntimeException("Заказ не найден: " + id));
+//
+//        // 2. Блокировка отмены, если уже выставлен счет (Инвойс)
+//        if (order.getInvoiceId() != null) {
+//            return ResponseEntity.badRequest().body(Map.of("error", "Нельзя отменить заказ с выставленным счетом!"));
+//        }
+//
+//        // Защита от повторной отмены (если статус уже CANCELLED)
+//        if (order.getStatus() == OrderStatus.CANCELLED) {
+//            return ResponseEntity.badRequest().body(Map.of("error", "Заказ уже был отменен ранее."));
+//        }
+//
+//        // 3. СКЛАД: Возвращаем товары в свободный остаток
+//        // Метод увеличит p.stockQuantity на указанное в заказе количество
+//        stockService.returnItemsToStock(order.getItems(), "Отмена заказа #" + id, "ADMIN");
+//
+//        // 4. ФИНАНСЫ: Обнуляем суммы, чтобы заказ не портил статистику продаж
+//        order.setTotalAmount(BigDecimal.ZERO);
+//        order.setTotalPurchaseCost(BigDecimal.ZERO);
+//        order.setPurchaseCost(BigDecimal.ZERO);
+//
+//        // 5. Статус и сохранение
+//        order.setStatus(OrderStatus.CANCELLED);
+//        orderRepository.save(order);
+//
+//        // 6. Аудит
+//        recordAudit(id, "ORDER", "ОТМЕНА", "Заказ отменен. Товары вернулись на склад. Суммы обнулены.");
+//
+//        return ResponseEntity.ok(Map.of(
+//                "message", "Заказ успешно отменен, товар вернулся на склад",
+//                "id", id
+//        ));
+//    }
+
+
     @PostMapping("/orders/{id}/cancel")
     @Transactional(rollbackFor = Exception.class)
     public ResponseEntity<?> cancelOrder(@PathVariable Long id) {
-        // 1. Поиск заказа с проверкой на существование
-        Order order = orderRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Заказ не найден: " + id));
+        // 1. Поиск заказа с ручной проверкой (чтобы не кидать 500 ошибку через orElseThrow)
+        Optional<Order> orderOpt = orderRepository.findById(id);
+
+        if (orderOpt.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("error", "Заказ №" + id + " не найден в системе."));
+        }
+
+        Order order = orderOpt.get();
 
         // 2. Блокировка отмены, если уже выставлен счет (Инвойс)
         if (order.getInvoiceId() != null) {
-            return ResponseEntity.badRequest().body(Map.of("error", "Нельзя отменить заказ с выставленным счетом!"));
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", "Нельзя отменить заказ с выставленным счетом!"));
         }
 
-        // Защита от повторной отмены (если статус уже CANCELLED)
+        // 3. ЗАЩИТА ОТ ПОВТОРНОЙ ОТМЕНЫ (Ключевое исправление)
         if (order.getStatus() == OrderStatus.CANCELLED) {
-            return ResponseEntity.badRequest().body(Map.of("error", "Заказ уже был отменен ранее."));
+            // Возвращаем 400 Bad Request, который поймает ваш JS fetch
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", "Этот заказ уже был отменен ранее."));
         }
 
-        // 3. СКЛАД: Возвращаем товары в свободный остаток
-        // Метод увеличит p.stockQuantity на указанное в заказе количество
-        stockService.returnItemsToStock(order.getItems(), "Отмена заказа #" + id, "ADMIN");
+        // 4. СКЛАД: Возвращаем товары в свободный остаток
+        try {
+            stockService.returnItemsToStock(order.getItems(), "Отмена заказа #" + id, "ADMIN");
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError()
+                    .body(Map.of("error", "Ошибка при возврате товара на склад: " + e.getMessage()));
+        }
 
-        // 4. ФИНАНСЫ: Обнуляем суммы, чтобы заказ не портил статистику продаж
+        // 5. ФИНАНСЫ: Обнуляем суммы
         order.setTotalAmount(BigDecimal.ZERO);
         order.setTotalPurchaseCost(BigDecimal.ZERO);
         order.setPurchaseCost(BigDecimal.ZERO);
 
-        // 5. Статус и сохранение
+        // 6. Статус и сохранение
         order.setStatus(OrderStatus.CANCELLED);
         orderRepository.save(order);
 
-        // 6. Аудит
+        // 7. Аудит
         recordAudit(id, "ORDER", "ОТМЕНА", "Заказ отменен. Товары вернулись на склад. Суммы обнулены.");
 
         return ResponseEntity.ok(Map.of(
@@ -211,6 +264,7 @@ public class AdminManagementController {
                 "id", id
         ));
     }
+
 
 
     @PutMapping("/products/{id}/edit")
@@ -626,18 +680,13 @@ public class AdminManagementController {
             order.setNeedsSeparateInvoice(false);
         }
 
-        // 2. Списание со склада с ручной обработкой ошибки нехватки
-        try {
-            stockService.deductItemsFromStock(order.getItems(),
-                    "Списание: " + (order.getComment() != null ? order.getComment() : "Без описания"), "ADMIN");
-        } catch (RuntimeException e) {
-            // Если товара не хватило, возвращаем 400 и текст ошибки.
-            // Транзакция откатится автоматически из-за выброса исключения в StockService.
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(Map.of("error", "Списание отклонено: " + e.getMessage()));
-        }
+        // 2. Списание со склада
+        // УБРАЛИ внутренний try-catch. Если прав нет (403) или товара мало (RuntimeException),
+        // Spring сам вернет нужный статус, а наш JS-fetch его поймает и ПРЕРВЕТ выполнение.
+        stockService.deductItemsFromStock(order.getItems(),
+                "Списание: " + (order.getComment() != null ? order.getComment() : "Без описания"), "ADMIN");
 
-        // 3. Расчет себестоимости через оптимизированный метод
+        // 3. Расчет себестоимости
         Map<String, BigDecimal> totals = calculateTotalSaleAndCostWithDiscount(order.getItems(), BigDecimal.ZERO);
 
         // 4. Установка финансовых показателей
@@ -650,8 +699,10 @@ public class AdminManagementController {
         recordAudit(saved.getId(), "ORDER", "СПИСАНИЕ",
                 "Проведено списание. Себестоимость: " + order.getTotalPurchaseCost() + " ֏");
 
+        // Этот ответ придет ТОЛЬКО если не было ошибок доступа и товара хватило
         return ResponseEntity.ok(Map.of("message", "Списание успешно проведено"));
     }
+
 
 
     @PostMapping("/returns/create-manual")

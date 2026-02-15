@@ -48,11 +48,13 @@ public interface ClientRepository extends JpaRepository<Client, Long> {
 
     @Query("SELECT c FROM Client c WHERE c.isDeleted = false " +
             "AND (:category IS NULL OR c.category = :category) " +
-            "AND (LOWER(c.name) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
+            "AND (:keyword IS NULL OR :keyword = '' " +
+            "OR LOWER(c.name) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
             "OR LOWER(c.address) LIKE LOWER(CONCAT('%', :keyword, '%')))")
     Page<Client> searchClients(@Param("keyword") String keyword,
                                @Param("category") String category,
                                Pageable pageable);
+
 
 
 }

@@ -70,13 +70,15 @@
         </tr>
         </tbody>
         <tfoot>
+        <!-- Найти строку с итоговым сальдо и заменить на: -->
         <tr class="sum-row">
             <td colspan="4" class="text-right">ИТОГОВОЕ САЛЬДО:</td>
             <td class="text-right"
-                th:with="cBalance=${client.balance ?: 0}"
-                th:text="${#numbers.formatDecimal(cBalance, 1, 'WHITESPACE', 0, 'POINT') + ' ֏'}">
+                th:with="cDebt=${client.debt ?: 0}"
+                th:text="${#numbers.formatDecimal(cDebt, 1, 'WHITESPACE', 0, 'POINT') + ' ֏'}">
             </td>
         </tr>
+
         </tfoot>
     </table>
 

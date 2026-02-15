@@ -1,19 +1,15 @@
 package com.sellion.sellionserver.api;
 
-import com.sellion.sellionserver.dto.ApiResponse;
 import com.sellion.sellionserver.dto.PaymentRequest;
-import com.sellion.sellionserver.entity.Client;
 import com.sellion.sellionserver.entity.Invoice;
 import com.sellion.sellionserver.entity.Payment;
-import com.sellion.sellionserver.repository.ClientRepository;
 import com.sellion.sellionserver.repository.InvoiceRepository;
 import com.sellion.sellionserver.repository.PaymentRepository;
 import com.sellion.sellionserver.services.FinanceService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -39,29 +35,34 @@ public class PaymentApiController {
 
     @PostMapping("/register")
     @Transactional(rollbackFor = Exception.class)
-    // ИДЕАЛЬНО: Используем @Valid DTO и ApiResponse для стандартизации ответа
-    public ResponseEntity<ApiResponse<?>> registerPayment(@Valid @RequestBody PaymentRequest request) {
+    public ResponseEntity<?> registerPayment(@Valid @RequestBody PaymentRequest request) {
 
         Long invoiceId = request.getInvoiceId();
         BigDecimal paymentAmount = request.getAmount().setScale(2, RoundingMode.HALF_UP);
         String comment = request.getComment() != null ? request.getComment() : "";
 
-        Invoice invoice = invoiceRepository.findById(invoiceId)
-                .orElseThrow(() -> new RuntimeException("Счет не найден: " + invoiceId));
+        // Используем Optional, чтобы избежать лишних исключений в логах при поиске
+        Invoice invoice = invoiceRepository.findById(invoiceId).orElse(null);
+        if (invoice == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("error", "Счет №" + invoiceId + " не найден в системе."));
+        }
 
-        // Проверка, что оплата не превышает остаток долга
+        // Проверка остатка долга
         BigDecimal currentDebt = invoice.getTotalAmount().subtract(
                 Optional.ofNullable(invoice.getPaidAmount()).orElse(BigDecimal.ZERO)
         );
 
+        // ИСПРАВЛЕНИЕ: Вместо throw возвращаем ResponseEntity с текстом ошибки
         if (paymentAmount.compareTo(currentDebt) > 0) {
-            throw new RuntimeException("Сумма платежа (" + paymentAmount + ") превышает остаток долга (" + currentDebt + ")");
+            log.warn("Попытка оплаты сверх долга: Счет {}, Долг {}, Оплата {}", invoiceId, currentDebt, paymentAmount);
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", "Сумма платежа (" + paymentAmount + ") превышает остаток долга (" + currentDebt + ")"));
         }
 
         // 1. Создание записи о платеже
         Payment payment = new Payment();
         payment.setInvoiceId(invoiceId);
-        // ИСПРАВЛЕНО: Теперь amount - это BigDecimal, ошибки нет
         payment.setAmount(paymentAmount);
         payment.setComment(comment);
         payment.setPaymentDate(LocalDateTime.now());
@@ -78,13 +79,11 @@ public class PaymentApiController {
         } else {
             invoice.setStatus("UNPAID");
         }
-
         invoiceRepository.save(invoice);
 
-        // 3. Регистрация финансовой операции (обновление долга клиента)
-        // FinanceService использует @Transactional, поэтому всё безопасно
+        // 3. Регистрация финансовой операции
         financeService.registerOperation(
-                null, // ID клиента не нужен, найдем по имени магазина
+                null,
                 "PAYMENT",
                 paymentAmount,
                 savedPayment.getId(),
@@ -94,13 +93,15 @@ public class PaymentApiController {
 
         log.info("Успешная оплата: счет {}, сумма {}", invoiceId, paymentAmount);
 
-        // 4. Стандартизированный ответ клиенту (Android/Web)
+        // 4. Ответ (совместим с ApiResponse или просто Map)
         Map<String, Object> responseData = Map.of(
                 "newInvoiceStatus", invoice.getStatus(),
-                "remainingDebt", invoice.getTotalAmount().subtract(newPaidAmount).setScale(2, RoundingMode.HALF_UP)
+                "remainingDebt", invoice.getTotalAmount().subtract(newPaidAmount).setScale(2, RoundingMode.HALF_UP),
+                "message", "Платеж успешно зарегистрирован"
         );
 
-        return ResponseEntity.ok(ApiResponse.ok("Платеж успешно зарегистрирован", responseData));
+        return ResponseEntity.ok(responseData);
     }
+
 }
 
