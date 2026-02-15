@@ -110,12 +110,24 @@ function updateRowInTable(order) {
 }
 
 
-function getManagerOptionsHTML() {
-    // Если список еще не загружен, добавляем хотя бы текущего пользователя или OFFICE
-    if (!managerIdList || managerIdList.length === 0) {
-        return `<option value="OFFICE">OFFICE (загрузка...)</option>`;
+function getManagerOptionsHTML(selectedManager = "") {
+    // 1. Собираем доступные данные
+    const webList = (typeof fullManagersList !== 'undefined') ? fullManagersList : [];
+    const apiList = (typeof window.managerIdList !== 'undefined') ? window.managerIdList : [];
+
+    // 2. Объединяем их и убираем дубликаты (Set), чтобы точно ничего не потерять
+    // Это гарантирует, что если в одном списке есть "Офис", а в другом нет — он появится.
+    const combinedList = [...new Set([...webList, ...apiList])];
+
+    // 3. Если списки вдруг пусты (ошибка загрузки), добавляем "Офис" вручную как страховку
+    if (combinedList.length === 0) {
+        combinedList.push("Офис");
     }
-    return managerIdList.map(m => `<option value="${m}">${m}</option>`).join('');
+
+    // 4. Формируем HTML
+    return combinedList.map(m =>
+        `<option value="${m}" ${m === selectedManager ? 'selected' : ''}>${m}</option>`
+    ).join('');
 }
 
 
@@ -591,7 +603,7 @@ async function loadManagerIds() {
 
 
 async function openCreateOrderModal() {
-    await loadManagerIds();
+    // await loadManagerIds();
     tempItems = {};
 
     // СБРОС СОСТОЯНИЙ (чтобы кнопки не прыгали и Итого не пропадало)
@@ -927,7 +939,7 @@ function recalculateWithPercent() {
 
 
 async function openCreateReturnModal() {
-    await loadManagerIds();
+    // await loadManagerIds();
     tempItems = {};
     // Инициализируем пустой объект цен, чтобы renderItemsTable не выдавала ошибок
     window.tempItemPrices = {};
@@ -3749,7 +3761,8 @@ function openPromoModal(productId) {
     if (!p) return;
 
     const today = new Date().toISOString().split('T')[0];
-    const managerOptions = managerIdList.map(m => `<option value="${m}">${m}</option>`).join('');
+    let managerOptions = getManagerOptionsHTML();
+    // const managerOptions = managerIdList.map(m => `<option value="${m}">${m}</option>`).join('');
 
     document.getElementById('modal-title').innerHTML = `📢 НАСТРОЙКА АКЦИИ: ${p.name}`;
     document.getElementById('order-info').innerHTML = `
@@ -3831,9 +3844,10 @@ function updatePromoTimers() {
 function openCreatePromoModal() {
     tempPromoItems = {};
     const today = new Date().toISOString().split('T')[0];
-    const managerOptions = managerIdList.map(m => `<option value="${m}">${m}</option>`).join('');
+    // const managerOptions = managerIdList.map(m => `<option value="${m}">${m}</option>`).join('');
 
     document.getElementById('modal-title').innerText = "🔥 СОЗДАНИЕ НОВОЙ АКЦИИ";
+    let managerOptions = getManagerOptionsHTML();
     document.getElementById('order-info').innerHTML = `
         <div class="modal-info-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; background: #fff7ed; padding: 15px; border-radius: 10px; border: 1px solid #fb923c;">
             <div style="grid-column: span 2;">

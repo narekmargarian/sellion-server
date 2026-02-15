@@ -274,6 +274,8 @@ public class MainWebController {
         model.addAttribute("managersKPI", managersForUI);
         model.addAttribute("managerStats", managerStats);
 
+
+
         // 4. Логика просрочки
         LocalDateTime limitDate = LocalDateTime.now().minusDays(30);
         Set<String> overdueClients = invoices.stream()
