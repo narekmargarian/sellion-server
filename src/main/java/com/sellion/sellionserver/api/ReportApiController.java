@@ -80,13 +80,11 @@ public class ReportApiController {
             List<String> reportTypes = (request.getTypes() != null) ? request.getTypes() : Collections.emptyList();
 
 
-            log.info("Поиск заказов с {} по {}. Выбрано типов: {}", from, to, reportTypes);
 
             // Логика выборки данных
             List<Order> orders = reportTypes.contains("orders") ?
                     orderRepository.findOrdersBetweenDates(from, to) : Collections.emptyList();
 
-            log.info("Найдено заказов: {}", orders.size());
 
             List<ReturnOrder> returns = reportTypes.contains("returns") ?
                     returnOrderRepository.findReturnsBetweenDates(from, to) : Collections.emptyList();
