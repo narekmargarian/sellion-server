@@ -2,6 +2,7 @@ package com.sellion.sellionserver.controller;
 
 import com.sellion.sellionserver.entity.Client;
 import com.sellion.sellionserver.repository.ClientRepository;
+import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -36,4 +37,7 @@ public class ReportWebController {
 
         return "debt-report";
     }
+
+
+
 }

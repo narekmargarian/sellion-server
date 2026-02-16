@@ -1839,55 +1839,67 @@ function downloadExcel(type) {
 
 
 function sendToEmail() {
-    const start = document.getElementById('report-start').value;
-    const end = document.getElementById('report-end').value;
-    const email = document.getElementById('report-email').value;
+    // 1. Получаем элементы
+    const startInput = document.getElementById('report-start');
+    const endInput = document.getElementById('report-end');
+    const emailInput = document.getElementById('report-email');
+
+    // Проверка на существование элементов (на всякий случай)
+    if (!startInput || !endInput || !emailInput) {
+        console.error("Элементы интерфейса не найдены");
+        return;
+    }
+
+    const start = startInput.value;
+    const end = endInput.value;
+    const email = emailInput.value;
 
     if (!start || !end || !email) {
         showToast("Выберите период и введите email!", "error");
         return;
     }
 
-    // Собираем типы отчетов
+    // 2. Собираем типы отчетов
     const types = [];
-    if (document.getElementById('check-orders').checked) types.push('orders');
-    if (document.getElementById('check-returns').checked) types.push('returns');
+    const checkOrders = document.getElementById('check-orders');
+    const checkReturns = document.getElementById('check-returns');
+
+    if (checkOrders && checkOrders.checked) types.push('orders');
+    if (checkReturns && checkReturns.checked) types.push('returns');
 
     if (types.length === 0) {
         showToast("Выберите хотя бы один тип данных (Заказы или Возвраты)!", "info");
         return;
     }
 
-    const params = new URLSearchParams();
-    params.append('start', start);
-    params.append('end', end);
-    params.append('email', email);
-    types.forEach(type => params.append('types', type));
+    // 3. Подготовка данных для отправки
+    // Мы отправляем объект, который Spring легко распарсит через @RequestBody или как Map
+    const payload = {
+        start: start,
+        end: end,
+        email: email,
+        types: types
+    };
 
     showToast(`⏳ Отправка отчета на ${email}...`, "info");
 
     const url = '/api/reports/excel/send-to-accountant';
 
-    // Используем fetch, который уже перехвачен нашим глобальным скриптом
+    // 4. Отправка через JSON
     fetch(url, {
         method: 'POST',
         headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
+            'Content-Type': 'application/json', // МЕНЯЕМ НА JSON
             'X-CSRF-TOKEN': document.querySelector('input[name="_csrf"]')?.value || ""
         },
-        body: params
+        body: JSON.stringify(payload) // ПРЕВРАЩАЕМ В СТРОКУ
     })
-        .then(response => {
-            // Мы попадем сюда только если статус 200 OK (благодаря Promise.reject в перехватчике)
-            return response.json();
-        })
+        .then(response => response.json())
         .then(data => {
             showToast(data.message || '✅ Отчет успешно отправлен!', 'success');
         })
         .catch(error => {
-            // Блок пустой для тостов!
-            // Если была ошибка доступа (403) или сервера (500),
-            // глобальный fetch уже показал красный тост.
+            // Ошибка уже обработана вашим глобальным перехватчиком fetch
             console.warn("Ошибка отправки email:", error.message);
         });
 }

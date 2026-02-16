@@ -21,7 +21,12 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
 
     // Найти заказы между датами, исключая списания
-    @Query("SELECT o FROM Order o WHERE o.createdAt BETWEEN :start AND :end AND o.type != 'WRITE_OFF'")
+//    @Query("SELECT o FROM Order o WHERE o.createdAt BETWEEN :start AND :end AND o.type != 'WRITE_OFF'")
+//    List<Order> findOrdersBetweenDates(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+
+
+    @Query("SELECT o FROM Order o WHERE o.createdAt BETWEEN :start AND :end " +
+            "AND (o.type IS NULL OR o.type != 'WRITE_OFF')")
     List<Order> findOrdersBetweenDates(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 
     // Сумма подтвержденных возвратов (уже было, просто проверьте наличие)

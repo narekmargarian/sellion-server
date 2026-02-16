@@ -6,6 +6,7 @@ import com.sellion.sellionserver.repository.OrderRepository;
 import com.sellion.sellionserver.repository.ReturnOrderRepository;
 import com.sellion.sellionserver.services.EmailService;
 import com.sellion.sellionserver.services.InvoiceExcelService;
+import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -67,18 +68,25 @@ public class ReportApiController {
      * ИДЕАЛЬНО: Поддержка нескольких типов данных в одном письме с защитой от пустых отчетов.
      */
     @PostMapping("/send-to-accountant")
-    public ResponseEntity<?> sendToAccountant(
-            @RequestParam String start,
-            @RequestParam String end,
-            @RequestParam String email,
-            @RequestParam(required = false) List<String> types) {
+    public ResponseEntity<?> sendToAccountant(@RequestBody ReportRequest request) { // Использование DTO и @RequestBody
         try {
+            // Извлекаем данные из объекта request
+            String start = request.getStart();
+            String end = request.getEnd();
+            String email = request.getEmail();
+
             LocalDateTime from = LocalDate.parse(start).atStartOfDay();
             LocalDateTime to = LocalDate.parse(end).atTime(LocalTime.MAX);
-            List<String> reportTypes = (types != null) ? types : Collections.emptyList();
+            List<String> reportTypes = (request.getTypes() != null) ? request.getTypes() : Collections.emptyList();
 
+
+            log.info("Поиск заказов с {} по {}. Выбрано типов: {}", from, to, reportTypes);
+
+            // Логика выборки данных
             List<Order> orders = reportTypes.contains("orders") ?
                     orderRepository.findOrdersBetweenDates(from, to) : Collections.emptyList();
+
+            log.info("Найдено заказов: {}", orders.size());
 
             List<ReturnOrder> returns = reportTypes.contains("returns") ?
                     returnOrderRepository.findReturnsBetweenDates(from, to) : Collections.emptyList();
@@ -88,6 +96,7 @@ public class ReportApiController {
                         .body(Map.of("message", "Нет данных для отправки за указанный период."));
             }
 
+            // Генерация и отправка
             try (Workbook workbook = invoiceExcelService.generateExcel(orders, returns, "Sellion ERP: Финансовый отчет")) {
                 byte[] bytes = workbookToBytes(workbook);
 
@@ -102,6 +111,7 @@ public class ReportApiController {
 
             log.info("Отчет успешно отправлен на {}", email);
             return ResponseEntity.ok(Map.of("message", "Отчет успешно отправлен на " + email));
+
         } catch (Exception e) {
             log.error("Критическая ошибка отправки отчета: ", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
@@ -194,6 +204,14 @@ public class ReportApiController {
             log.error("Ошибка генерации отчета по возвратам: ", e);
             return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
         }
+    }
+
+    @Data
+    public static class ReportRequest {
+        private String start;
+        private String end;
+        private String email;
+        private List<String> types;
     }
 
 }
