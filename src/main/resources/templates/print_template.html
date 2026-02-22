@@ -3,45 +3,46 @@
 <head>
     <meta charset="UTF-8">
     <style>
-        body { font-family: 'Inter', sans-serif; font-size: 12px; color: #333; margin: 0; }
+        body { font-family: 'Inter', sans-serif; font-size: 11px; color: #333; margin: 0; }
         .header { display: flex; justify-content: space-between; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; }
         .company-info { line-height: 1.4; font-size: 11px; }
         .doc-title { font-size: 18px; font-weight: bold; text-transform: uppercase; }
-        .info-table { width: 100%; margin-bottom: 20px; border-collapse: collapse; }
-        .info-table td { padding: 5px 0; border-bottom: 1px solid #eee; }
-        .main-table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
-        .main-table th { background: #f0f0f0 !important; border: 1px solid #ccc; padding: 8px; text-align: left; -webkit-print-color-adjust: exact; }
-        .main-table td { border: 1px solid #ccc; padding: 8px; }
-        .total-block { text-align: right; font-size: 16px; font-weight: bold; }
-        .footer-sig { margin-top: 50px; display: flex; justify-content: space-between; }
-        .sig-line { border-top: 1px solid #000; width: 200px; margin-top: 40px; text-align: center; font-size: 10px; padding-top: 5px; }
+        .info-table { width: 100%; margin-bottom: 15px; border-collapse: collapse; }
+        .info-table td { padding: 4px 0; border-bottom: 1px solid #eee; }
+        .main-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+        .main-table th { background: #f0f0f0 !important; border: 1px solid #ccc; padding: 6px; text-align: left; -webkit-print-color-adjust: exact; font-size: 10px; }
+        .main-table td { border: 1px solid #ccc; padding: 6px; }
+        .total-block { text-align: right; font-size: 15px; font-weight: bold; margin-top: 10px; }
+        .footer-sig { margin-top: 40px; display: flex; justify-content: space-between; }
+        .sig-line { border-top: 1px solid #000; width: 180px; margin-top: 35px; text-align: center; font-size: 9px; padding-top: 5px; }
 
         @media print {
             @page { margin: 0; }
-            body { margin: 1.5cm; }
+            body { margin: 1cm; }
         }
     </style>
 </head>
 <body>
-<div th:if="${op != null}">
+
+<div th:if="${op != null}"
+     th:with="isOrder=${#strings.contains(op.class.name, 'Order') and !#strings.contains(op.class.name, 'Return')}">
+
     <div class="header">
         <div class="company-info">
             <strong th:text="${@companySettings != null ? @companySettings.getSetting('COMPANY_NAME', 'SELLION ERP 2026') : 'SELLION ERP 2026'}"></strong><br>
             <span th:text="${@companySettings != null ? @companySettings.getSetting('COMPANY_ADDRESS', 'г. Ереван, Армения') : 'г. Ереван, Армения'}"></span>
         </div>
-        <div class="doc-title" th:text="${title != null ? title : 'ДОКУМЕНТ'}">ДОКУМЕНТ</div>
+        <div class="doc-title" th:text="${title != null ? title : (isOrder ? 'НАКЛАДНАЯ' : 'АКТ ВОЗВРАТА')}">ДОКУМЕНТ</div>
     </div>
 
     <table class="info-table">
         <tr>
-            <td width="180">Контрагент (Магазин):</td>
+            <td width="160">Контрагент (Магазин):</td>
             <td><strong th:text="${op.shopName != null ? op.shopName : '---'}"></strong></td>
         </tr>
         <tr>
             <td>Дата документа:</td>
-            <td th:with="cName=${op.class.name},
-                         isOrder=${#strings.contains(cName, 'Order') and !#strings.contains(cName, 'Return')},
-                         docDate=${isOrder ? op.deliveryDate : op.returnDate}"
+            <td th:with="docDate=${isOrder ? op.deliveryDate : (op.class.name.contains('Return') ? op.returnDate : null)}"
                 th:text="${docDate != null ? #temporals.format(docDate, 'dd.MM.yyyy') : (op.createdAt != null ? #temporals.format(op.createdAt, 'dd.MM.yyyy HH:mm') : '---')}">
             </td>
         </tr>
@@ -49,59 +50,65 @@
             <td>Ответственное лицо:</td>
             <td th:text="${op.managerId != null ? op.managerId : '---'}">Менеджер</td>
         </tr>
-        <tr th:if="${op.carNumber != null && !#strings.isEmpty(op.carNumber)}">
-            <td>Номер автомобиля:</td>
-            <td th:text="${op.carNumber}"></td>
-        </tr>
     </table>
 
     <table class="main-table">
         <thead>
         <tr>
-            <th style="width: 40px;">№</th>
+            <th style="width: 30px;">№</th>
             <th>Наименование товара</th>
-            <th style="width: 80px; text-align: center;">Кол-во</th>
-            <th style="width: 120px; text-align: right;">Цена (֏)</th>
-            <th style="width: 140px; text-align: right;">Сумма (֏)</th>
+            <th style="width: 50px; text-align: center;">Кол-во</th>
+            <!-- Скрываются для возвратов -->
+            <th th:if="${isOrder}" style="width: 80px; text-align: right;">Прайс</th>
+            <th th:if="${isOrder}" style="width: 40px; text-align: center;">%</th>
+            <th style="width: 80px; text-align: right;">Цена (֏)</th>
+            <th style="width: 100px; text-align: right;">Сумма (֏)</th>
         </tr>
         </thead>
         <tbody>
-        <tr th:each="item, iter : ${printItems}" th:if="${printItems != null}">
-            <td style="text-align: center;" th:text="${iter.count}">1</td>
-            <td th:text="${item.name}">Товар</td>
-            <td style="text-align: center;" th:text="${item.quantity + ' шт.'}">0</td>
+        <tr th:each="entry, stat : ${op.items}"
+            th:with="
+                pId=${entry.key},
+                qty=${entry.value},
+                p=${productRepo.findById(pId).orElse(null)},
+                discount=${isOrder ? (op.appliedPromoItems != null ? (op.appliedPromoItems.getOrDefault(pId, (op.discountPercent != null ? op.discountPercent : 0))) : (op.discountPercent != null ? op.discountPercent : 0)) : 0},
+                basePrice=${p != null ? p.price : 0},
+                finalPrice=${isOrder ? (basePrice.doubleValue() * (1.0 - (discount.doubleValue() / 100.0))) : (op.itemPrices != null ? (op.itemPrices.getOrDefault(pId, basePrice)) : basePrice)},
+                rowTotal=${finalPrice.doubleValue() * qty}">
 
-            <!-- УМНАЯ ЦЕНА ТОВАРА -->
-            <td style="text-align: right;">
-        <span th:with="pVal=${item.price != null ? item.price.doubleValue() : 0}"
-              th:text="${(pVal % 1 == 0) ? #numbers.formatInteger(pVal, 1, 'WHITESPACE') : #numbers.formatDecimal(pVal, 1, 'WHITESPACE', 2, 'POINT').replaceAll('0$', '')} + ' ֏'">
-        </span>
-            </td>
+            <td style="text-align: center;" th:text="${stat.count}"></td>
+            <td th:text="${p != null ? p.name : 'Товар #' + pId}"></td>
+            <td style="text-align: center;" th:text="${qty}"></td>
 
-            <!-- УМНАЯ СУММА СТРОКИ -->
-            <td style="text-align: right;">
-        <span th:with="tVal=${item.total != null ? item.total.doubleValue() : 0}"
-              th:text="${(tVal % 1 == 0) ? #numbers.formatInteger(tVal, 1, 'WHITESPACE') : #numbers.formatDecimal(tVal, 1, 'WHITESPACE', 2, 'POINT').replaceAll('0$', '')} + ' ֏'">
-        </span>
+            <!-- Колонки ЗАКАЗА с вашим форматированием -->
+            <th:block th:if="${isOrder}">
+                <td style="text-align: right;"
+                    th:text="${basePrice.doubleValue() % 1 == 0 ? #numbers.formatDecimal(basePrice, 1, 'WHITESPACE', 0, 'POINT') : #numbers.formatDecimal(basePrice, 1, 'WHITESPACE', 2, 'POINT').replaceAll('0$', '')} + ' ֏'">
+                </td>
+                <td style="text-align: center;"
+                    th:text="${(discount != null and discount.doubleValue() > 0) ? (discount.doubleValue() % 1 == 0 ? #numbers.formatInteger(discount, 1) : #numbers.formatDecimal(discount, 1, 1, 'POINT').replaceAll('0$', '')) + '%' : '-'}">
+                </td>
+            </th:block>
+
+            <!-- Цена и Сумма с вашим форматированием -->
+            <td style="text-align: right;"
+                th:text="${finalPrice.doubleValue() % 1 == 0 ? #numbers.formatDecimal(finalPrice, 1, 'WHITESPACE', 0, 'POINT') : #numbers.formatDecimal(finalPrice, 1, 'WHITESPACE', 2, 'POINT').replaceAll('0$', '')} + ' ֏'">
             </td>
-        </tr>
-        <tr th:if="${printItems == null || #lists.isEmpty(printItems)}">
-            <td colspan="5" style="text-align: center; padding: 20px;">Список товаров пуст</td>
+            <td style="text-align: right;"
+                th:text="${rowTotal % 1 == 0 ? #numbers.formatDecimal(rowTotal, 1, 'WHITESPACE', 0, 'POINT') : #numbers.formatDecimal(rowTotal, 1, 'WHITESPACE', 2, 'POINT').replaceAll('0$', '')} + ' ֏'">
+            </td>
         </tr>
         </tbody>
     </table>
 
     <div class="total-block">
         ИТОГО К ОПЛАТЕ:
-        <!-- УМНОЕ ИТОГО ДОКУМЕНТА -->
-        <span th:with="totalVal=${op.totalAmount != null ? op.totalAmount.doubleValue() : 0}"
-              th:text="${(totalVal % 1 == 0) ? #numbers.formatInteger(totalVal, 1, 'WHITESPACE') : #numbers.formatDecimal(totalVal, 1, 'WHITESPACE', 2, 'POINT').replaceAll('0$', '')} + ' ֏'">
-    </span>
+        <span th:with="total=${op.totalAmount != null ? op.totalAmount.doubleValue() : 0}"
+              th:text="${total % 1 == 0 ? #numbers.formatDecimal(total, 1, 'WHITESPACE', 0, 'POINT') : #numbers.formatDecimal(total, 1, 'WHITESPACE', 2, 'POINT').replaceAll('0$', '')} + ' ֏'">
+        </span>
     </div>
 
-
-
-    <div th:if="${op.comment != null && !#strings.isEmpty(op.comment)}" style="margin-top: 20px; font-style: italic; font-size: 11px;">
+    <div th:if="${op.comment != null && !#strings.isEmpty(op.comment)}" style="margin-top: 15px; font-style: italic; font-size: 10px;">
         Примечание: <span th:text="${op.comment}"></span>
     </div>
 
@@ -109,10 +116,6 @@
         <div class="sig-line">Отпустил (Подпись)</div>
         <div class="sig-line">Получил (Подпись / Печать)</div>
     </div>
-</div>
-
-<div th:if="${op == null}" style="text-align: center; padding: 50px;">
-    <h2>Ошибка: Документ не найден</h2>
 </div>
 
 </body>

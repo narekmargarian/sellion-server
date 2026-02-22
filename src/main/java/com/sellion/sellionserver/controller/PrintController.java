@@ -46,6 +46,7 @@ public class PrintController {
         Order order = orderRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Заказ не найден: " + id));
 
+        model.addAttribute("productRepo", productRepository);
         model.addAttribute("op", order);
         model.addAttribute("title", "НАКЛАДНАЯ (ЗАКАЗ) №" + id);
         // ИСПРАВЛЕНО: используем специфичный метод для заказов
@@ -59,7 +60,7 @@ public class PrintController {
     public String printReturn(@PathVariable Long id, Model model) {
         ReturnOrder ret = returnOrderRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Возврат не найден: " + id));
-
+        model.addAttribute("productRepo", productRepository);
         model.addAttribute("op", ret);
         model.addAttribute("title", "АКТ ВОЗВРАТА №" + id);
         // ИСПРАВЛЕНО: используем специфичный метод для возвратов (подтянет ручные цены)
@@ -398,6 +399,17 @@ public class PrintController {
         int totalItemsCount = summary.stream()
                 .mapToInt(DailySummaryDto::getTotalQuantity)
                 .sum();
+
+        // --- ЛОГИКА ОПРЕДЕЛЕНИЯ МЕНЕДЖЕРА ---
+        // Собираем всех уникальных менеджеров из выбранных заказов
+        Set<String> managers = orders.stream()
+                .map(Order::getManagerId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        // Если менеджер один — пишем его ID, если разные или пусто — пишем "ВСЕ"
+        String displayManager = (managers.size() == 1) ? managers.iterator().next() : "ВСЕ";
+        model.addAttribute("selectedManager", displayManager);
 
         model.addAttribute("summary", summary);
         model.addAttribute("totalItemsCount", totalItemsCount); // Передаем готовую сумму
