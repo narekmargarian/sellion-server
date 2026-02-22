@@ -71,7 +71,7 @@
             <!-- УМНЫЙ ПРАЙС -->
             <td th:text="${basePrice.doubleValue() % 1 == 0 ? #numbers.formatDecimal(basePrice, 1, 'WHITESPACE', 0, 'POINT') : #numbers.formatDecimal(basePrice, 1, 'WHITESPACE', 2, 'POINT').replaceAll('0$', '')} + ' ֏'"></td>
 
-            <td th:text="${(discount != null and discount.doubleValue() > 0) ? #numbers.formatDecimal(discount, 1, 0, 'POINT') + '%' : '-'}"></td>
+            <td th:text="${(discount != null and discount.doubleValue() > 0) ? (discount.doubleValue() % 1 == 0 ? #numbers.formatInteger(discount, 1) : #numbers.formatDecimal(discount, 1, 1, 'POINT').replaceAll('0$', '')) + '%' : '-'}"></td>
 
             <!-- УМНАЯ ЦЕНА СО СКИДКОЙ -->
             <td th:text="${finalPrice.doubleValue() % 1 == 0 ? #numbers.formatDecimal(finalPrice, 1, 'WHITESPACE', 0, 'POINT') : #numbers.formatDecimal(finalPrice, 1, 'WHITESPACE', 2, 'POINT').replaceAll('0$', '')} + ' ֏'"></td>

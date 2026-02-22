@@ -69,7 +69,7 @@
         <tr th:each="item, iter : ${printItems}" th:if="${printItems != null}">
             <td style="text-align: center;" th:text="${iter.count}">1</td>
             <td th:text="${item.name}">Товар</td>
-            <td style="text-align: center;" th:text="${item.quantity + ' шт.'}">10</td>
+            <td style="text-align: center;" th:text="${item.quantity + ' шт.'}">0</td>
 
             <!-- УМНАЯ ЦЕНА ТОВАРА -->
             <td style="text-align: right;">
