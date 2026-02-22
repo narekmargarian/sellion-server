@@ -2934,9 +2934,17 @@ function renderItemsTable(itemsMap, isEdit) {
                 <td>${qtyDisplay}</td>
                 <td style="${priceStyle} font-size: 11px;">${formatSmartJS(p.price)} ֏</td>
                 <td class="item-price-cell" style="color: #6366f1; font-weight: 700;">${formatSmartJS(priceWithPercent)} ֏</td>
+                
                 <td style="text-align:center;">
-                    ${hasPromo ? `<span class="badge" style="background:#fff7ed; color:#ea580c; border:1px solid #fdba74; padding: 2px 6px;">${parseFloat(currentItemPercent)}%</span>` : `<span style="color:#cbd5e1;">---</span>`}
+                    <!-- ИСПРАВЛЕНО: Показываем оранжевый бейдж, если применен любой процент (акция или скидка магазина) -->
+                    ${currentItemPercent > 0 ?
+                `<span class="badge" style="background:#fff7ed; color:#ea580c; border:1px solid #fdba74; padding: 2px 6px;">
+                            ${parseFloat(currentItemPercent)}%
+                        </span>` :
+                `<span style="color:#cbd5e1;">---</span>`
+            }
                 </td>
+                
                 <td id="total-row-${pId}" class="item-subtotal-cell" style="font-weight:800;">${formatSmartJS(rowSum)} ֏</td>
                 <td><small class="text-muted">${p.category || '---'}</small></td>
             </tr>`;
