@@ -1228,3 +1228,27 @@ body {
 
 
 
+/* 1. Цвет ползунка по умолчанию (ВЫКЛЮЧЕН) */
+.custom-switch-ui {
+    background: #cbd5e1;
+}
+
+/* 2. Положение кружка по умолчанию (ВЫКЛЮЧЕН - слева) */
+.switch-circle {
+    left: 2px;
+}
+
+/* 3. Когда чекбокс ВКЛЮЧЕН, меняем фон ползунка внутри соседнего LABEL */
+.promo-checkbox:checked + .promo-card .custom-switch-ui {
+    background: #6366f1;
+}
+
+/* 4. Когда чекбокс ВКЛЮЧЕН, двигаем кружок вправо */
+.promo-checkbox:checked + .promo-card .switch-circle {
+    left: 22px; /* 40px ширина - 16px кружок - 2px отступ */
+}
+
+/* Эффект при наведении на всю карточку */
+.promo-card:hover {
+    border-color: #6366f1 !important;
+}

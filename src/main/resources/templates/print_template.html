@@ -70,16 +70,20 @@
             <td style="text-align: center;" th:text="${iter.count}">1</td>
             <td th:text="${item.name}">Товар</td>
             <td style="text-align: center;" th:text="${item.quantity + ' шт.'}">10</td>
-            <td style="text-align: right;"
-                th:with="p=${item.price ?: 0}"
-                th:text="${#numbers.formatDecimal(p, 1, 'WHITESPACE', 0, 'POINT') + ' ֏'}">
+
+            <!-- УМНАЯ ЦЕНА ТОВАРА -->
+            <td style="text-align: right;">
+        <span th:with="pVal=${item.price != null ? item.price.doubleValue() : 0}"
+              th:text="${(pVal % 1 == 0) ? #numbers.formatInteger(pVal, 1, 'WHITESPACE') : #numbers.formatDecimal(pVal, 1, 'WHITESPACE', 2, 'POINT').replaceAll('0$', '')} + ' ֏'">
+        </span>
             </td>
 
-            <td style="text-align: right;"
-                th:with="t=${item.total ?: 0}"
-                th:text="${#numbers.formatDecimal(t, 1, 'WHITESPACE', 0, 'POINT') + ' ֏'}">
+            <!-- УМНАЯ СУММА СТРОКИ -->
+            <td style="text-align: right;">
+        <span th:with="tVal=${item.total != null ? item.total.doubleValue() : 0}"
+              th:text="${(tVal % 1 == 0) ? #numbers.formatInteger(tVal, 1, 'WHITESPACE') : #numbers.formatDecimal(tVal, 1, 'WHITESPACE', 2, 'POINT').replaceAll('0$', '')} + ' ֏'">
+        </span>
             </td>
-
         </tr>
         <tr th:if="${printItems == null || #lists.isEmpty(printItems)}">
             <td colspan="5" style="text-align: center; padding: 20px;">Список товаров пуст</td>
@@ -89,9 +93,12 @@
 
     <div class="total-block">
         ИТОГО К ОПЛАТЕ:
-        <span th:with="total=${op.totalAmount ?: 0}"
-              th:text="${#numbers.formatDecimal(total, 1, 'WHITESPACE', 0, 'POINT') + ' ֏'}">0</span>
+        <!-- УМНОЕ ИТОГО ДОКУМЕНТА -->
+        <span th:with="totalVal=${op.totalAmount != null ? op.totalAmount.doubleValue() : 0}"
+              th:text="${(totalVal % 1 == 0) ? #numbers.formatInteger(totalVal, 1, 'WHITESPACE') : #numbers.formatDecimal(totalVal, 1, 'WHITESPACE', 2, 'POINT').replaceAll('0$', '')} + ' ֏'">
+    </span>
     </div>
+
 
 
     <div th:if="${op.comment != null && !#strings.isEmpty(op.comment)}" style="margin-top: 20px; font-style: italic; font-size: 11px;">

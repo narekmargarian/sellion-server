@@ -138,7 +138,7 @@ public class AdminManagementController {
             );
 
             // ИСПРАВЛЕНО: Установлен масштаб 1 вместо 0 для сохранения точности (напр. 1751.2)
-            BigDecimal discountedPrice = basePrice.multiply(modifier).setScale(1, RoundingMode.HALF_UP);
+            BigDecimal discountedPrice = basePrice.multiply(modifier).setScale(2, RoundingMode.HALF_UP);
 
             totalAmount = totalAmount.add(discountedPrice.multiply(qty));
             totalCost = totalCost.add(Optional.ofNullable(p.getPurchasePrice()).orElse(BigDecimal.ZERO).multiply(qty));
@@ -149,7 +149,7 @@ public class AdminManagementController {
         order.setAppliedPromoItems(promoItemsMap);
 
         // ИСПРАВЛЕНО: Устанавливаем итоговую сумму с точностью до 1 знака
-        order.setTotalAmount(totalAmount.setScale(1, RoundingMode.HALF_UP));
+        order.setTotalAmount(totalAmount.setScale(2, RoundingMode.HALF_UP));
         order.setTotalPurchaseCost(totalCost.setScale(2, RoundingMode.HALF_UP));
         order.setPurchaseCost(totalCost.setScale(2, RoundingMode.HALF_UP));
 
@@ -168,49 +168,6 @@ public class AdminManagementController {
         ));
     }
 
-
-
-
-
-    // В AdminManagementController.java
-//    @PostMapping("/orders/{id}/cancel")
-//    @Transactional(rollbackFor = Exception.class)
-//    public ResponseEntity<?> cancelOrder(@PathVariable Long id) {
-//        // 1. Поиск заказа с проверкой на существование
-//        Order order = orderRepository.findById(id)
-//                .orElseThrow(() -> new RuntimeException("Заказ не найден: " + id));
-//
-//        // 2. Блокировка отмены, если уже выставлен счет (Инвойс)
-//        if (order.getInvoiceId() != null) {
-//            return ResponseEntity.badRequest().body(Map.of("error", "Нельзя отменить заказ с выставленным счетом!"));
-//        }
-//
-//        // Защита от повторной отмены (если статус уже CANCELLED)
-//        if (order.getStatus() == OrderStatus.CANCELLED) {
-//            return ResponseEntity.badRequest().body(Map.of("error", "Заказ уже был отменен ранее."));
-//        }
-//
-//        // 3. СКЛАД: Возвращаем товары в свободный остаток
-//        // Метод увеличит p.stockQuantity на указанное в заказе количество
-//        stockService.returnItemsToStock(order.getItems(), "Отмена заказа #" + id, "ADMIN");
-//
-//        // 4. ФИНАНСЫ: Обнуляем суммы, чтобы заказ не портил статистику продаж
-//        order.setTotalAmount(BigDecimal.ZERO);
-//        order.setTotalPurchaseCost(BigDecimal.ZERO);
-//        order.setPurchaseCost(BigDecimal.ZERO);
-//
-//        // 5. Статус и сохранение
-//        order.setStatus(OrderStatus.CANCELLED);
-//        orderRepository.save(order);
-//
-//        // 6. Аудит
-//        recordAudit(id, "ORDER", "ОТМЕНА", "Заказ отменен. Товары вернулись на склад. Суммы обнулены.");
-//
-//        return ResponseEntity.ok(Map.of(
-//                "message", "Заказ успешно отменен, товар вернулся на склад",
-//                "id", id
-//        ));
-//    }
 
 
     @PostMapping("/orders/{id}/cancel")
@@ -372,8 +329,8 @@ public class AdminManagementController {
         ret.setItems(newItems);
         ret.setItemPrices(newItemPrices); // Сохраняем кастомные цены в ReturnOrder
 
-        // Округляем итог до целых (актуально для 2026 года)
-        ret.setTotalAmount(totalSum.setScale(0, RoundingMode.HALF_UP));
+
+        ret.setTotalAmount(totalSum.setScale(3, RoundingMode.HALF_UP));
 
         returnOrderRepository.save(ret);
 
@@ -502,14 +459,14 @@ public class AdminManagementController {
                 );
 
                 // ИСПРАВЛЕНО: Установлен масштаб 1 вместо 0 для сохранения точности (напр. 1751.2)
-                BigDecimal discountedPrice = basePrice.multiply(itemModifier).setScale(1, RoundingMode.HALF_UP);
+                BigDecimal discountedPrice = basePrice.multiply(itemModifier).setScale(2, RoundingMode.HALF_UP);
 
                 totalAmount = totalAmount.add(discountedPrice.multiply(qty));
                 totalCost = totalCost.add(Optional.ofNullable(p.getPurchasePrice()).orElse(BigDecimal.ZERO).multiply(qty));
             }
 
             // ИСПРАВЛЕНО: Устанавливаем итоговую сумму с точностью до 1 знака
-            order.setTotalAmount(totalAmount.setScale(1, RoundingMode.HALF_UP));
+            order.setTotalAmount(totalAmount.setScale(2, RoundingMode.HALF_UP));
             order.setTotalPurchaseCost(totalCost.setScale(2, RoundingMode.HALF_UP));
             order.setPurchaseCost(totalCost.setScale(2, RoundingMode.HALF_UP));
 
@@ -640,7 +597,7 @@ public class AdminManagementController {
 
             // ИСПРАВЛЕНО: Установлен scale(1) вместо 0
             BigDecimal discountedPrice = Optional.ofNullable(p.getPrice()).orElse(BigDecimal.ZERO)
-                    .multiply(modifier).setScale(1, RoundingMode.HALF_UP);
+                    .multiply(modifier).setScale(2, RoundingMode.HALF_UP);
 
             totalSale = totalSale.add(discountedPrice.multiply(qty));
             totalCost = totalCost.add(Optional.ofNullable(p.getPurchasePrice()).orElse(BigDecimal.ZERO).multiply(qty));
@@ -648,7 +605,7 @@ public class AdminManagementController {
 
         return Map.of(
                 // ИСПРАВЛЕНО: Установлен scale(1) вместо 0
-                "totalSale", totalSale.setScale(1, RoundingMode.HALF_UP),
+                "totalSale", totalSale.setScale(2, RoundingMode.HALF_UP),
                 "totalCost", totalCost.setScale(2, RoundingMode.HALF_UP)
         );
     }
@@ -768,7 +725,7 @@ public class AdminManagementController {
 
             ret.setItems(items);
             ret.setItemPrices(itemPrices);
-            ret.setTotalAmount(totalAmount.setScale(1, RoundingMode.HALF_UP));
+            ret.setTotalAmount(totalAmount.setScale(2, RoundingMode.HALF_UP));
 
             ReturnOrder saved = returnOrderRepository.save(ret);
 

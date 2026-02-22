@@ -32,7 +32,7 @@
 
 <!-- ОБЩИЙ ЗАГОЛОВОК -->
 <div class="page-header" th:if="${payload != null && !payload.isEmpty()}">
-    <span>РЕЕСТР ВОЗВРАТОВ (КОМПАКТ)</span>
+    <span>РЕЕСТР ВОЗВРАТОВ</span>
     <span>МЕНЕДЖЕР: <span th:text="${payload[0].managerId}"></span></span>
     <span>ДАТА: <span th:text="${#temporals.format(#temporals.createNow(), 'dd.MM.yyyy')}"></span></span>
 </div>
@@ -58,24 +58,38 @@
         <tbody>
         <tr th:each="entry, stat : ${op.items}"
             th:with="
-        p=${productRepo.findById(entry.key).orElse(null)},
-        price=${op.itemPrices != null ? op.itemPrices.getOrDefault(entry.key, (p != null ? p.price : 0)) : (p != null ? p.price : 0)}
-    ">
+            p=${productRepo.findById(entry.key).orElse(null)},
+            price=${op.itemPrices != null ? op.itemPrices.getOrDefault(entry.key, (p != null ? p.price : 0)) : (p != null ? p.price : 0)}
+        ">
             <td class="center" th:text="${stat.count}"></td>
             <td th:text="${p != null ? p.name : 'Товар #' + entry.key}"></td>
             <td class="center" th:text="${entry.value + ' шт.'}"></td>
-            <!-- Цена -->
-            <td class="num" th:text="${#numbers.formatDecimal(price, 1, 'WHITESPACE', 0, 'POINT') + ' ֏'}"></td>
-            <!-- Сумма -->
-            <td class="num" th:text="${#numbers.formatDecimal(price.doubleValue() * entry.value, 1, 'WHITESPACE', 0, 'POINT') + ' ֏'}"></td>
+
+            <!-- УМНАЯ ЦЕНА -->
+            <td class="num">
+            <span th:with="pVal=${price.doubleValue()}"
+                  th:text="${(pVal == pVal.longValue() ? #numbers.formatInteger(pVal, 1, 'WHITESPACE') : #numbers.formatDecimal(pVal, 1, 'WHITESPACE', (pVal * 10 == (pVal * 10).longValue() ? 1 : 2), 'POINT')) + ' ֏'}">
+            </span>
+            </td>
+
+            <!-- УМНАЯ СУММА СТРОКИ -->
+            <td class="num">
+            <span th:with="sVal=${price.doubleValue() * entry.value}"
+                  th:text="${(sVal == sVal.longValue() ? #numbers.formatInteger(sVal, 1, 'WHITESPACE') : #numbers.formatDecimal(sVal, 1, 'WHITESPACE', (sVal * 10 == (sVal * 10).longValue() ? 1 : 2), 'POINT')) + ' ֏'}">
+            </span>
+            </td>
         </tr>
         </tbody>
-
     </table>
 
     <div class="total">
-        ИТОГО ВОЗВРАТ: <span th:text="${#numbers.formatDecimal((op.totalAmount != null ? op.totalAmount : 0), 1, 'WHITESPACE', 0, 'POINT') + ' ֏'}"></span>
+        <!-- УМНОЕ ИТОГО -->
+        ИТОГО ВОЗВРАТ:
+        <span th:with="tVal=${(op.totalAmount != null ? op.totalAmount.doubleValue() : 0)}"
+              th:text="${(tVal == tVal.longValue() ? #numbers.formatInteger(tVal, 1, 'WHITESPACE') : #numbers.formatDecimal(tVal, 1, 'WHITESPACE', (tVal * 10 == (tVal * 10).longValue() ? 1 : 2), 'POINT')) + ' ֏'}">
+    </span>
     </div>
+
 
     <div th:if="${op.returnReason != null}" style="font-size: 9px; color: #666; margin-top: 3px;">
         Причина: <span th:text="${op.returnReason.displayName}"></span>

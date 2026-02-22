@@ -10,8 +10,10 @@ let tempPromoItems = {};
 let currentPromoData = null;
 
 function roundHalfUp(num) {
-    return Math.round(num * 10) / 10;
+
+    return Math.round((num + Number.EPSILON) * 100) / 100;
 }
+
 
 
 function openModal(id) {
@@ -2841,19 +2843,27 @@ function collectItemsFromUI() {
     return items;
 }
 
+function formatSmartJS(num) {
+    if (num === null || num === undefined) return "0";
+    // 1. Округляем до 2 знаков для точности
+    let fixed = Math.round((num + Number.EPSILON) * 100) / 100;
+    // 2. Форматируем: убираем .00 или финальный 0 в дроби, добавляем пробел как разделитель тысяч
+    return parseFloat(fixed).toLocaleString('ru-RU', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2
+    }).replace(',', '.');
+}
 
 function renderItemsTable(itemsMap, isEdit) {
     const body = document.getElementById('order-items-body');
     if (!body) return;
 
-    const f = { minimumFractionDigits: 1, maximumFractionDigits: 1 };
-
     const modalTitleEl = document.getElementById('modal-title');
     const modalTitle = modalTitleEl ? modalTitleEl.innerText.toUpperCase() : "";
 
     const isReturnOrWriteOff = modalTitle.includes("ВОЗВРАТ") ||
-                               modalTitle.includes("СПИСАНИЕ") ||
-                               modalTitle.includes("🔄");
+        modalTitle.includes("СПИСАНИЕ") ||
+        modalTitle.includes("🔄");
 
     const tableHeader = document.querySelector('#modal-order-view table thead tr');
     if (tableHeader) {
@@ -2876,8 +2886,8 @@ function renderItemsTable(itemsMap, isEdit) {
         if (!p) return;
 
         let currentPrice = (isReturnOrWriteOff && window.tempItemPrices && window.tempItemPrices[pId] !== undefined)
-                           ? window.tempItemPrices[pId]
-                           : p.price;
+            ? window.tempItemPrices[pId]
+            : p.price;
 
         const hasPromo = appliedPromos.hasOwnProperty(pId);
         const currentItemPercent = hasPromo ? parseFloat(appliedPromos[pId]) : shopPercent;
@@ -2895,7 +2905,7 @@ function renderItemsTable(itemsMap, isEdit) {
 
         if (isReturnOrWriteOff) {
             const priceDisplay = isEdit ?
-                            `<div style="display: flex; align-items: center; gap: 4px; white-space: nowrap;">
+                `<div style="display: flex; align-items: center; gap: 4px; white-space: nowrap;">
                                 <input type="number" step="0.1" class="form-control item-price-input"
                                        data-pid="${pId}"
                                        value="${currentPrice}"
@@ -2903,16 +2913,16 @@ function renderItemsTable(itemsMap, isEdit) {
                                        style="width: 75px; font-weight: bold; border: 1px solid #f87171; padding: 2px 5px; height: 30px;">
                                 <span style="font-weight: bold;">֏</span>
                             </div>` :
-                            `<b style="white-space: nowrap;">${currentPrice.toLocaleString(undefined, f)} ֏</b>`;
+                `<b style="white-space: nowrap;">${formatSmartJS(currentPrice)} ֏</b>`;
 
-                        html += `<tr data-base-price="${currentPrice}" id="row-${pId}">
+            html += `<tr data-base-price="${currentPrice}" id="row-${pId}">
                             <td style="padding-left: 15px;">
                                 ${p.name}
                                 ${isEdit ? `<span onclick="removeItemFromEdit('${pId}')" style="color: #ef4444; cursor: pointer; margin-left: 5px;">❌</span>` : ''}
                             </td>
                             <td>${qtyDisplay}</td>
                             <td class="item-price-cell">${priceDisplay}</td>
-                            <td id="total-row-${pId}" class="item-subtotal-cell" style="font-weight:800; white-space: nowrap;">${rowSum.toLocaleString(undefined, f)} ֏</td>
+                            <td id="total-row-${pId}" class="item-subtotal-cell" style="font-weight:800; white-space: nowrap;">${formatSmartJS(rowSum)} ֏</td>
                             <td><small class="text-muted">${p.category || '---'}</small></td>
                         </tr>`;
         } else {
@@ -2922,12 +2932,12 @@ function renderItemsTable(itemsMap, isEdit) {
             html += `<tr data-base-price="${p.price}" id="row-${pId}">
                 <td style="padding-left: 15px;">${p.name} ${isEdit ? `<span onclick="removeItemFromEdit('${pId}')" style="color: #ef4444; cursor: pointer; margin-left: 5px;">❌</span>` : ''}</td>
                 <td>${qtyDisplay}</td>
-                <td style="${priceStyle} font-size: 11px;">${p.price.toLocaleString(undefined, f)} ֏</td>
-                <td class="item-price-cell" style="color: #6366f1; font-weight: 700;">${priceWithPercent.toLocaleString(undefined, f)} ֏</td>
+                <td style="${priceStyle} font-size: 11px;">${formatSmartJS(p.price)} ֏</td>
+                <td class="item-price-cell" style="color: #6366f1; font-weight: 700;">${formatSmartJS(priceWithPercent)} ֏</td>
                 <td style="text-align:center;">
-                    ${hasPromo ? `<span class="badge" style="background:#fff7ed; color:#ea580c; border:1px solid #fdba74; padding: 2px 6px;">${currentItemPercent}%</span>` : `<span style="color:#cbd5e1;">---</span>`}
+                    ${hasPromo ? `<span class="badge" style="background:#fff7ed; color:#ea580c; border:1px solid #fdba74; padding: 2px 6px;">${parseFloat(currentItemPercent)}%</span>` : `<span style="color:#cbd5e1;">---</span>`}
                 </td>
-                <td id="total-row-${pId}" class="item-subtotal-cell" style="font-weight:800;">${rowSum.toLocaleString(undefined, f)} ֏</td>
+                <td id="total-row-${pId}" class="item-subtotal-cell" style="font-weight:800;">${formatSmartJS(rowSum)} ֏</td>
                 <td><small class="text-muted">${p.category || '---'}</small></td>
             </tr>`;
         }
@@ -2935,7 +2945,7 @@ function renderItemsTable(itemsMap, isEdit) {
 
     if (isEdit) {
         const options = `<option value="" disabled selected>Выберите товар...</option>` +
-            productsData.map(p => `<option value="${p.id}">${p.name} (${p.price} ֏)</option>`).join('');
+            productsData.map(p => `<option value="${p.id}">${p.name} (${formatSmartJS(p.price)} ֏)</option>`).join('');
 
         const addRowColspan = isReturnOrWriteOff ? 3 : 5;
         html += `<tr class="add-row-sticky" style="background: #f8fafc;">
@@ -2950,21 +2960,21 @@ function renderItemsTable(itemsMap, isEdit) {
     body.innerHTML = html;
     totalSumForCalculation = roundHalfUp(totalSumForCalculation);
 
-    // ИСПРАВЛЕННЫЙ БЛОК: Запрет переноса строки
     const totalEl = document.getElementById('order-total-price');
     if (totalEl) {
         totalEl.style.display = 'flex';
         totalEl.style.alignItems = 'center';
-        totalEl.style.whiteSpace = 'nowrap'; // ЗАПРЕТ ПЕРЕНОСА
+        totalEl.style.whiteSpace = 'nowrap';
         totalEl.style.gap = '8px';
 
         totalEl.innerHTML = `
             <span style="font-size: 14px; color: #64748b; font-weight: normal;">Итого:</span>
-            <span style="font-weight: 800;">${totalSumForCalculation.toLocaleString(undefined, f)} ֏</span>
+            <span style="font-weight: 800;">${formatSmartJS(totalSumForCalculation)} ֏</span>
         `;
     }
     window.currentOrderTotal = totalSumForCalculation;
 }
+
 
 function addItemToEdit() {
     const select = document.getElementById('add-item-select');
@@ -3881,7 +3891,6 @@ function openCreatePromoModal() {
 
 
 async function checkPromosBeforeSave(items) {
-    // Вызываем API (которое мы создадим), чтобы получить список активных акций для этих товаров
     const res = await fetch('/api/promos/check-active', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
@@ -3890,25 +3899,46 @@ async function checkPromosBeforeSave(items) {
     const activePromos = await res.json();
 
     if (activePromos.length > 0) {
-        // Открываем маленькое окошко (confirm) с перечислением акций и галочкой
+        // Формируем красивые карточки с РАБОЧИМИ ползунками
+        // Внутри функции checkPromosBeforeSave или там, где рисуете список:
         const promoListHtml = activePromos.map(p => `
-            <div style="margin-bottom:10px;">
-                <input type="checkbox" class="promo-apply-checkbox" data-promo-id="${p.id}" checked>
-                <b>${p.title}</b> (Акция вместо скидки магазина)
-            </div>
-        `).join('');
+    <label class="promo-card" style="display: flex; align-items: center; justify-content: space-between; width: 100%; box-sizing: border-box;">
+        <div style="flex-grow: 1; text-align: left; pointer-events: none;">
+            <div style="font-weight: 700; color: #1e293b; font-size: 13px;">${p.title || p.name}</div>
+            <div style="font-size: 11px; color: #64748b;">Для менеджера: ${p.managerId}</div>
+        </div>
+        
+        <!-- Чекбокс ДОЛЖЕН быть перед .custom-switch -->
+        <input type="checkbox" 
+               class="promo-checkbox" 
+               data-promo-id="${p.id}" 
+               checked 
+               style="display: none;"> <!-- Скрываем, но он работает через label -->
+        
+        <!-- Визуальный ползунок -->
+        <div class="custom-switch"></div>
+    </label>
+`).join('');
 
-        showConfirmModal("Обнаружены акции!", `
-            <div style="text-align:left;">
+
+        showConfirmModal("Нашли акции!", `
+            <div style="text-align:center;">
                 ${promoListHtml}
-                <p style="font-size:11px; color:red;">* Если выбрано, на товары из акции НЕ будет действовать скидка магазина.</p>
+                <p style="font-size:11px; color:#ef4444; margin-top:15px;">* При активации спец. цены заменят скидку магазина на эти товары.</p>
             </div>
         `, () => {
-            // Если нажали "Применить", помечаем в данных заказа, какие акции применить
-            saveOrderWithPromos(activePromos);
+            // Собираем ТОЛЬКО те акции, где ползунок остался включенным
+            const selectedPromos = [];
+            document.querySelectorAll('.promo-apply-checkbox').forEach(cb => {
+                if (cb.checked) {
+                    const id = cb.getAttribute('data-promo-id');
+                    const found = activePromos.find(ap => ap.id == id);
+                    if (found) selectedPromos.push(found);
+                }
+            });
+            saveOrderWithPromos(selectedPromos);
         });
     } else {
-        // Если акций нет, сохраняем как обычно
         performFinalOrderSave();
     }
 }
@@ -4127,20 +4157,23 @@ async function checkAndApplyPromos(orderItems, onApplied) {
         }
 
         // Рендеринг карточек (без изменений)
+        // Внутри container.innerHTML = activePromos.map(...)
         container.innerHTML = activePromos.map(p => `
-            <div style="margin-bottom: 8px;">
-                <input type="checkbox" class="promo-checkbox" id="p-${p.id}" data-id="${p.id}" checked style="display:none;">
-                <label class="promo-card" for="p-${p.id}" style="display: flex; align-items: center; justify-content: space-between; padding: 10px; background: #f8fafc; border-radius: 12px; cursor: pointer; border: 1px solid #e2e8f0;">
-                    <div style="flex-grow: 1;">
-                        <div style="font-weight: 700; font-size: 13px;">${p.title}</div>
-                        <div style="font-size: 11px; color: #64748b;">Для менеджера: ${p.managerId}</div>
-                    </div>
-                    <div class="custom-switch-ui" style="width: 40px; height: 20px; background: #6366f1; border-radius: 20px; position: relative;">
-                        <div class="switch-circle" style="width: 16px; height: 16px; background: white; border-radius: 50%; position: absolute; right: 2px; top: 2px;"></div>
-                    </div>
-                </label>
+    <div style="margin-bottom: 8px;">
+        <input type="checkbox" class="promo-checkbox" id="p-${p.id}" data-id="${p.id}" checked style="display:none;">
+        <label class="promo-card" for="p-${p.id}" style="display: flex; align-items: center; justify-content: space-between; padding: 10px; background: #f8fafc; border-radius: 12px; cursor: pointer; border: 1px solid #e2e8f0;">
+            <div style="flex-grow: 1; pointer-events: none;">
+                <div style="font-weight: 700; font-size: 13px;">${p.title}</div>
+                <div style="font-size: 11px; color: #64748b;">Для менеджера: ${p.managerId}</div>
             </div>
-        `).join('');
+            <!-- УБРАЛИ background и position из inline-style -->
+            <div class="custom-switch-ui" style="width: 40px; height: 20px; border-radius: 20px; position: relative; transition: 0.3s;">
+                <div class="switch-circle" style="width: 16px; height: 16px; background: white; border-radius: 50%; position: absolute; top: 2px; transition: 0.3s;"></div>
+            </div>
+        </label>
+    </div>
+`).join('');
+
 
         document.getElementById('promo-apply-btn').onclick = () => {
             const selectedIds = Array.from(document.querySelectorAll('.promo-checkbox:checked')).map(el => el.dataset.id);

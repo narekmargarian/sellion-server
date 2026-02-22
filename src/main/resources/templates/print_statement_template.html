@@ -55,31 +55,46 @@
         <tr th:each="tx : ${transactions}" th:if="${tx != null}">
             <td th:text="${tx.timestamp != null ? #temporals.format(tx.timestamp, 'dd.MM.yyyy') : '---'}"></td>
             <td th:text="${tx.comment != null ? tx.comment : '---'}"></td>
-            <!-- Безопасная проверка типа и форматирование -->
-            <td class="text-right" th:text="${#strings.toString(tx.type) == 'ORDER' ? #numbers.formatDecimal(tx.amount, 1, 'WHITESPACE', 0, 'POINT') : ''}"></td>
-            <td class="text-right" th:text="${#strings.toString(tx.type) != 'ORDER' ? #numbers.formatDecimal(tx.amount, 1, 'WHITESPACE', 0, 'POINT') : ''}"></td>
-            <td class="text-right"
-                style="font-weight: bold;"
-                th:with="balance=${tx.balanceAfter ?: 0}"
-                th:text="${#numbers.formatDecimal(balance, 1, 'WHITESPACE', 0, 'POINT') + ' ֏'}">
+
+            <!-- ДЕБЕТ (ЗАКАЗ) -->
+            <td class="text-right">
+        <span th:if="${#strings.toString(tx.type) == 'ORDER'}"
+              th:with="dVal=${tx.amount != null ? tx.amount.doubleValue() : 0}"
+              th:text="${(dVal % 1 == 0) ? #numbers.formatInteger(dVal, 1, 'WHITESPACE') : #numbers.formatDecimal(dVal, 1, 'WHITESPACE', 2, 'POINT').replaceAll('0$', '')}">
+        </span>
             </td>
 
+            <!-- КРЕДИТ (ОПЛАТА/ВОЗВРАТ) -->
+            <td class="text-right">
+        <span th:if="${#strings.toString(tx.type) != 'ORDER'}"
+              th:with="kVal=${tx.amount != null ? tx.amount.doubleValue() : 0}"
+              th:text="${(kVal % 1 == 0) ? #numbers.formatInteger(kVal, 1, 'WHITESPACE') : #numbers.formatDecimal(kVal, 1, 'WHITESPACE', 2, 'POINT').replaceAll('0$', '')}">
+        </span>
+            </td>
+
+            <!-- ТЕКУЩИЙ ОСТАТОК (БАЛАНС) -->
+            <td class="text-right" style="font-weight: bold;">
+        <span th:with="bVal=${tx.balanceAfter != null ? tx.balanceAfter.doubleValue() : 0}"
+              th:text="${(bVal % 1 == 0) ? #numbers.formatInteger(bVal, 1, 'WHITESPACE') : #numbers.formatDecimal(bVal, 1, 'WHITESPACE', 2, 'POINT').replaceAll('0$', '')} + ' ֏'">
+        </span>
+            </td>
         </tr>
         <tr th:if="${#lists.isEmpty(transactions)}">
             <td colspan="5" style="text-align: center; padding: 20px;">Записей за указанный период не найдено.</td>
         </tr>
         </tbody>
         <tfoot>
-        <!-- Найти строку с итоговым сальдо и заменить на: -->
         <tr class="sum-row">
             <td colspan="4" class="text-right">ИТОГОВОЕ САЛЬДО:</td>
-            <td class="text-right"
-                th:with="cDebt=${client.debt ?: 0}"
-                th:text="${#numbers.formatDecimal(cDebt, 1, 'WHITESPACE', 0, 'POINT') + ' ֏'}">
+            <td class="text-right">
+                <!-- ИТОГОВОЕ САЛЬДО -->
+                <span th:with="cDebtVal=${client.debt != null ? client.debt.doubleValue() : 0}"
+                      th:text="${(cDebtVal % 1 == 0) ? #numbers.formatInteger(cDebtVal, 1, 'WHITESPACE') : #numbers.formatDecimal(cDebtVal, 1, 'WHITESPACE', 2, 'POINT').replaceAll('0$', '')} + ' ֏'">
+        </span>
             </td>
         </tr>
-
         </tfoot>
+
     </table>
 
     <div class="footer">

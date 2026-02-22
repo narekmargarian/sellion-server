@@ -328,8 +328,8 @@ public class PrintController {
 
             // Считаем цену со скидкой
             BigDecimal modifier = BigDecimal.ONE.subtract(discount.divide(new BigDecimal("100"), 4, RoundingMode.HALF_UP));
-            dto.price = basePrice.multiply(modifier).setScale(0, RoundingMode.HALF_UP);
-            dto.total = dto.price.multiply(BigDecimal.valueOf(qty)).setScale(0, RoundingMode.HALF_UP);
+            dto.price = basePrice.multiply(modifier).setScale(2, RoundingMode.HALF_UP);
+            dto.total = dto.price.multiply(BigDecimal.valueOf(qty)).setScale(2, RoundingMode.HALF_UP);
 
             dtoList.add(dto);
         });

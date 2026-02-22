@@ -100,12 +100,11 @@
             <td th:text="${inv.createdAt != null ? #temporals.format(inv.createdAt, 'dd.MM.yyyy') : '---'}"></td>
             <td th:text="${inv.shopName != null ? inv.shopName : '---'}" style="font-weight: 700;"></td>
             <td style="text-align: right; font-weight: 700;">
-                <!-- ИСПРАВЛЕНО: Безопасное вычитание BigDecimal и форматирование -->
-                <span th:with="total=${inv.totalAmount != null ? inv.totalAmount : 0},
-                               paid=${inv.paidAmount != null ? inv.paidAmount : 0},
-                               remain=${total - paid}"
-                      th:text="${#numbers.formatDecimal(remain, 1, 'WHITESPACE', 0, 'POINT') + ' ֏'}">
-                </span>
+        <span th:with="total=${inv.totalAmount != null ? inv.totalAmount.doubleValue() : 0},
+                       paid=${inv.paidAmount != null ? inv.paidAmount.doubleValue() : 0},
+                       remain=${total - paid}"
+              th:text="${(remain % 1 == 0) ? #numbers.formatDecimal(remain, 1, 'WHITESPACE', 0, 'POINT') : #numbers.formatDecimal(remain, 1, 'WHITESPACE', 2, 'POINT').replaceAll('0$', '')} + ' ֏'">
+        </span>
             </td>
         </tr>
         <tr th:if="${#lists.isEmpty(invoices)}">
@@ -116,10 +115,11 @@
 
     <div class="total-row">
         ОБЩИЙ ДОЛГ:
-        <span th:with="debt=${totalDebt != null ? totalDebt : 0}"
-              th:text="${#numbers.formatDecimal(debt, 1, 'WHITESPACE', 0, 'POINT') + ' ֏'}">
+        <span th:with="debt=${totalDebt != null ? totalDebt.doubleValue() : 0}"
+              th:text="${(debt % 1 == 0) ? #numbers.formatDecimal(debt, 1, 'WHITESPACE', 0, 'POINT') : #numbers.formatDecimal(debt, 1, 'WHITESPACE', 2, 'POINT').replaceAll('0$', '')} + ' ֏'">
     </span>
     </div>
+
 
 </div>
 

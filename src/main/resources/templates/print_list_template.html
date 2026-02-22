@@ -45,7 +45,12 @@
 
             <td th:text="${op.shopName != null ? op.shopName : '---'}" style="font-weight: bold;"></td>
 
-            <td class="text-right" th:text="${op.totalAmount != null ? #numbers.formatDecimal(op.totalAmount, 1, 'WHITESPACE', 0, 'POINT') : '0'}"></td>
+            <!-- УМНАЯ СУММА ОПЕРАЦИИ -->
+            <td class="text-right">
+            <span th:with="val=${op.totalAmount != null ? op.totalAmount.doubleValue() : 0}"
+                  th:text="${(val % 1 == 0) ? #numbers.formatInteger(val, 1, 'WHITESPACE') : #numbers.formatDecimal(val, 1, 'WHITESPACE', 2, 'POINT').replaceAll('0$', '')}">
+            </span>
+            </td>
 
             <td>
                 <!-- Безопасная проверка через #strings -->
@@ -66,14 +71,17 @@
         <tr class="total-row">
             <td colspan="3" class="text-right">ИТОГО ПО РЕЕСТРУ:</td>
 
-            <td class="text-right"
-                th:with="val=${finalTotal != null ? finalTotal : 0}"
-                th:text="${#numbers.formatDecimal(val, 1, 'WHITESPACE', 0, 'POINT') + ' ֏'}">
+            <!-- УМНОЕ ИТОГО ПО ВСЕМУ РЕЕСТРУ -->
+            <td class="text-right">
+            <span th:with="fVal=${finalTotal != null ? finalTotal.doubleValue() : 0}"
+                  th:text="${(fVal % 1 == 0) ? #numbers.formatInteger(fVal, 1, 'WHITESPACE') : #numbers.formatDecimal(fVal, 1, 'WHITESPACE', 2, 'POINT').replaceAll('0$', '')} + ' ֏'">
+            </span>
             </td>
 
             <td></td>
         </tr>
         </tfoot>
+
     </table>
 </div>
 

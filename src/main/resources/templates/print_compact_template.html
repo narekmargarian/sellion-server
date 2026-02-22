@@ -59,33 +59,35 @@
             th:with="
         p=${productRepo.findById(entry.key).orElse(null)},
         isOrder=${#strings.contains(op.class.name, 'Order') and !#strings.contains(op.class.name, 'Return')},
-
         discount=${isOrder ? (op.appliedPromoItems != null ? (op.appliedPromoItems.getOrDefault(entry.key, (op.discountPercent != null ? op.discountPercent : 0))) : (op.discountPercent != null ? op.discountPercent : 0)) : 0},
-
         basePrice=${p != null ? p.price : 0},
-
-        finalPrice=${isOrder ? (basePrice.doubleValue() * (1.0 - (discount.doubleValue() / 100.0))) : (op.itemPrices != null ? (op.itemPrices.getOrDefault(entry.key, basePrice)) : basePrice)}
+        finalPrice=${isOrder ? (basePrice.doubleValue() * (1.0 - (discount.doubleValue() / 100.0))) : (op.itemPrices != null ? (op.itemPrices.getOrDefault(entry.key, basePrice)) : basePrice)},
+        rowTotal=${finalPrice.doubleValue() * entry.value}
     ">
             <td th:text="${stat.count}"></td>
             <td th:text="${p != null ? p.name : 'Товар #' + entry.key}"></td>
             <td th:text="${entry.value}"></td>
 
-            <td th:text="${#numbers.formatDecimal(basePrice, 1, 'WHITESPACE', 0, 'POINT') + ' ֏'}"></td>
+            <!-- УМНЫЙ ПРАЙС -->
+            <td th:text="${basePrice.doubleValue() % 1 == 0 ? #numbers.formatDecimal(basePrice, 1, 'WHITESPACE', 0, 'POINT') : #numbers.formatDecimal(basePrice, 1, 'WHITESPACE', 2, 'POINT').replaceAll('0$', '')} + ' ֏'"></td>
 
-            <!-- Исправлено: добавлена проверка на null для discount перед вызовом .doubleValue() -->
-            <td th:text="${(discount != null and discount.doubleValue() > 0) ? (discount + '%') : '-'}"></td>
+            <td th:text="${(discount != null and discount.doubleValue() > 0) ? #numbers.formatDecimal(discount, 1, 0, 'POINT') + '%' : '-'}"></td>
 
-            <td th:text="${#numbers.formatDecimal(finalPrice, 1, 'WHITESPACE', 0, 'POINT') + ' ֏'}"></td>
+            <!-- УМНАЯ ЦЕНА СО СКИДКОЙ -->
+            <td th:text="${finalPrice.doubleValue() % 1 == 0 ? #numbers.formatDecimal(finalPrice, 1, 'WHITESPACE', 0, 'POINT') : #numbers.formatDecimal(finalPrice, 1, 'WHITESPACE', 2, 'POINT').replaceAll('0$', '')} + ' ֏'"></td>
 
-            <!-- Исправлено: расчет обернут в скобки внутри функции -->
-            <td th:text="${#numbers.formatDecimal((finalPrice.doubleValue() * entry.value), 1, 'WHITESPACE', 0, 'POINT') + ' ֏'}"></td>
+            <!-- УМНАЯ СУММА СТРОКИ -->
+            <td th:text="${rowTotal % 1 == 0 ? #numbers.formatDecimal(rowTotal, 1, 'WHITESPACE', 0, 'POINT') : #numbers.formatDecimal(rowTotal, 1, 'WHITESPACE', 2, 'POINT').replaceAll('0$', '')} + ' ֏'"></td>
         </tr>
-
         </tbody>
     </table>
+
     <div class="total">
-        ИТОГО: <span th:text="${#numbers.formatDecimal((op.totalAmount != null ? op.totalAmount : 0), 1, 'WHITESPACE', 0, 'POINT') + ' ֏'}"></span>
+        <!-- УМНОЕ ИТОГО -->
+        ИТОГО: <span th:with="total=${op.totalAmount != null ? op.totalAmount.doubleValue() : 0}"
+                     th:text="${total % 1 == 0 ? #numbers.formatDecimal(total, 1, 'WHITESPACE', 0, 'POINT') : #numbers.formatDecimal(total, 1, 'WHITESPACE', 2, 'POINT').replaceAll('0$', '')} + ' ֏'"></span>
     </div>
+
 
 </div>
 

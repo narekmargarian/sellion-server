@@ -41,11 +41,11 @@
 
     <div onclick="showTab('tab-products')" class="nav-link" id="btn-products"><i class="bi bi-box-seam"></i> Склад</div>
 
-    <div  onclick="showTab('tab-invoices')" class="nav-link"
+    <div onclick="showTab('tab-invoices')" class="nav-link"
          id="btn-invoices">
         <i class="bi bi-file-earmark-text"></i> Счета / Оплата
     </div>
-    <div  onclick="showTab('tab-reports')" class="nav-link"
+    <div onclick="showTab('tab-reports')" class="nav-link"
          id="btn-reports">
         <i class="bi bi-graph-up"></i> Отчеты
     </div>
@@ -63,7 +63,7 @@
 
     <form id="logout-form" th:action="@{/logout}" method="post" style="margin-top:auto; padding:20px;">
         <!-- Правильный CSRF токен без лишних кавычек -->
-        <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}" />
+        <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
 
         <button type="button"
                 onclick="handleLogout()"
@@ -86,7 +86,10 @@
                 <div class="summary-item">
                     <small>Общая сумма:</small>
                     <span class="price-up"
-                          th:text="${(totalOrdersSum ?: 0) == 0 ? '0 ֏' : #numbers.formatDecimal(totalOrdersSum, 1, 'WHITESPACE', 1, 'POINT') + ' ֏'}">0 ֏</span>
+                          th:with="val=${totalOrdersSum != null ? totalOrdersSum.doubleValue() : 0}"
+                          th:text="${val == 0 ? '0 ֏' : (val % 1 == 0 ? #numbers.formatInteger(val, 1, 'WHITESPACE') : #numbers.formatDecimal(val, 1, 'WHITESPACE', 2, 'POINT').replaceAll('0$', '')) + ' ֏'}">
+        0 ֏
+    </span>
                 </div>
             </div>
 
@@ -154,8 +157,12 @@
                         <td class="js-date-format" th:text="${o.createdAt}"></td>
                         <td th:text="${o.managerId}" style="font-weight:600; color:var(--accent);"></td>
                         <td th:text="${o.shopName}" style="font-weight:700;"></td>
-                        <td class="price-up"
-                            th:text="${o.totalAmount != null ? #numbers.formatDecimal(o.totalAmount, 1, 'WHITESPACE', 1, 'POINT') + ' ֏' : '0 ֏'}"></td>
+                        <td class="price-up">
+    <span th:with="val=${o.totalAmount != null ? o.totalAmount.doubleValue() : 0}"
+          th:text="${val == 0 ? '0 ֏' : (val % 1 == 0 ? #numbers.formatInteger(val, 1, 'WHITESPACE') : #numbers.formatDecimal(val, 1, 'WHITESPACE', 2, 'POINT').replaceAll('0$', '')) + ' ֏'}">
+        0 ֏
+    </span>
+                        </td>
 
 
                         <td class="js-date-format" th:text="${o.deliveryDate}"></td>
@@ -232,13 +239,15 @@
                 <div class="summary-item">
                     <small>Общий долг системы:</small><br>
                     <span class="price-down"
-                          th:text="${(totalInvoiceDebt ?: 0) == 0 ? '0 ֏' : #numbers.formatDecimal(totalInvoiceDebt, 1, 'WHITESPACE', 1, 'POINT') + ' ֏'}">
+                          th:with="val=${totalInvoiceDebt != null ? totalInvoiceDebt.doubleValue() : 0}"
+                          th:text="${(val == 0) ? '0 ֏' : ((val % 1 == 0) ? #numbers.formatInteger(val, 1, 'WHITESPACE') : #numbers.formatDecimal(val, 1, 'WHITESPACE', 2, 'POINT').replaceAll('0$', '')) + ' ֏'}">
         </span>
                 </div>
                 <div class="summary-item">
                     <small>Всего оплачено:</small><br>
                     <span class="price-up"
-                          th:text="${(totalPaidSum ?: 0) == 0 ? '0 ֏' : #numbers.formatDecimal(totalPaidSum, 1, 'WHITESPACE', 1, 'POINT') + ' ֏'}">
+                          th:with="val=${totalPaidSum != null ? totalPaidSum.doubleValue() : 0}"
+                          th:text="${(val == 0) ? '0 ֏' : ((val % 1 == 0) ? #numbers.formatInteger(val, 1, 'WHITESPACE') : #numbers.formatDecimal(val, 1, 'WHITESPACE', 2, 'POINT').replaceAll('0$', '')) + ' ֏'}">
         </span>
                 </div>
             </div>
@@ -299,9 +308,12 @@
                     <tr th:each="inv : ${invoices}" th:data-manager="${inv.managerId}">
                         <td th:text="${inv.invoiceNumber}"></td>
                         <td th:text="${inv.shopName}" style="font-weight:700;"></td>
-                        <td th:text="${#numbers.formatDecimal(inv.totalAmount, 1, 'WHITESPACE', 1, 'POINT') + ' ֏'}"></td>
-                        <td class="price-up"
-                            th:text="${#numbers.formatDecimal(inv.paidAmount, 1, 'WHITESPACE', 1, 'POINT') + ' ֏'}"></td>
+                        <td th:text="${#numbers.formatDecimal(inv.totalAmount, 1, 'WHITESPACE', 2, 'POINT') + ' ֏'}"></td>
+                        <td class="price-up">
+    <span th:with="val=${inv.paidAmount != null ? inv.paidAmount.doubleValue() : 0}"
+          th:text="${(val == 0) ? '0 ֏' : ((val % 1 == 0) ? #numbers.formatInteger(val, 1, 'WHITESPACE') : #numbers.formatDecimal(val, 1, 'WHITESPACE', 2, 'POINT').replaceAll('0$', '')) + ' ֏'}">
+    </span>
+                        </td>
 
 
                         <td>
@@ -362,7 +374,10 @@
                 <div class="summary-item">
                     <small>Сумма возвратов:</small>
                     <span class="price-down"
-                          th:text="${(totalReturnsSum ?: 0) == 0 ? '0 ֏' : #numbers.formatDecimal(totalReturnsSum, 1, 'WHITESPACE', 1, 'POINT') + ' ֏'}">0 ֏</span>
+                          th:with="val=${totalReturnsSum != null ? totalReturnsSum.doubleValue() : 0}"
+                          th:text="${val == 0 ? '0 ֏' : (val % 1 == 0 ? #numbers.formatInteger(val, 1, 'WHITESPACE') : #numbers.formatDecimal(val, 1, 'WHITESPACE', 2, 'POINT').replaceAll('0$', '')) + ' ֏'}">
+        0 ֏
+    </span>
                 </div>
             </div>
 
@@ -394,10 +409,10 @@
                 <button class="btn-primary" onclick="openCreateReturnModal()" title="Новый возврат">+</button>
 
                 <button type="button" class="btn-primary"
-                        style="background: #ef4444;"
+                        style="background: #10b981;"
                         onclick="printCompactReturns()"
                         title="Печать выбранных возвратов (Компакт)">
-                    🔄
+                    📄
                 </button>
             </div>
 
@@ -442,8 +457,12 @@
                             <span th:text="${r.returnReason.displayName}"></span>
                         </td>
 
-                        <td class="price-down"
-                            th:text="${r.totalAmount != null ? #numbers.formatDecimal(r.totalAmount, 1, 'WHITESPACE', 1, 'POINT') + ' ֏' : '0 ֏'}"></td>
+                        <td class="price-down">
+    <span th:with="val=${r.totalAmount != null ? r.totalAmount.doubleValue() : 0}"
+          th:text="${val == 0 ? '0 ֏' : (val % 1 == 0 ? #numbers.formatInteger(val, 1, 'WHITESPACE') : #numbers.formatDecimal(val, 1, 'WHITESPACE', 2, 'POINT').replaceAll('0$', '')) + ' ֏'}">
+        0 ֏
+    </span>
+                        </td>
 
                         <td>
                             <span class="js-status-translate" th:text="${r.status.name()}"></span>
@@ -493,8 +512,10 @@
                         <td th:text="${c.address}"></td>
                         <td th:text="${c.category ?: '---'}"></td> <!-- ОТОБРАЖЕНИЕ КАТЕГОРИИ -->
 
-                        <td class="price-down"
-                            th:text="${#numbers.formatDecimal((c.debt ?: 0), 1, 'WHITESPACE', 1, 'POINT') + ' ֏'}">
+                        <td class="price-down">
+    <span th:with="val=${c.debt != null ? c.debt.doubleValue() : 0}"
+          th:text="${(val == 0) ? '0 ֏' : ((val % 1 == 0) ? #numbers.formatInteger(val, 1, 'WHITESPACE') : #numbers.formatDecimal(val, 1, 'WHITESPACE', 2, 'POINT').replaceAll('0$', '')) + ' ֏'}">
+    </span>
                         </td>
 
 
@@ -589,7 +610,7 @@
                             </td>
 
                             <td style="font-weight: 700; color: #0f172a;"
-                                th:text="${p.price != null ? #numbers.formatDecimal(p.price, 1, 'WHITESPACE', 1, 'POINT') + ' ֏' : '0 ֏'}">
+                                th:text="${p.price != null ? #numbers.formatDecimal(p.price, 1, 'WHITESPACE', 2, 'POINT') + ' ֏' : '0 ֏'}">
                             </td>
 
                             <td>
@@ -658,7 +679,7 @@
                     <input type="hidden" name="activeTab" value="tab-managers">
                     <input type="date" name="kpiStart" class="form-control" th:value="${orderStartDate}">
                     <input type="date" name="kpiEnd" class="form-control" th:value="${orderEndDate}">
-                    <button type="submit" class="btn-primary">Применить период</button>
+                    <button type="submit" class="btn-primary">⟳</button>
                 </form>
 
             </div>
@@ -673,13 +694,13 @@
 
                             <div style="margin-bottom: 15px;">
                                 <h5 style="margin: 0; font-weight: 800; color: #1e293b;" th:text="${m}">Имя</h5>
-                                <span class="badge" style="background: #e0f2fe; color: #0369a1; font-size: 10px;">ID: [[${m}]]</span>
+                                <!--                                <span class="badge" style="background: #e0f2fe; color: #0369a1; font-size: 10px;">ID: [[${m}]]</span>-->
                             </div>
 
                             <div style="background: #eef2ff; padding: 12px; border-radius: 12px; margin-bottom: 15px;">
                                 <div style="display: flex; justify-content: space-between; align-items: center;">
                                     <b style="font-size: 15px; color: #4f46e5;"
-                                       th:text="${(stats != null and stats.targetAmount != null) ? #numbers.formatDecimal(stats.targetAmount, 1, 'WHITESPACE', 1, 'POINT') + ' ֏' : '0 ֏'}">
+                                       th:text="${(stats != null and stats.targetAmount != null) ? #numbers.formatDecimal(stats.targetAmount, 1, 'WHITESPACE', 2, 'POINT') + ' ֏' : '0 ֏'}">
                                         0 ֏
                                     </b>
                                     <button class="btn-ghost" th:data-manager-id="${m}"
@@ -693,7 +714,7 @@
                                     <small style="display:block; color: #166534; font-size: 10px; font-weight: 700; text-transform: uppercase;">Продано</small>
                                     <b style="font-size: 15px; color: #166534;">
                                                         <span th:if="${stats != null and stats.totalSales != null}"
-                                                             th:text="${#numbers.formatDecimal(stats.totalSales, 1, 'WHITESPACE', 1, 'POINT')} + ' ֏'"></span>
+                                                              th:text="${#numbers.formatDecimal(stats.totalSales, 1, 'WHITESPACE', 2, 'POINT')} + ' ֏'"></span>
                                         <span th:unless="${stats != null and stats.totalSales != null}">0 ֏</span>
                                     </b>
                                 </div>
@@ -701,7 +722,7 @@
                                     <small style="display:block; color: #991b1b; font-size: 10px; font-weight: 700; text-transform: uppercase;">Возвраты</small>
                                     <b style="font-size: 15px; color: #991b1b;">
                                             <span th:if="${stats != null and stats.totalReturns != null}"
-                                                 th:text="${#numbers.formatDecimal(stats.totalReturns, 1, 'WHITESPACE', 1, 'POINT')} + ' ֏'"></span>
+                                                  th:text="${#numbers.formatDecimal(stats.totalReturns, 1, 'WHITESPACE', 2, 'POINT')} + ' ֏'"></span>
                                         <span th:unless="${stats != null and stats.totalReturns != null}">0 ֏</span>
                                     </b>
                                 </div>
@@ -718,16 +739,16 @@
                                 </div>
                             </div>
 
-                            <div style="display: flex; gap: 8px;">
-                                <button class="btn-ghost" style="flex: 1; padding: 8px;"
-                                        th:data-name="${m}"
-                                        onclick="showManagerInvoices(this.getAttribute('data-name'))">💳 Счета
-                                </button>
-                                <button class="btn-ghost" style="flex: 1; padding: 8px;"
-                                        th:data-name="${m}"
-                                        onclick="showManagerReport(this.getAttribute('data-name'))">📑 Отчет
-                                </button>
-                            </div>
+                            <!--                            <div style="display: flex; gap: 8px;">-->
+                            <!--                                <button class="btn-ghost" style="flex: 1; padding: 8px;"-->
+                            <!--                                        th:data-name="${m}"-->
+                            <!--                                        onclick="showManagerInvoices(this.getAttribute('data-name'))">💳 Счета-->
+                            <!--                                </button>-->
+                            <!--                                <button class="btn-ghost" style="flex: 1; padding: 8px;"-->
+                            <!--                                        th:data-name="${m}"-->
+                            <!--                                        onclick="showManagerReport(this.getAttribute('data-name'))">📑 Отчет-->
+                            <!--                                </button>-->
+                            <!--                            </div>-->
 
                         </div>
                     </th:block>
@@ -756,18 +777,23 @@
 
                 <div style="background: #fff; padding: 25px; border-radius: 20px; border: 1px solid #f1f5f9; box-shadow: 0 4px 20px rgba(0,0,0,0.03); margin-bottom: 30px;">
                     <h5 style="font-weight: 800; color: #0f172a; margin-bottom: 20px; display: flex; align-items: center; gap: 12px; font-size: 18px;">
-                        <span style="background: #e0f2fe; padding: 8px; border-radius: 10px;">🚚</span> Формирование рейса</h5>
+                        <span style="background: #e0f2fe; padding: 8px; border-radius: 10px;">🚚</span> Формирование
+                        рейса</h5>
 
                     <div style="display: grid; grid-template-columns: 2fr 1.5fr 1.5fr; gap: 20px; align-items: end;">
                         <div>
-                            <label style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 8px; display: block;">Ответственный водитель / Менеджер</label>
-                            <select id="route-manager-select" class="form-select" style="border-radius: 12px; border: 1.5px solid #e2e8f0; height: 48px; font-weight: 600; color: #1e293b;">
+                            <label style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 8px; display: block;">Ответственный
+                                водитель / Менеджер</label>
+                            <select id="route-manager-select" class="form-select"
+                                    style="border-radius: 12px; border: 1.5px solid #e2e8f0; height: 48px; font-weight: 600; color: #1e293b;">
                                 <option th:each="m : ${managers}" th:value="${m}" th:text="${m}"></option>
                             </select>
                         </div>
                         <div>
-                            <label style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 8px; display: block;">Дата доставки</label>
-                            <input type="date" id="route-date-select" class="form-control" style="border-radius: 12px; border: 1.5px solid #e2e8f0; height: 48px; font-weight: 600;">
+                            <label style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 8px; display: block;">Дата
+                                доставки</label>
+                            <input type="date" id="route-date-select" class="form-control"
+                                   style="border-radius: 12px; border: 1.5px solid #e2e8f0; height: 48px; font-weight: 600;">
                         </div>
                         <button class="btn-primary"
                                 style="width: 100%; background: #0284c7; height: 48px; font-weight: 700; border-radius: 12px; border: none; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 4px 12px rgba(2, 132, 199, 0.2);"
@@ -806,7 +832,7 @@
                                       th:text="${inv.order != null ? (inv.order.carNumber ?: 'Не указан') : '---'}"></span>
 
                             </td>
-                            <td th:text="${#numbers.formatDecimal(inv.totalAmount, 1, 'WHITESPACE', 1, 'POINT') + ' ֏'}"
+                            <td th:text="${#numbers.formatDecimal(inv.totalAmount, 1, 'WHITESPACE', 2, 'POINT') + ' ֏'}"
                                 style="font-weight: 600;"></td>
 
                             <td style="text-align: center;">
@@ -935,8 +961,7 @@
 
                     <div style="text-align: right; line-height: 1.2;">
                         <small style="color: #64748b; font-size: 11px;">К выгрузке доступно:</small><br>
-                        <b style="color: #1e293b; font-size: 14px;">Итого [[${(totalOrdersCount ?: 0) +
-                            (totalReturnsCount ?: 0)}]] операций</b>
+                        <b style="color: #1e293b; font-size: 14px;">Итого [[${(totalOrdersCount ?: 0)}]] операций</b>
                     </div>
                 </div>
             </div>
@@ -985,8 +1010,12 @@
                                 <td class="js-date-format" th:text="${r.createdAt}"></td>
                                 <td th:text="${r.shopName}" style="font-weight:700;"></td>
                                 <td><span class="badge bg-info" th:text="${r.returnReason.displayName}"></span></td>
-                                <td class="price-down"
-                                    th:text="${r.totalAmount != null ? #numbers.formatDecimal(r.totalAmount, 1, 'WHITESPACE', 1, 'POINT') + ' ֏' : '0 ֏'}"></td>
+                                <td class="price-down">
+                            <span th:with="val=${r.totalAmount != null ? r.totalAmount.doubleValue() : 0}"
+                                      th:text="${(val == 0) ? '0 ֏' : ((val % 1 == 0) ? #numbers.formatInteger(val, 1, 'WHITESPACE') : #numbers.formatDecimal(val, 1, 'WHITESPACE', 2, 'POINT').replaceAll('0$', '')) + ' ֏'}">
+                                      </span>
+                                </td>
+
 
                             </tr>
                         </th:block>
@@ -1104,7 +1133,7 @@
                         <span class="dot dot-accent"></span>Средний чек
                     </div>
                     <div style="font-size: 22px; font-weight: 800; letter-spacing: -0.5px;" id="stat-avg-check"
-                         th:text="${(totalOrdersCount != null and totalOrdersCount > 0) ? #numbers.formatDecimal(totalOrdersSum / totalOrdersCount, 1, 'WHITESPACE', 1, 'POINT') + ' ֏' : '0 ֏'}">
+                         th:text="${(totalOrdersCount != null and totalOrdersCount > 0) ? #numbers.formatDecimal(totalOrdersSum / totalOrdersCount, 1, 'WHITESPACE', 2, 'POINT') + ' ֏' : '0 ֏'}">
                         0 ֏
                     </div>
 
@@ -1121,7 +1150,7 @@
                         <span class="dot" style="background: #22c55e;"></span>Прибыль
                     </div>
                     <div style="font-size: 22px; font-weight: 800; color: #15803d; letter-spacing: -0.5px;"
-                         th:text="${netProfit != null ? #numbers.formatDecimal(netProfit, 1, 'WHITESPACE', 1, 'POINT') + ' ֏' : '0 ֏'}">
+                         th:text="${netProfit != null ? #numbers.formatDecimal(netProfit, 1, 'WHITESPACE', 2, 'POINT') + ' ֏' : '0 ֏'}">
                         0 ֏
                     </div>
                 </div>
@@ -1168,7 +1197,9 @@
                     </th:block>
 
                     <tr th:if="${auditLogs == null or #lists.isEmpty(auditLogs)}">
-                        <td colspan="3" style="text-align: center; color: #94a3b8; padding: 20px;">Операций пока не зафиксировано</td>
+                        <td colspan="3" style="text-align: center; color: #94a3b8; padding: 20px;">Операций пока не
+                            зафиксировано
+                        </td>
                     </tr>
                     </tbody>
                 </table>
@@ -1693,25 +1724,34 @@
         </div>
 
         <!-- СОВРЕМЕННЫЙ ПРЕДЧЕК АКЦИЙ -->
-        <div id="promo-checker-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); z-index: 20000; align-items: center; justify-content: center; animation: fadeIn 0.2s ease;">
+        <div id="promo-checker-overlay"
+             style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); z-index: 20000; align-items: center; justify-content: center; animation: fadeIn 0.2s ease;">
             <div style="width: 380px; background: white; border-radius: 20px; padding: 24px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04); border: 1px solid #e2e8f0; animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);">
                 <div style="text-align: center; margin-bottom: 20px;">
-                    <div style="width: 50px; height: 50px; background: #fff7ed; border-radius: 14px; display: flex; align-items: center; justify-content: center; margin: 0 auto 12px; color: #f97316; font-size: 24px;">🔥</div>
+                    <div style="width: 50px; height: 50px; background: #fff7ed; border-radius: 14px; display: flex; align-items: center; justify-content: center; margin: 0 auto 12px; color: #f97316; font-size: 24px;">
+                        🔥
+                    </div>
                     <h3 style="margin: 0; color: #1e293b; font-size: 18px; font-weight: 800;">Нашли акции!</h3>
                     <p style="margin: 4px 0 0; color: #64748b; font-size: 13px;">Применить спец. цены для заказа?</p>
                 </div>
 
-                <div id="promo-list-container" style="max-height: 220px; overflow-y: auto; margin-bottom: 20px; padding-right: 4px;">
+                <div id="promo-list-container"
+                     style="max-height: 220px; overflow-y: auto; margin-bottom: 20px; padding-right: 4px;">
                     <!-- Сюда вставим компактные карточки акций -->
                 </div>
 
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                    <button id="promo-skip-btn" style="background: #f1f5f9; color: #64748b; border: none; padding: 12px; border-radius: 12px; font-weight: 600; cursor: pointer; transition: 0.2s;">Пропустить</button>
-                    <button id="promo-apply-btn" style="background: #6366f1; color: white; border: none; padding: 12px; border-radius: 12px; font-weight: 600; cursor: pointer; transition: 0.2s; box-shadow: 0 4px 6px -1px rgba(99, 102, 241, 0.4);">Применить</button>
+                    <button id="promo-skip-btn"
+                            style="background: #f1f5f9; color: #64748b; border: none; padding: 12px; border-radius: 12px; font-weight: 600; cursor: pointer; transition: 0.2s;">
+                        Пропустить
+                    </button>
+                    <button id="promo-apply-btn"
+                            style="background: #6366f1; color: white; border: none; padding: 12px; border-radius: 12px; font-weight: 600; cursor: pointer; transition: 0.2s; box-shadow: 0 4px 6px -1px rgba(99, 102, 241, 0.4);">
+                        Применить
+                    </button>
                 </div>
             </div>
         </div>
-
 
 
         <dialog id="confirm-modal" class="confirm-modal-image-style">

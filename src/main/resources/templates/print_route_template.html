@@ -40,11 +40,16 @@
             <td th:text="${stat.count}"></td>
             <td>
                 <strong th:text="${o.shopName != null ? o.shopName : '---'}"></strong><br>
-                <!-- БЕЗОПАСНОЕ ПОЛУЧЕНИЕ АДРЕСА -->
                 <small th:with="clientOpt=${clientRepo.findByName(o.shopName)}"
                        th:text="${clientOpt != null && clientOpt.isPresent() ? clientOpt.get().address : 'Адрес не найден'}"></small>
             </td>
-            <td th:text="${#numbers.formatDecimal((o.totalAmount ?: 0), 1, 'WHITESPACE', 0, 'POINT') + ' ֏'}"></td>
+
+            <!-- УМНАЯ СУММА ЗАКАЗА -->
+            <td>
+        <span th:with="val=${o.totalAmount != null ? o.totalAmount.doubleValue() : 0}"
+              th:text="${(val % 1 == 0) ? #numbers.formatInteger(val, 1, 'WHITESPACE') : #numbers.formatDecimal(val, 1, 'WHITESPACE', 2, 'POINT').replaceAll('0$', '')} + ' ֏'">
+        </span>
+            </td>
 
             <td th:text="${o.paymentMethod != null ? o.paymentMethod.displayName : '---'}"></td>
             <td th:text="${o.comment}"></td>
@@ -55,12 +60,15 @@
         </tr>
         </tbody>
     </table>
+
     <div class="summary">
         ИТОГО К СДАЧЕ:
-        <span th:with="safeTotal=${routeTotal ?: 0}"
-              th:text="${#numbers.formatDecimal(safeTotal, 1, 'WHITESPACE', 0, 'POINT') + ' ֏'}">
+        <!-- УМНОЕ ИТОГО ПО МАРШРУТУ -->
+        <span th:with="sTotal=${routeTotal != null ? routeTotal.doubleValue() : 0}"
+              th:text="${(sTotal % 1 == 0) ? #numbers.formatInteger(sTotal, 1, 'WHITESPACE') : #numbers.formatDecimal(sTotal, 1, 'WHITESPACE', 2, 'POINT').replaceAll('0$', '')} + ' ֏'">
     </span>
     </div>
+
 
 
 </div>

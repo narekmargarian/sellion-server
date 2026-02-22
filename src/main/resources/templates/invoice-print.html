@@ -47,7 +47,7 @@
     </table>
 
     <div class="total">
-        ИТОГО: <span th:text="${#numbers.formatDecimal((invoice.totalAmount != null ? invoice.totalAmount : 0), 1, 'WHITESPACE', 0, 'POINT') + ' ֏'}"></span>
+        ИТОГО: <span th:text="${#numbers.formatDecimal((invoice.totalAmount != null ? invoice.totalAmount : 0), 1, 'WHITESPACE', 2, 'POINT') + ' ֏'}"></span>
     </div>
 
 </div>
