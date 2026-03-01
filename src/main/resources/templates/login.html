@@ -25,8 +25,6 @@
             font-family: 'Inter', sans-serif;
             background: var(--dark);
             color: white;
-            /* Разрешаем скрипту управлять касаниями на телефоне */
-            touch-action: none;
             overflow: hidden;
         }
 
@@ -141,6 +139,7 @@
     <div class="login-card">
         <h2>Авторизация</h2>
 
+        <!-- Блок ошибки Thymeleaf -->
         <div th:if="${param.error}" class="error-msg">
             Неверный логин или пароль. Попробуйте снова.
         </div>
@@ -199,8 +198,6 @@
 </div>
 
 <script>
-    let startY = 0;
-
     function scrollPage(index) {
         document.getElementById('wrapper').style.transform = `translateY(-${index * 100}vh)`;
     }
@@ -209,53 +206,49 @@
         document.getElementById('modal').classList.toggle('active');
     }
 
-    // ПК: Колесико мыши
     window.addEventListener('wheel', (e) => {
         if (document.getElementById('modal').classList.contains('active')) return;
         if (e.deltaY > 0) scrollPage(1);
         else scrollPage(0);
     });
 
-    // ТЕЛЕФОН: Начало касания
-    window.addEventListener('touchstart', (e) => {
-        startY = e.touches[0].pageY;
-    }, {passive: true});
-
-    // ТЕЛЕФОН: Конец касания (расчет свайпа)
-    window.addEventListener('touchend', (e) => {
-        if (document.getElementById('modal').classList.contains('active')) return;
-        let endY = e.changedTouches[0].pageY;
-        let diff = startY - endY;
-
-        if (Math.abs(diff) > 50) { // Если свайп больше 50 пикселей
-            if (diff > 0) scrollPage(1); // Свайп вверх -> идем вниз
-            else scrollPage(0); // Свайп вниз -> идем вверх
-        }
-    }, {passive: true});
-
     (function() {
+        // 1. Получаем чистый путь и параметры
         const path = window.location.pathname.toLowerCase().replace(/\/$/, "");
         const urlParams = new URLSearchParams(window.location.search);
+
         const wrapper = document.getElementById('wrapper');
         const modal = document.getElementById('modal');
 
+        // 2. ПРОВЕРКА: Если путь в точности "/login" ИЛИ есть ошибка входа
         if (path === "/login" || urlParams.has('error')) {
+            // МГНОВЕННО переходим на 2-й экран
             wrapper.style.transition = 'none';
             wrapper.style.transform = 'translateY(-100vh)';
+
+            // МГНОВЕННО открываем окно
             modal.style.transition = 'none';
             modal.classList.add('active');
+
+            // Включаем плавность обратно для будущего использования
             setTimeout(() => {
                 wrapper.style.transition = 'transform 0.8s cubic-bezier(0.85, 0, 0.15, 1)';
                 modal.style.transition = '0.4s';
             }, 50);
         } else {
+            // 3. ДЛЯ ВСЕХ ОСТАЛЬНЫХ СЛУЧАЕВ (включая "/")
+            // Показываем только ПЕРВЫЙ экран
             wrapper.style.transform = 'translateY(0)';
             modal.classList.remove('active');
+
+            // Если в адресе написано что-то лишнее (напр. /qwerty), чистим адресную строку для красоты
             if (path !== "" && path !== "/") {
                 window.history.replaceState({}, document.title, "/");
             }
         }
     })();
+
+
 </script>
 
 </body>
