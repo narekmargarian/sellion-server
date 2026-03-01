@@ -1012,7 +1012,7 @@
                                 <td><span class="badge bg-info" th:text="${r.returnReason.displayName}"></span></td>
                                 <td class="price-down">
                             <span th:with="val=${r.totalAmount != null ? r.totalAmount.doubleValue() : 0}"
-                                      th:text="${(val == 0) ? '0 ֏' : ((val % 1 == 0) ? #numbers.formatInteger(val, 1, 'WHITESPACE') : #numbers.formatDecimal(val, 1, 'WHITESPACE', 2, 'POINT').replaceAll('0$', '')) + ' ֏'}">
+                                  th:text="${(val == 0) ? '0 ֏' : ((val % 1 == 0) ? #numbers.formatInteger(val, 1, 'WHITESPACE') : #numbers.formatDecimal(val, 1, 'WHITESPACE', 2, 'POINT').replaceAll('0$', '')) + ' ֏'}">
                                       </span>
                                 </td>
 

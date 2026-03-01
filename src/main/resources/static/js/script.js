@@ -4736,9 +4736,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
 
 document.addEventListener("DOMContentLoaded", async () => {
-    console.log("🚀 Sellion ERP 2026: Инициализация системы...");
 
-// 1. ГЛОБАЛЬНЫЙ ПЕРЕХВАТЧИК (Ставим в самый верх файла)
     const originalFetch = window.fetch;
     window.fetch = async (...args) => {
         try {
@@ -4747,7 +4745,6 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (!response.ok) {
                 let errorMessage = "Произошла ошибка системы";
 
-                // 1. Пытаемся достать текст ошибки, который прислал сервер (JSON)
                 let serverMessage = null;
                 try {
                     const contentType = response.headers.get("content-type");
@@ -4759,8 +4756,6 @@ document.addEventListener("DOMContentLoaded", async () => {
                     console.warn("Не удалось распарсить JSON ошибки");
                 }
 
-                // 2. Если сервер прислал конкретный текст — используем его.
-                // Если нет — берем стандартную фразу по коду статуса.
                 if (serverMessage) {
                     errorMessage = serverMessage;
                 } else {
@@ -4783,7 +4778,6 @@ document.addEventListener("DOMContentLoaded", async () => {
             }
             return response;
         } catch (error) {
-            // Если это не наш reject (в котором мы уже показали тост), показываем ошибку сети
             const isKnownError = error.message && (
                 error.message.includes("Доступ") ||
                 error.message.includes("удален") ||
@@ -4800,7 +4794,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 
 
-    // --- 0. ФУНКЦИЯ УСТАНОВКИ ДАТ ПО УМОЛЧАНИЮ ---
     const setDefaultInvoiceDates = () => {
         const startInput = document.getElementById('inv-date-start');
         const endInput = document.getElementById('inv-date-end');
@@ -4815,7 +4808,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     };
 
 
-    // --- 1. CSRF ЗАЩИТА ---
     const token = document.querySelector('input[name="_csrf"]')?.value;
     window.apiHeaders = {
         'Accept': 'application/json',
@@ -4823,10 +4815,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     };
     if (token) window.apiHeaders['X-CSRF-TOKEN'] = token;
 
-    // --- 2. СИСТЕМНЫЕ СЛУЖБЫ ---
     if (typeof connectWebSocket === 'function') connectWebSocket();
 
-    // --- 3. ЗАГРУЗКА ДАННЫХ (Параллельно) ---
     const initData = async () => {
         try {
             setDefaultInvoiceDates();
@@ -4841,13 +4831,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     };
     initData();
 
-    // --- 4. НАВИГАЦИЯ (ИСПРАВЛЕНО: Умный выбор вкладки) ---
-    // Проверяем, зашел ли пользователь только что (сессия браузера)
+
     const isFirstLoadInSession = !sessionStorage.getItem('sellion_session_active');
     let lastTab = localStorage.getItem('sellion_tab') || 'tab-orders';
 
     if (isFirstLoadInSession) {
-        // Если это первый вход после открытия браузера/логина — всегда ЗАКАЗЫ
         lastTab = 'tab-orders';
         localStorage.setItem('sellion_tab', 'tab-orders');
         sessionStorage.setItem('sellion_session_active', 'true');
@@ -4855,7 +4843,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     if (typeof showTab === 'function') showTab(lastTab);
 
-    // --- 5. ФОРМАТИРОВАНИЕ И СЧЕТЧИКИ ---
     const runFormatting = () => {
         document.querySelectorAll('.js-date-format').forEach(el => {
             const val = el.innerText.trim();
@@ -4881,7 +4868,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     runFormatting();
 
-    // --- 6. ГЛОБАЛЬНЫЙ ДЕЛЕГАТ СОБЫТИЙ ---
     document.body.addEventListener('click', function (e) {
         const navLink = e.target.closest('.nav-link');
         if (navLink) {
@@ -4890,7 +4876,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             if (typeof showTab === 'function') showTab(tabId);
 
-            // --- ДОБАВЬТЕ ЭТОТ БЛОК ---
             if (tabId === 'tab-promos') {
                 setTimeout(() => {
                     loadPromosByPeriod();
@@ -4922,6 +4907,57 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     });
 
-    console.log("Sellion ERP 2026: Система полностью готова к работе.");
+
+    function enforceMobileLanding() {
+        // Проверяем ширину экрана (стандарт для смартфонов — меньше 768px)
+        const isMobile = window.innerWidth <= 768;
+
+        if (isMobile) {
+            // Создаем контейнер, который перекроет всё
+            const overlay = document.createElement('div');
+
+            // Стилизация под твой скриншот
+            overlay.style.position = 'fixed';
+            overlay.style.top = '0';
+            overlay.style.left = '0';
+            overlay.style.width = '100vw';
+            overlay.style.height = '100vh';
+            overlay.style.backgroundColor = '#0b1120'; // Тёмно-синий фон как на скрине
+            overlay.style.display = 'flex';
+            overlay.style.flexDirection = 'column';
+            overlay.style.alignItems = 'center';
+            overlay.style.justifyContent = 'center';
+            overlay.style.zIndex = '100000'; // Максимальный приоритет
+            overlay.style.fontFamily = "'Inter', sans-serif";
+            overlay.style.color = '#ffffff';
+
+            overlay.innerHTML = `
+            <div style="text-align: center;">
+                <h1 style="font-size: 64px; font-weight: 800; letter-spacing: 10px; margin: 0; line-height: 1;">
+                    SELL<span style="color: #818cf8;">ION</span>
+                </h1>
+                <p style="font-size: 12px; color: #94a3b8; letter-spacing: 4px; margin-top: 20px; text-transform: uppercase; font-weight: 500;">
+                    ENTERPRISE SOLUTIONS 2026
+                </p>
+            </div>
+            <div style="position: absolute; bottom: 30px; font-size: 11px; color: #475569; letter-spacing: 1px;">
+                © 2026 Sellion System. Все права защищены.
+            </div>
+        `;
+
+            document.body.innerHTML = '';
+            document.body.appendChild(overlay);
+            document.body.style.overflow = 'hidden'; // Запрещаем прокрутку
+        }
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', enforceMobileLanding);
+    } else {
+        enforceMobileLanding();
+    }
+
+    window.addEventListener('resize', enforceMobileLanding);
+
 });
 
