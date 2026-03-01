@@ -4907,57 +4907,5 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     });
 
-
-    function enforceMobileLanding() {
-        // Проверяем ширину экрана (стандарт для смартфонов — меньше 768px)
-        const isMobile = window.innerWidth <= 768;
-
-        if (isMobile) {
-            // Создаем контейнер, который перекроет всё
-            const overlay = document.createElement('div');
-
-            // Стилизация под твой скриншот
-            overlay.style.position = 'fixed';
-            overlay.style.top = '0';
-            overlay.style.left = '0';
-            overlay.style.width = '100vw';
-            overlay.style.height = '100vh';
-            overlay.style.backgroundColor = '#0b1120'; // Тёмно-синий фон как на скрине
-            overlay.style.display = 'flex';
-            overlay.style.flexDirection = 'column';
-            overlay.style.alignItems = 'center';
-            overlay.style.justifyContent = 'center';
-            overlay.style.zIndex = '100000'; // Максимальный приоритет
-            overlay.style.fontFamily = "'Inter', sans-serif";
-            overlay.style.color = '#ffffff';
-
-            overlay.innerHTML = `
-            <div style="text-align: center;">
-                <h1 style="font-size: 64px; font-weight: 800; letter-spacing: 10px; margin: 0; line-height: 1;">
-                    SELL<span style="color: #818cf8;">ION</span>
-                </h1>
-                <p style="font-size: 12px; color: #94a3b8; letter-spacing: 4px; margin-top: 20px; text-transform: uppercase; font-weight: 500;">
-                    ENTERPRISE SOLUTIONS 2026
-                </p>
-            </div>
-            <div style="position: absolute; bottom: 30px; font-size: 11px; color: #475569; letter-spacing: 1px;">
-                © 2026 Sellion System. Все права защищены.
-            </div>
-        `;
-
-            document.body.innerHTML = '';
-            document.body.appendChild(overlay);
-            document.body.style.overflow = 'hidden'; // Запрещаем прокрутку
-        }
-    }
-
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', enforceMobileLanding);
-    } else {
-        enforceMobileLanding();
-    }
-
-    window.addEventListener('resize', enforceMobileLanding);
-
 });
 
