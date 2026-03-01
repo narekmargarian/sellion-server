@@ -25,7 +25,9 @@
             font-family: 'Inter', sans-serif;
             background: var(--dark);
             color: white;
-            /*overflow: hidden;*/
+            /* Разрешаем скрипту управлять касаниями на телефоне */
+            touch-action: none;
+            overflow: hidden;
         }
 
         .main-wrapper {
@@ -139,7 +141,6 @@
     <div class="login-card">
         <h2>Авторизация</h2>
 
-        <!-- Блок ошибки Thymeleaf -->
         <div th:if="${param.error}" class="error-msg">
             Неверный логин или пароль. Попробуйте снова.
         </div>
@@ -208,26 +209,30 @@
         document.getElementById('modal').classList.toggle('active');
     }
 
-    // Скролл колесиком (ПК)
+    // ПК: Колесико мыши
     window.addEventListener('wheel', (e) => {
         if (document.getElementById('modal').classList.contains('active')) return;
         if (e.deltaY > 0) scrollPage(1);
         else scrollPage(0);
     });
 
-    // Скролл свайпом (Мобилки)
+    // ТЕЛЕФОН: Начало касания
     window.addEventListener('touchstart', (e) => {
         startY = e.touches[0].pageY;
     }, {passive: true});
 
+    // ТЕЛЕФОН: Конец касания (расчет свайпа)
     window.addEventListener('touchend', (e) => {
         if (document.getElementById('modal').classList.contains('active')) return;
         let endY = e.changedTouches[0].pageY;
-        if (startY - endY > 50) scrollPage(1); // Свайп вверх
-        else if (endY - startY > 50) scrollPage(0); // Свайп вниз
+        let diff = startY - endY;
+
+        if (Math.abs(diff) > 50) { // Если свайп больше 50 пикселей
+            if (diff > 0) scrollPage(1); // Свайп вверх -> идем вниз
+            else scrollPage(0); // Свайп вниз -> идем вверх
+        }
     }, {passive: true});
 
-    // Твой блок с проверкой /login оставляем без изменений
     (function() {
         const path = window.location.pathname.toLowerCase().replace(/\/$/, "");
         const urlParams = new URLSearchParams(window.location.search);
@@ -246,6 +251,9 @@
         } else {
             wrapper.style.transform = 'translateY(0)';
             modal.classList.remove('active');
+            if (path !== "" && path !== "/") {
+                window.history.replaceState({}, document.title, "/");
+            }
         }
     })();
 </script>

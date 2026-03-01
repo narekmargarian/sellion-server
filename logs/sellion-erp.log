@@ -1442,3 +1442,41 @@ Caused by: org.hibernate.HibernateException: Unable to determine Dialect without
 2026-03-01T16:50:08.804+04:00  INFO 5584 --- [sellion-server] [SpringApplicationShutdownHook] j.LocalContainerEntityManagerFactoryBean : Closing JPA EntityManagerFactory for persistence unit 'default'
 2026-03-01T16:50:08.807+04:00  INFO 5584 --- [sellion-server] [SpringApplicationShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown initiated...
 2026-03-01T16:50:08.827+04:00  INFO 5584 --- [sellion-server] [SpringApplicationShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown completed.
+2026-03-01T17:28:57.284+04:00  INFO 6276 --- [sellion-server] [main] c.s.s.SellionServerApplicationTests      : Starting SellionServerApplicationTests using Java 21.0.9 with PID 6276 (started by RIVENTO in E:\Sellion web & Server\sellion-server)
+2026-03-01T17:28:57.289+04:00  INFO 6276 --- [sellion-server] [main] c.s.s.SellionServerApplicationTests      : No active profile set, falling back to 1 default profile: "default"
+2026-03-01T17:29:04.878+04:00  INFO 6276 --- [sellion-server] [main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-03-01T17:29:05.368+04:00  INFO 6276 --- [sellion-server] [main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 397 ms. Found 14 JPA repository interfaces.
+2026-03-01T17:29:08.872+04:00  INFO 6276 --- [sellion-server] [main] org.hibernate.orm.jpa                    : HHH008540: Processing PersistenceUnitInfo [name: default]
+2026-03-01T17:29:09.247+04:00  INFO 6276 --- [sellion-server] [main] org.hibernate.orm.core                   : HHH000001: Hibernate ORM core version 7.2.0.Final
+2026-03-01T17:29:10.689+04:00  INFO 6276 --- [sellion-server] [main] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-03-01T17:29:10.756+04:00  WARN 6276 --- [sellion-server] [main] com.zaxxer.hikari.HikariConfig           : HikariPool-1 - idleTimeout has been set but has no effect because the pool is operating as a fixed size pool.
+2026-03-01T17:29:10.757+04:00  INFO 6276 --- [sellion-server] [main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+2026-03-01T17:29:11.343+04:00  INFO 6276 --- [sellion-server] [main] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection com.mysql.cj.jdbc.ConnectionImpl@6c8d638a
+2026-03-01T17:29:11.349+04:00  INFO 6276 --- [sellion-server] [main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+2026-03-01T17:29:11.677+04:00  INFO 6276 --- [sellion-server] [main] org.hibernate.orm.connections.pooling    : HHH10001005: Database info:
+	Database JDBC URL [jdbc:mysql://localhost:3306/trading_db?useSSL=false&serverTimezone=Asia/Yerevan&allowPublicKeyRetrieval=true&characterEncoding=UTF-8]
+	Database driver: MySQL Connector/J
+	Database dialect: MySQLDialect
+	Database version: 8.0.44
+	Default catalog/schema: trading_db/undefined
+	Autocommit mode: undefined/unknown
+	Isolation level: REPEATABLE_READ [default REPEATABLE_READ]
+	JDBC fetch size: none
+	Pool: DataSourceConnectionProvider
+	Minimum pool size: undefined/unknown
+	Maximum pool size: undefined/unknown
+2026-03-01T17:29:14.131+04:00  INFO 6276 --- [sellion-server] [main] org.hibernate.orm.core                   : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-03-01T17:29:14.809+04:00  INFO 6276 --- [sellion-server] [main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-03-01T17:29:15.017+04:00  INFO 6276 --- [sellion-server] [main] o.s.d.j.r.query.QueryEnhancerFactories   : Hibernate is in classpath; If applicable, HQL parser will be used.
+2026-03-01T17:29:19.388+04:00  WARN 6276 --- [sellion-server] [main] JpaBaseConfiguration$JpaWebConfiguration : spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning
+2026-03-01T17:29:19.532+04:00  INFO 6276 --- [sellion-server] [main] r$InitializeUserDetailsManagerConfigurer : Global AuthenticationManager configured with UserDetailsService bean with name customUserDetailsService
+2026-03-01T17:29:23.869+04:00  INFO 6276 --- [sellion-server] [main] o.s.m.s.b.SimpleBrokerMessageHandler     : Starting...
+2026-03-01T17:29:23.879+04:00  INFO 6276 --- [sellion-server] [main] o.s.m.s.b.SimpleBrokerMessageHandler     : BrokerAvailabilityEvent[available=true, SimpleBrokerMessageHandler [org.springframework.messaging.simp.broker.DefaultSubscriptionRegistry@7a7508b4]]
+2026-03-01T17:29:23.883+04:00  INFO 6276 --- [sellion-server] [main] o.s.m.s.b.SimpleBrokerMessageHandler     : Started.
+2026-03-01T17:29:23.913+04:00  INFO 6276 --- [sellion-server] [main] c.s.s.SellionServerApplicationTests      : Started SellionServerApplicationTests in 27.268 seconds (process running for 30.683)
+2026-03-01T17:29:25.176+04:00  INFO 6276 --- [sellion-server] [main] o.s.m.s.b.SimpleBrokerMessageHandler     : Stopping...
+2026-03-01T17:29:25.178+04:00  INFO 6276 --- [sellion-server] [main] o.s.m.s.b.SimpleBrokerMessageHandler     : BrokerAvailabilityEvent[available=false, SimpleBrokerMessageHandler [org.springframework.messaging.simp.broker.DefaultSubscriptionRegistry@7a7508b4]]
+2026-03-01T17:29:25.180+04:00  INFO 6276 --- [sellion-server] [main] o.s.m.s.b.SimpleBrokerMessageHandler     : Stopped.
+2026-03-01T17:29:25.614+04:00  INFO 6276 --- [sellion-server] [SpringApplicationShutdownHook] j.LocalContainerEntityManagerFactoryBean : Closing JPA EntityManagerFactory for persistence unit 'default'
+2026-03-01T17:29:25.650+04:00  INFO 6276 --- [sellion-server] [SpringApplicationShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown initiated...
+2026-03-01T17:29:25.782+04:00  INFO 6276 --- [sellion-server] [SpringApplicationShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown completed.
