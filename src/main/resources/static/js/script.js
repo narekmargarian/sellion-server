@@ -1078,10 +1078,8 @@ function getCurrentTimeFormat() {
 }
 
 
-function printInvoiceInline(invoiceId) {
-    const url = `/admin/invoices/print/${invoiceId}`;
-
-    // Пытаемся использовать метод с iframe (лучший вариант)
+function printInvoiceInline(url) {
+    // Теперь url передается целиком из кнопки
     const iframe = document.createElement('iframe');
     iframe.style.display = 'none';
     iframe.src = url;
@@ -1091,21 +1089,17 @@ function printInvoiceInline(invoiceId) {
         try {
             iframe.contentWindow.focus();
             iframe.contentWindow.print();
-            setTimeout(() => document.body.removeChild(iframe), 1000);
+            setTimeout(() => {
+                if (document.body.contains(iframe)) {
+                    document.body.removeChild(iframe);
+                }
+            }, 1000);
         } catch (e) {
-            // Если сервер запрещает iframe (X-Frame-Options),
-            // используем резервный вариант — новое окно
-            console.warn("Фрейм заблокирован, открываю в новом окне...");
-            const printWin = window.open(url, '_blank', 'width=800,height=600');
-            printWin.onload = function () {
-                printWin.focus();
-                printWin.print();
-                // printWin.close(); // Можно раскомментировать, чтобы окно закрывалось само
-            };
+            console.warn("Печать через iframe не удалась, открываю окно...");
+            window.open(url, '_blank');
         }
     };
 }
-
 
 
 function showTab(tabId) {
@@ -4673,27 +4667,26 @@ async function handleCreateInvoice(orderId) {
             headers: window.apiHeaders
         });
 
-        // 1. Читаем ответ сервера
-        const result = await response.json().catch(() => ({}));
-
-        // 2. КРИТИЧЕСКАЯ ПРОВЕРКА: Если в ответе есть ошибка (её поймал наш перехватчик)
-        // Мы просто выходим из функции и НЕ показываем зеленый тост.
-        if (result.error) {
-            console.log("Действие отменено перехватчиком ошибок.");
-            return;
-        }
-
-        // 3. Только если ошибок НЕТ, показываем успех
+        // ПЕРВОЕ: Если статус 200 (OK), сразу показываем успех и выходим
         if (response.ok) {
             showToast("Счет успешно выставлен", "success");
             setTimeout(() => location.reload(), 1000);
+            return;
+        }
+
+        // ВТОРОЕ: Если мы дошли сюда, значит статус не OK. Проверяем на ошибку.
+        const result = await response.json().catch(() => ({}));
+        if (result.error) {
+            console.log("Действие отменено: " + result.error);
+            // Тост с ошибкой покажет твой глобальный перехватчик
         }
 
     } catch (e) {
         console.error("Ошибка при создании счета:", e);
-        // Ошибка сети будет обработана перехватчиком автоматически
     }
 }
+
+
 
 
 

@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="ru" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title th:text="${title}">История оплат</title>
+    <style>
+        @media print {
+            @page {
+                size: A4;
+                margin: 10mm;
+            }
+            .no-print { display: none; }
+            body { -webkit-print-color-adjust: exact; }
+        }
+
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            color: #1e293b;
+            line-height: 1.4;
+            padding: 0;
+            margin: 0;
+            font-size: 13px;
+        }
+
+        .container { max-width: 800px; margin: 0 auto; padding: 10px; }
+
+        .header {
+            border-bottom: 2px solid #334155;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 18px;
+            text-transform: uppercase;
+            color: #0f172a;
+            white-space: nowrap;
+        }
+        .info-block { font-size: 13px; }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .summary-item {
+            border: 1px solid #e2e8f0;
+            padding: 10px;
+            border-radius: 4px;
+            background: #fff; /* ИСПРАВЛЕНО: Белый фон */
+        }
+        .summary-item small { display: block; color: #64748b; font-size: 10px; text-transform: uppercase; margin-bottom: 2px;}
+        .summary-item span { font-size: 15px; font-weight: 700; color: #000; }
+
+        .items-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+        .items-table th { background: #f1f5f9; border: 1px solid #cbd5e1; padding: 8px; text-align: left; font-size: 11px; }
+        .items-table td { border: 1px solid #e2e8f0; padding: 8px; vertical-align: middle; }
+        .text-right { text-align: right; }
+
+        /* ИСПРАВЛЕНО: Общий долг теперь черный и жирный */
+        .total-debt-black {
+            color: #000 !important;
+            font-weight: 700;
+        }
+
+        .signatures {
+            margin-top: 30px;
+            display: flex;
+            justify-content: space-between;
+            max-width: 100%;
+        }
+        .sig-line {
+            border-top: 1px solid #000;
+            width: 200px;
+            margin-top: 35px;
+            text-align: center;
+            font-size: 11px;
+        }
+
+
+        @media print {
+            @page { margin: 0; }
+            body { margin: 1.5cm; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="no-print" style="text-align: right; margin-bottom: 10px;">
+        <button onclick="window.print()" style="padding: 8px 16px; cursor: pointer; background: #1e293b; color: white; border: none; border-radius: 4px;">Распечатать</button>
+    </div>
+
+    <div class="header">
+        <div>
+            <h1 th:text="${title}">История оплат по счету</h1>
+            <div class="info-block" style="margin-top: 8px;">
+                Клиент: <b th:text="${invoice.shopName}">Название магазина</b><br>
+                Менеджер: <span th:text="${invoice.managerId}">Имя</span>
+            </div>
+        </div>
+        <div class="text-right info-block">
+            Дата формирования: <b th:text="${#temporals.format(#temporals.createNow(), 'dd.MM.yyyy HH:mm')}"></b>
+        </div>
+    </div>
+
+    <div class="summary-grid">
+        <div class="summary-item">
+            <small>Сумма по счету</small>
+            <span th:text="${#numbers.formatDecimal(invoice.totalAmount, 1, 'WHITESPACE', 0, 'POINT') + ' ֏'}"></span>
+        </div>
+        <div class="summary-item">
+            <small>Всего оплачено</small>
+            <span th:text="${#numbers.formatDecimal(invoice.paidAmount, 1, 'WHITESPACE', 0, 'POINT') + ' ֏'}"></span>
+        </div>
+        <div class="summary-item">
+            <small>Остаток долга</small>
+            <span th:text="${#numbers.formatDecimal(invoice.totalAmount.subtract(invoice.paidAmount), 1, 'WHITESPACE', 0, 'POINT') + ' ֏'}"></span>
+        </div>
+    </div>
+
+    <table class="items-table">
+        <thead>
+        <tr>
+            <th style="width: 140px;">Дата и время</th>
+            <th>Примечание / Детали</th>
+            <th style="width: 110px;" class="text-right">Сумма</th>
+            <th style="width: 110px;" class="text-right">Общий долг</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="p : ${payments}">
+            <td th:text="${#temporals.format(p.timestamp, 'dd.MM.yyyy HH:mm')}"></td>
+            <td th:text="${p.comment}"></td>
+            <td class="text-right">
+                <b th:text="${#numbers.formatDecimal(p.amount, 1, 'WHITESPACE', 0, 'POINT') + ' ֏'}"></b>
+            </td>
+            <td class="text-right total-debt-black">
+                <span th:text="${#numbers.formatDecimal(p.balanceAfter, 1, 'WHITESPACE', 0, 'POINT') + ' ֏'}"></span>
+            </td>
+        </tr>
+        <tr th:if="${#lists.isEmpty(payments)}">
+            <td colspan="4" style="text-align: center; padding: 20px; color: #64748b;">
+                По данному счету платежей еще не зафиксировано.
+            </td>
+        </tr>
+        </tbody>
+    </table>
+
+    <div class="signatures">
+        <div><div class="sig-line">Бухгалтерия (подпись)</div></div>
+        <div><div class="sig-line">Клиент (подпись)</div></div>
+    </div>
+</div>
+
+</body>
+</html>

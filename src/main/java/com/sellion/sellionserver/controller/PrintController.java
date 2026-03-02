@@ -419,6 +419,26 @@ public class PrintController {
         return "print_daily_summary_template";
     }
 
+    @GetMapping("/invoices/print-payments/{id}")
+    @Transactional(readOnly = true)
+    public String printInvoicePayments(@PathVariable Long id, Model model) {
+        Invoice inv = invoiceRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Счет не найден: " + id));
+
+        // Фильтруем: только этот номер счета И только тип "PAYMENT"
+        List<Transaction> payments = transactionRepository.findAll().stream()
+                .filter(t -> t.getComment() != null
+                        && t.getComment().contains(inv.getInvoiceNumber())
+                        && "PAYMENT".equals(t.getType())) // <--- ТУТ ФИЛЬТР ТОЛЬКО ОПЛАТ
+                .sorted(Comparator.comparing(Transaction::getTimestamp))
+                .toList();
+
+        model.addAttribute("invoice", inv);
+        model.addAttribute("payments", payments);
+        model.addAttribute("title", "ИСТОРИЯ ОПЛАТ ПО СЧЕТУ №" + inv.getInvoiceNumber());
+
+        return "print_payments_history_template";
+    }
 
 
 }

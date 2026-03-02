@@ -36,16 +36,6 @@ public class InvoiceWebController {
         return "redirect:/admin?activeTab=tab-invoices";
     }
 
-    @GetMapping("/print/{id}")
-    public String printInvoice(@PathVariable Long id, Model model) {
-        Invoice invoice = invoiceRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Счет не найден"));
 
-        model.addAttribute("invoice", invoice);
-        model.addAttribute("order", invoice.getOrder());
-        model.addAttribute("items", invoice.getOrder().getItems());
-        model.addAttribute("now", LocalDateTime.now());
 
-        return "invoice-print";
-    }
 }
