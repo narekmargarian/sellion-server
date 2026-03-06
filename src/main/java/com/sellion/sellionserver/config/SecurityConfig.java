@@ -30,7 +30,6 @@ public class SecurityConfig {
 
     @Bean
     public ApiKeyAuthFilter apiKeyAuthFilter() {
-        // ИДЕАЛЬНО: Передаем PasswordEncoder в фильтр для безопасной проверки хэшей
         return new ApiKeyAuthFilter(apiKeyRepository, passwordEncoder());
     }
 
