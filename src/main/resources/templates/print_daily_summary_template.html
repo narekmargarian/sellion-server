@@ -4,47 +4,44 @@
   <meta charset="UTF-8">
   <style>
     body {
-        font-family: Arial, sans-serif;
-        margin: 0;
-        padding: 10px;
-        color: #000;
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 5px; /* Уменьшен отступ */
+      color: #000;
     }
     .header {
-        text-align: center;
-        border-bottom: 2px solid #000;
-        margin-bottom: 15px;
-        padding-bottom: 10px;
+      text-align: center;
+      border-bottom: 1px solid #000; /* Тоньше линия */
+      margin-bottom: 5px; /* Меньше отступ */
+      padding-bottom: 5px;
     }
+    .header h3 { margin: 5px 0; font-size: 16px; } /* Уменьшен заголовок */
     table {
-        width: 100%;
-        border-collapse: collapse;
+      width: 100%;
+      border-collapse: collapse;
     }
     th, td {
-        border: 1px solid #000;
-        padding: 8px;
-        text-align: left;
-        font-size: 14px;
+      border: 1px solid #000;
+      padding: 4px 6px; /* Компактные ячейки */
+      text-align: left;
+      font-size: 12px; /* Меньше шрифт */
     }
     th { background-color: #eee !important; -webkit-print-color-adjust: exact; }
-
     .qty-cell {
-        text-align: center;
-        font-size: 18px;
-        font-weight: bold;
-        width: 100px;
+      text-align: center;
+      font-size: 14px; /* Меньше шрифт цифр */
+      font-weight: bold;
+      width: 60px; /* Узкая колонка */
     }
-
     .date-info {
-        font-size: 16px;
-        margin-top: 5px;
-        font-weight: bold;
+      font-size: 12px; /* Меньше шрифт мета-данных */
+      margin-top: 2px;
     }
-
     @media print {
-        @page { margin: 0.5cm; }
-        body { padding: 0; }
+      @page { margin: 0.3cm; }
     }
   </style>
+
 
 </head>
 <body>

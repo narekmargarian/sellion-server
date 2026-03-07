@@ -7,7 +7,7 @@
         body {
             font-family: 'Inter', Arial, sans-serif;
             color: #000;
-            line-height: 1.2;
+            line-height: 1.3;
             padding: 0;
             margin: 0;
         }
@@ -20,57 +20,66 @@
         }
 
         .company-name {
-            font-size: 22px;
+            font-size: 18px; /* Умерено крупный */
             font-weight: 700;
             margin: 0;
             text-transform: uppercase;
         }
 
         .document-title {
-            font-size: 18px;
+            font-size: 16px;
             font-weight: 700;
-            margin-top: 10px;
+            margin-top: 5px;
         }
 
         .meta-info {
             margin-bottom: 15px;
-            font-size: 14px;
+            font-size: 13px; /* Оптимальный размер для А4 */
+            display: flex;
+            justify-content: space-between; /* Растянет информацию по краям */
         }
 
         table {
             width: 100%;
             border-collapse: collapse;
+            table-layout: fixed; /* Фиксированная структура */
         }
 
         th {
             border: 1px solid #000;
-            padding: 8px;
+            padding: 6px 8px;
             background: #f2f2f2 !important;
-            font-size: 13px;
+            font-size: 12px;
             text-align: left;
             -webkit-print-color-adjust: exact;
         }
 
         td {
             border: 1px solid #000;
-            padding: 8px;
-            font-size: 14px;
+            padding: 6px 8px;
+            font-size: 13px;
+            word-wrap: break-word; /* Чтобы длинные названия не ломали таблицу */
         }
 
         .total-row {
-            margin-top: 20px;
+            margin-top: 15px;
             text-align: right;
-            font-size: 18px;
+            font-size: 16px;
             font-weight: 700;
             border-top: 2px solid #000;
-            padding-top: 10px;
+            padding-top: 8px;
         }
 
         @media print {
-            @page { margin: 0; }
-            body { margin: 1.5cm; }
+            @page {
+                size: A4;
+                margin: 1.5cm;
+            }
+            body { margin: 0; }
         }
     </style>
+
+
 
 </head>
 <body>
