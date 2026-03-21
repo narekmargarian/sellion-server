@@ -329,23 +329,17 @@ public class InvoiceExcelService {
         borderStyle.setBorderTop(BorderStyle.THIN);
         borderStyle.setBorderRight(BorderStyle.THIN);
         borderStyle.setBorderLeft(BorderStyle.THIN);
-        borderStyle.setVerticalAlignment(VerticalAlignment.CENTER);
         borderStyle.setDataFormat(format.getFormat("#,##0.0"));
 
-        CellStyle centerStyle = wb.createCellStyle();
-        centerStyle.cloneStyleFrom(borderStyle);
-        centerStyle.setAlignment(HorizontalAlignment.CENTER);
-
         CellStyle headerStyle = wb.createCellStyle();
-        headerStyle.cloneStyleFrom(centerStyle);
+        headerStyle.cloneStyleFrom(borderStyle);
         Font boldFont = wb.createFont();
         boldFont.setBold(true);
         headerStyle.setFont(boldFont);
-        headerStyle.setDataFormat(format.getFormat("@"));
 
         Row header = sheet.createRow(rowIdx++);
-        // Оставляем структуру 1-в-1 как была, просто меняем заголовок второй колонки
-        String[] colNames = {"Товар", "Код", "Ед.", "Кол-во", "Прайс", "%", "Цена (со скидкой)", "Сумма"};
+        // Добавил "Код" первым, "Код(ԱՏԳ)" оставил вторым
+        String[] colNames = {"Код", "Товар", "Код(ԱՏԳ)", "Ед.", "Кол-во", "Прайс", "%", "Цена (со ск.)", "Сумма"};
 
         for (int i = 0; i < colNames.length; i++) {
             Cell cell = header.createCell(i);
@@ -357,45 +351,37 @@ public class InvoiceExcelService {
 
         if (items != null) {
             for (Map.Entry<Long, Integer> entry : items.entrySet()) {
-                Long productId = entry.getKey();
-                Product p = products.get(productId);
+                Product p = products.get(entry.getKey());
                 if (p == null) continue;
 
-                BigDecimal qty = BigDecimal.valueOf(entry.getValue());
+                // Логика цен (без изменений)
                 BigDecimal basePrice = Optional.ofNullable(p.getPrice()).orElse(BigDecimal.ZERO);
                 BigDecimal finalPrice;
                 BigDecimal finalPercent = BigDecimal.ZERO;
 
-                if (manualPrices != null && manualPrices.containsKey(productId)) {
-                    finalPrice = manualPrices.get(productId);
+                if (manualPrices != null && manualPrices.containsKey(p.getId())) {
+                    finalPrice = manualPrices.get(p.getId());
                     basePrice = finalPrice;
                 } else {
-                    BigDecimal itemPromo = (appliedPromos != null) ? appliedPromos.getOrDefault(productId, BigDecimal.ZERO) : BigDecimal.ZERO;
+                    BigDecimal itemPromo = (appliedPromos != null) ? appliedPromos.getOrDefault(p.getId(), BigDecimal.ZERO) : BigDecimal.ZERO;
                     finalPercent = (itemPromo.compareTo(BigDecimal.ZERO) > 0) ? itemPromo : (discountPercent != null ? discountPercent : BigDecimal.ZERO);
-
                     BigDecimal modifier = BigDecimal.ONE.subtract(finalPercent.divide(new BigDecimal("100"), 4, RoundingMode.HALF_UP));
                     finalPrice = basePrice.multiply(modifier);
                 }
 
                 finalPrice = finalPrice.setScale(1, RoundingMode.HALF_UP);
-                BigDecimal itemTotal = finalPrice.multiply(qty).setScale(1, RoundingMode.HALF_UP);
+                BigDecimal itemTotal = finalPrice.multiply(BigDecimal.valueOf(entry.getValue())).setScale(1, RoundingMode.HALF_UP);
                 totalAmount = totalAmount.add(itemTotal);
 
                 Row row = sheet.createRow(rowIdx++);
                 int c = 0;
+                createStyledCell(row, c++, p.getProductCode() != null ? p.getProductCode() : "", borderStyle); // НОВЫЙ КОД
                 createStyledCell(row, c++, p.getName(), borderStyle);
-
-                // ВОТ ТУТ: Вместо hsnCode теперь пишем твой productCode
-                String codeToDisplay = (p.getProductCode() != null) ? p.getProductCode() : "";
-                createStyledCell(row, c++, codeToDisplay, borderStyle);
-
-                createStyledCell(row, c++, p.getUnit() != null ? p.getUnit() : "шт", centerStyle);
-                createStyledCell(row, c++, entry.getValue().doubleValue(), centerStyle);
+                createStyledCell(row, c++, p.getHsnCode() != null ? p.getHsnCode() : "", borderStyle); // СТАРЫЙ АТГ
+                createStyledCell(row, c++, p.getUnit() != null ? p.getUnit() : "шт", borderStyle);
+                createStyledCell(row, c++, entry.getValue().doubleValue(), borderStyle);
                 createStyledCell(row, c++, basePrice.doubleValue(), borderStyle);
-
-                String percentValue = (finalPercent.compareTo(BigDecimal.ZERO) > 0) ? finalPercent.stripTrailingZeros().toPlainString() : "";
-                createStyledCell(row, c++, percentValue, centerStyle);
-
+                createStyledCell(row, c++, finalPercent.compareTo(BigDecimal.ZERO) > 0 ? finalPercent.toString() : "", borderStyle);
                 createStyledCell(row, c++, finalPrice.doubleValue(), borderStyle);
                 createStyledCell(row, c++, itemTotal.doubleValue(), borderStyle);
             }
@@ -403,11 +389,12 @@ public class InvoiceExcelService {
 
         rowIdx++;
         Row totalRow = sheet.createRow(rowIdx++);
-        Cell totalLabel = totalRow.createCell(6);
+        // Итог под колонкой "Сумма" (теперь это 8-й индекс)
+        Cell totalLabel = totalRow.createCell(7);
         totalLabel.setCellValue("ИТОГО К ОПЛАТЕ:");
         totalLabel.setCellStyle(headerStyle);
 
-        Cell sumCell = totalRow.createCell(7);
+        Cell sumCell = totalRow.createCell(8);
         sumCell.setCellValue(totalAmount.setScale(1, RoundingMode.HALF_UP).doubleValue());
         sumCell.setCellStyle(headerStyle);
 

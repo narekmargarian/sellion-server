@@ -743,35 +743,31 @@ public class AdminManagementController {
         try (org.apache.poi.ss.usermodel.Workbook workbook = new org.apache.poi.xssf.usermodel.XSSFWorkbook()) {
             org.apache.poi.ss.usermodel.Sheet sheet = workbook.createSheet("Остатки склада РИВЕНТО");
 
-            // 1. Создаем стиль для границ
             org.apache.poi.ss.usermodel.CellStyle borderStyle = workbook.createCellStyle();
             borderStyle.setBorderTop(org.apache.poi.ss.usermodel.BorderStyle.THIN);
             borderStyle.setBorderBottom(org.apache.poi.ss.usermodel.BorderStyle.THIN);
             borderStyle.setBorderLeft(org.apache.poi.ss.usermodel.BorderStyle.THIN);
             borderStyle.setBorderRight(org.apache.poi.ss.usermodel.BorderStyle.THIN);
 
-            // 2. Стиль для шапки
             org.apache.poi.ss.usermodel.CellStyle headerStyle = workbook.createCellStyle();
             headerStyle.cloneStyleFrom(borderStyle);
             org.apache.poi.ss.usermodel.Font font = workbook.createFont();
             font.setBold(true);
             headerStyle.setFont(font);
 
-            // 3. Стиль для итогов
             org.apache.poi.ss.usermodel.CellStyle footerStyle = workbook.createCellStyle();
             footerStyle.cloneStyleFrom(borderStyle);
             footerStyle.setFont(font);
 
-            // Шапка (Добавлен "Код" в начало)
-            org.apache.poi.ss.usermodel.Row headerRow = sheet.createRow(0);
+            // Шапка: Добавлен "Код" в начало
             String[] columns = {"Код", "Категория", "Наименование", "Штрих-код", "Остаток (шт)", "Цена (֏)", "Себестоимость (֏)", "Общая стоимость (֏)"};
+            org.apache.poi.ss.usermodel.Row headerRow = sheet.createRow(0);
             for (int i = 0; i < columns.length; i++) {
                 org.apache.poi.ss.usermodel.Cell cell = headerRow.createCell(i);
                 cell.setCellValue(columns[i]);
                 cell.setCellStyle(headerStyle);
             }
 
-            // Данные
             List<Product> products = productRepository.findAllByIsDeletedFalse();
             products.sort(java.util.Comparator.comparing(Product::getCategory).thenComparing(Product::getName));
 
@@ -780,30 +776,22 @@ public class AdminManagementController {
 
             for (Product p : products) {
                 org.apache.poi.ss.usermodel.Row row = sheet.createRow(rowIdx++);
-
-                // Заполняем ячейки. Код на 0-й позиции, остальные сдвинуты на +1
+                // 0 - Код продукта, далее все по порядку
                 createCellWithStyle(row, 0, p.getProductCode() != null ? p.getProductCode() : "", borderStyle);
                 createCellWithStyle(row, 1, p.getCategory(), borderStyle);
                 createCellWithStyle(row, 2, p.getName(), borderStyle);
                 createCellWithStyle(row, 3, p.getBarcode(), borderStyle);
                 createCellWithStyle(row, 4, p.getStockQuantity(), borderStyle);
                 createCellWithStyle(row, 5, p.getPrice().doubleValue(), borderStyle);
-
                 double purchase = (p.getPurchasePrice() != null) ? p.getPurchasePrice().doubleValue() : 0;
                 createCellWithStyle(row, 6, purchase, borderStyle);
-
                 java.math.BigDecimal rowTotal = p.getPrice().multiply(java.math.BigDecimal.valueOf(p.getStockQuantity()));
                 createCellWithStyle(row, 7, rowTotal.doubleValue(), borderStyle);
-
                 grandTotal = grandTotal.add(rowTotal);
             }
 
-            // Итог внизу (сдвинут на одну колонку вправо из-за добавления "Кода")
+            // ИТОГ: Убрал отрисовку пустых ячеек с границами слева
             org.apache.poi.ss.usermodel.Row footerRow = sheet.createRow(rowIdx + 1);
-
-            // Пустые ячейки с границами до колонки Итого (теперь до 6-й ячейки)
-            for(int i=0; i<6; i++) footerRow.createCell(i).setCellStyle(borderStyle);
-
             org.apache.poi.ss.usermodel.Cell labelCell = footerRow.createCell(6);
             labelCell.setCellValue("ИТОГО ПО СКЛАДУ:");
             labelCell.setCellStyle(footerStyle);
@@ -816,13 +804,7 @@ public class AdminManagementController {
 
             java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
             workbook.write(out);
-            byte[] data = out.toByteArray();
-
-            org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
-            headers.setContentType(org.springframework.http.MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"));
-            headers.setContentDispositionFormData("attachment", "Inventory_Rivento.xlsx");
-
-            return new ResponseEntity<>(data, headers, org.springframework.http.HttpStatus.OK);
+            return new ResponseEntity<>(out.toByteArray(), createExcelHeaders("Inventory_Rivento.xlsx"), org.springframework.http.HttpStatus.OK);
         } catch (Exception e) {
             return new ResponseEntity<>(org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR);
         }
