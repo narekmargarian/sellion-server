@@ -737,6 +737,104 @@ public class AdminManagementController {
         }
     }
 
+    @GetMapping("/products/export-excel")
+    @Transactional(readOnly = true)
+    public ResponseEntity<byte[]> exportProductsToExcel() {
+        try (org.apache.poi.ss.usermodel.Workbook workbook = new org.apache.poi.xssf.usermodel.XSSFWorkbook()) {
+            org.apache.poi.ss.usermodel.Sheet sheet = workbook.createSheet("Остатки склада РИВЕНТО");
+
+            // 1. Создаем стиль для границ (общий для всех ячеек)
+            org.apache.poi.ss.usermodel.CellStyle borderStyle = workbook.createCellStyle();
+            borderStyle.setBorderTop(org.apache.poi.ss.usermodel.BorderStyle.THIN);
+            borderStyle.setBorderBottom(org.apache.poi.ss.usermodel.BorderStyle.THIN);
+            borderStyle.setBorderLeft(org.apache.poi.ss.usermodel.BorderStyle.THIN);
+            borderStyle.setBorderRight(org.apache.poi.ss.usermodel.BorderStyle.THIN);
+
+            // 2. Стиль для шапки (Жирный + Границы)
+            org.apache.poi.ss.usermodel.CellStyle headerStyle = workbook.createCellStyle();
+            headerStyle.cloneStyleFrom(borderStyle); // Копируем границы
+            org.apache.poi.ss.usermodel.Font font = workbook.createFont();
+            font.setBold(true);
+            headerStyle.setFont(font);
+
+            // 3. Стиль для итогов (Жирный + Границы)
+            org.apache.poi.ss.usermodel.CellStyle footerStyle = workbook.createCellStyle();
+            footerStyle.cloneStyleFrom(borderStyle);
+            footerStyle.setFont(font);
+
+            // Шапка
+            org.apache.poi.ss.usermodel.Row headerRow = sheet.createRow(0);
+            String[] columns = {"Категория", "Наименование", "Штрих-код", "Остаток (шт)", "Цена (֏)", "Себестоимость (֏)", "Общая стоимость (֏)"};
+            for (int i = 0; i < columns.length; i++) {
+                org.apache.poi.ss.usermodel.Cell cell = headerRow.createCell(i);
+                cell.setCellValue(columns[i]);
+                cell.setCellStyle(headerStyle);
+            }
+
+            // Данные
+            List<Product> products = productRepository.findAllByIsDeletedFalse();
+            products.sort(java.util.Comparator.comparing(Product::getCategory).thenComparing(Product::getName));
+
+            int rowIdx = 1;
+            java.math.BigDecimal grandTotal = java.math.BigDecimal.ZERO;
+
+            for (Product p : products) {
+                org.apache.poi.ss.usermodel.Row row = sheet.createRow(rowIdx++);
+
+                // Создаем ячейки и применяем стиль границ к каждой
+                createCellWithStyle(row, 0, p.getCategory(), borderStyle);
+                createCellWithStyle(row, 1, p.getName(), borderStyle);
+                createCellWithStyle(row, 2, p.getBarcode(), borderStyle);
+                createCellWithStyle(row, 3, p.getStockQuantity(), borderStyle);
+                createCellWithStyle(row, 4, p.getPrice().doubleValue(), borderStyle);
+
+                double purchase = (p.getPurchasePrice() != null) ? p.getPurchasePrice().doubleValue() : 0;
+                createCellWithStyle(row, 5, purchase, borderStyle);
+
+                java.math.BigDecimal rowTotal = p.getPrice().multiply(java.math.BigDecimal.valueOf(p.getStockQuantity()));
+                createCellWithStyle(row, 6, rowTotal.doubleValue(), borderStyle);
+
+                grandTotal = grandTotal.add(rowTotal);
+            }
+
+            // Итог внизу
+            org.apache.poi.ss.usermodel.Row footerRow = sheet.createRow(rowIdx + 1);
+
+            // Для красоты добавим пустые ячейки с границами до колонки Итого
+            for(int i=0; i<5; i++) footerRow.createCell(i);
+
+            org.apache.poi.ss.usermodel.Cell labelCell = footerRow.createCell(5);
+            labelCell.setCellValue("ИТОГО ПО СКЛАДУ:");
+            labelCell.setCellStyle(footerStyle);
+
+            org.apache.poi.ss.usermodel.Cell totalCell = footerRow.createCell(6);
+            totalCell.setCellValue(grandTotal.doubleValue());
+            totalCell.setCellStyle(footerStyle);
+
+            for (int i = 0; i < columns.length; i++) sheet.autoSizeColumn(i);
+
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            workbook.write(out);
+            byte[] data = out.toByteArray();
+
+            org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+            headers.setContentType(org.springframework.http.MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"));
+            headers.setContentDispositionFormData("attachment", "Inventory_Rivento.xlsx");
+
+            return new ResponseEntity<>(data, headers, org.springframework.http.HttpStatus.OK);
+        } catch (Exception e) {
+            return new ResponseEntity<>(org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    // Вспомогательный метод для сокращения кода (добавьте его в этот же контроллер вниз)
+    private void createCellWithStyle(org.apache.poi.ss.usermodel.Row row, int column, Object value, org.apache.poi.ss.usermodel.CellStyle style) {
+        org.apache.poi.ss.usermodel.Cell cell = row.createCell(column);
+        if (value instanceof String) cell.setCellValue((String) value);
+        else if (value instanceof Integer) cell.setCellValue((Integer) value);
+        else if (value instanceof Double) cell.setCellValue((Double) value);
+        cell.setCellStyle(style);
+    }
 
 
 }

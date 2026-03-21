@@ -4127,6 +4127,42 @@ async function confirmPromoAction(id) {
     });
 }
 
+function downloadInventoryExcel() {
+    showToast("⏳ Подготовка данных склада...", "info");
+
+    const url = '/api/admin/products/export-excel';
+
+    fetch(url)
+        .then(async response => {
+            if (response.ok) {
+                const blob = await response.blob();
+                const downloadUrl = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = downloadUrl;
+
+                // Дата для имени файла
+                const dateStr = new Date().toISOString().split('T')[0];
+                a.download = `Rivento_Inventory_${dateStr}.xlsx`;
+
+                document.body.appendChild(a);
+                a.click();
+
+                setTimeout(() => {
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(downloadUrl);
+                }, 100);
+
+                showToast(`Склад успешно выгружен!`, 'success');
+            } else {
+                showToast('Ошибка при формировании отчета остатков', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Inventory export error:', error);
+            showToast('Ошибка сети при выгрузке склада.', 'error');
+        });
+}
 
 async function checkAndApplyPromos(orderItems, onApplied) {
     const productIds = Object.keys(orderItems).map(Number);

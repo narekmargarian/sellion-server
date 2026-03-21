@@ -52,6 +52,8 @@ public class SecurityConfig {
                         // 2. СКЛАД (ПРОСМОТР И ИСТОРИЯ)
                         // Разрешаем просмотр (GET) всем ролям офиса и мобилки
                         .requestMatchers(HttpMethod.GET, "/api/products/**").hasAnyRole("ADMIN", "OPERATOR", "ACCOUNTANT", "MANAGER")
+                        // Добавьте это правило туда, где у вас права для ADMIN/OPERATOR
+                        .requestMatchers("/api/admin/products/export-excel").hasAnyRole("ADMIN", "OPERATOR", "ACCOUNTANT")
 
                         // ИНВЕНТАРИЗАЦИЯ, СОЗДАНИЕ, УДАЛЕНИЕ, ИМПОРТ — ТОЛЬКО АДМИН
                         .requestMatchers("/api/admin/products/*/inventory", "/api/products/create", "/api/products/import").hasRole("ADMIN")
