@@ -224,9 +224,103 @@ public class InvoiceExcelService {
     }
 
 
+//    private int fillItemsTable(Sheet sheet, int rowIdx, Map<Long, Integer> items, Map<Long, Product> products,
+//                               BigDecimal discountPercent, Map<Long, BigDecimal> appliedPromos,
+//                               Map<Long, BigDecimal> manualPrices) { // Добавлен параметр для цен возврата
+//        Workbook wb = sheet.getWorkbook();
+//        DataFormat format = wb.createDataFormat();
+//
+//        CellStyle borderStyle = wb.createCellStyle();
+//        borderStyle.setBorderBottom(BorderStyle.THIN);
+//        borderStyle.setBorderTop(BorderStyle.THIN);
+//        borderStyle.setBorderRight(BorderStyle.THIN);
+//        borderStyle.setBorderLeft(BorderStyle.THIN);
+//        borderStyle.setVerticalAlignment(VerticalAlignment.CENTER);
+//        borderStyle.setDataFormat(format.getFormat("#,##0.0"));
+//
+//        CellStyle centerStyle = wb.createCellStyle();
+//        centerStyle.cloneStyleFrom(borderStyle);
+//        centerStyle.setAlignment(HorizontalAlignment.CENTER);
+//
+//        CellStyle headerStyle = wb.createCellStyle();
+//        headerStyle.cloneStyleFrom(centerStyle);
+//        Font boldFont = wb.createFont();
+//        boldFont.setBold(true);
+//        headerStyle.setFont(boldFont);
+//        headerStyle.setDataFormat(format.getFormat("@"));
+//
+//        Row header = sheet.createRow(rowIdx++);
+//        String[] colNames = {"Товар", "Код(ԱՏԳ)", "Ед.", "Кол-во", "Прайс", "%", "Цена (со скидкой)", "Сумма"};
+//
+//        for (int i = 0; i < colNames.length; i++) {
+//            Cell cell = header.createCell(i);
+//            cell.setCellValue(colNames[i]);
+//            cell.setCellStyle(headerStyle);
+//        }
+//
+//        BigDecimal totalAmount = BigDecimal.ZERO;
+//
+//        if (items != null) {
+//            for (Map.Entry<Long, Integer> entry : items.entrySet()) {
+//                Long productId = entry.getKey();
+//                Product p = products.get(productId);
+//                if (p == null) continue;
+//
+//                BigDecimal qty = BigDecimal.valueOf(entry.getValue());
+//                BigDecimal basePrice = Optional.ofNullable(p.getPrice()).orElse(BigDecimal.ZERO);
+//                BigDecimal finalPrice;
+//                BigDecimal finalPercent = BigDecimal.ZERO;
+//
+//                // ЛОГИКА: Если есть ручная цена (ВОЗВРАТ), берем её. Иначе — считаем скидку (ЗАКАЗ).
+//                if (manualPrices != null && manualPrices.containsKey(productId)) {
+//                    finalPrice = manualPrices.get(productId);
+//                    basePrice = finalPrice; // Для возвратов в колонку "Прайс" пишем фактическую цену
+//                } else {
+//                    BigDecimal itemPromo = (appliedPromos != null) ? appliedPromos.getOrDefault(productId, BigDecimal.ZERO) : BigDecimal.ZERO;
+//                    finalPercent = (itemPromo.compareTo(BigDecimal.ZERO) > 0) ? itemPromo : (discountPercent != null ? discountPercent : BigDecimal.ZERO);
+//
+//                    BigDecimal modifier = BigDecimal.ONE.subtract(finalPercent.divide(new BigDecimal("100"), 4, RoundingMode.HALF_UP));
+//                    finalPrice = basePrice.multiply(modifier);
+//                }
+//
+//                finalPrice = finalPrice.setScale(1, RoundingMode.HALF_UP);
+//                BigDecimal itemTotal = finalPrice.multiply(qty).setScale(1, RoundingMode.HALF_UP);
+//                totalAmount = totalAmount.add(itemTotal);
+//
+//                Row row = sheet.createRow(rowIdx++);
+//                int c = 0;
+//                createStyledCell(row, c++, p.getName(), borderStyle);
+//                createStyledCell(row, c++, p.getHsnCode() != null ? p.getHsnCode() : "", borderStyle);
+//                createStyledCell(row, c++, p.getUnit() != null ? p.getUnit() : "шт", centerStyle);
+//                createStyledCell(row, c++, entry.getValue().doubleValue(), centerStyle);
+//                createStyledCell(row, c++, basePrice.doubleValue(), borderStyle);
+//
+//                String percentValue = (finalPercent.compareTo(BigDecimal.ZERO) > 0) ? finalPercent.stripTrailingZeros().toPlainString() : "";
+//                createStyledCell(row, c++, percentValue, centerStyle);
+//
+//                createStyledCell(row, c++, finalPrice.doubleValue(), borderStyle);
+//                createStyledCell(row, c++, itemTotal.doubleValue(), borderStyle);
+//            }
+//        }
+//
+//        rowIdx++;
+//        Row totalRow = sheet.createRow(rowIdx++);
+//        Cell totalLabel = totalRow.createCell(6);
+//        totalLabel.setCellValue("ИТОГО К ОПЛАТЕ:");
+//        totalLabel.setCellStyle(headerStyle);
+//
+//        Cell sumCell = totalRow.createCell(7);
+//        sumCell.setCellValue(totalAmount.setScale(1, RoundingMode.HALF_UP).doubleValue());
+//        sumCell.setCellStyle(headerStyle);
+//
+//        return rowIdx;
+//    }
+
+
+
     private int fillItemsTable(Sheet sheet, int rowIdx, Map<Long, Integer> items, Map<Long, Product> products,
                                BigDecimal discountPercent, Map<Long, BigDecimal> appliedPromos,
-                               Map<Long, BigDecimal> manualPrices) { // Добавлен параметр для цен возврата
+                               Map<Long, BigDecimal> manualPrices) {
         Workbook wb = sheet.getWorkbook();
         DataFormat format = wb.createDataFormat();
 
@@ -250,7 +344,8 @@ public class InvoiceExcelService {
         headerStyle.setDataFormat(format.getFormat("@"));
 
         Row header = sheet.createRow(rowIdx++);
-        String[] colNames = {"Товар", "Код(ԱՏԳ)", "Ед.", "Кол-во", "Прайс", "%", "Цена (со скидкой)", "Сумма"};
+        // Оставляем структуру 1-в-1 как была, просто меняем заголовок второй колонки
+        String[] colNames = {"Товар", "Код", "Ед.", "Кол-во", "Прайс", "%", "Цена (со скидкой)", "Сумма"};
 
         for (int i = 0; i < colNames.length; i++) {
             Cell cell = header.createCell(i);
@@ -271,10 +366,9 @@ public class InvoiceExcelService {
                 BigDecimal finalPrice;
                 BigDecimal finalPercent = BigDecimal.ZERO;
 
-                // ЛОГИКА: Если есть ручная цена (ВОЗВРАТ), берем её. Иначе — считаем скидку (ЗАКАЗ).
                 if (manualPrices != null && manualPrices.containsKey(productId)) {
                     finalPrice = manualPrices.get(productId);
-                    basePrice = finalPrice; // Для возвратов в колонку "Прайс" пишем фактическую цену
+                    basePrice = finalPrice;
                 } else {
                     BigDecimal itemPromo = (appliedPromos != null) ? appliedPromos.getOrDefault(productId, BigDecimal.ZERO) : BigDecimal.ZERO;
                     finalPercent = (itemPromo.compareTo(BigDecimal.ZERO) > 0) ? itemPromo : (discountPercent != null ? discountPercent : BigDecimal.ZERO);
@@ -290,7 +384,11 @@ public class InvoiceExcelService {
                 Row row = sheet.createRow(rowIdx++);
                 int c = 0;
                 createStyledCell(row, c++, p.getName(), borderStyle);
-                createStyledCell(row, c++, p.getHsnCode() != null ? p.getHsnCode() : "", borderStyle);
+
+                // ВОТ ТУТ: Вместо hsnCode теперь пишем твой productCode
+                String codeToDisplay = (p.getProductCode() != null) ? p.getProductCode() : "";
+                createStyledCell(row, c++, codeToDisplay, borderStyle);
+
                 createStyledCell(row, c++, p.getUnit() != null ? p.getUnit() : "шт", centerStyle);
                 createStyledCell(row, c++, entry.getValue().doubleValue(), centerStyle);
                 createStyledCell(row, c++, basePrice.doubleValue(), borderStyle);
@@ -315,10 +413,6 @@ public class InvoiceExcelService {
 
         return rowIdx;
     }
-
-
-
-
 
 
     // Вспомогательный метод для создания ячеек со стилем
