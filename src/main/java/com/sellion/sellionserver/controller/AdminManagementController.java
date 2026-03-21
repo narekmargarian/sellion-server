@@ -759,7 +759,7 @@ public class AdminManagementController {
             footerStyle.cloneStyleFrom(borderStyle);
             footerStyle.setFont(font);
 
-            // Шапка: Добавлен "Код" в начало
+            // Шапка: Добавлен "Код" первым
             String[] columns = {"Код", "Категория", "Наименование", "Штрих-код", "Остаток (шт)", "Цена (֏)", "Себестоимость (֏)", "Общая стоимость (֏)"};
             org.apache.poi.ss.usermodel.Row headerRow = sheet.createRow(0);
             for (int i = 0; i < columns.length; i++) {
@@ -776,7 +776,6 @@ public class AdminManagementController {
 
             for (Product p : products) {
                 org.apache.poi.ss.usermodel.Row row = sheet.createRow(rowIdx++);
-                // 0 - Код продукта, далее все по порядку
                 createCellWithStyle(row, 0, p.getProductCode() != null ? p.getProductCode() : "", borderStyle);
                 createCellWithStyle(row, 1, p.getCategory(), borderStyle);
                 createCellWithStyle(row, 2, p.getName(), borderStyle);
@@ -790,7 +789,7 @@ public class AdminManagementController {
                 grandTotal = grandTotal.add(rowTotal);
             }
 
-            // ИТОГ: Убрал отрисовку пустых ячеек с границами слева
+            // ИТОГ: Просто две ячейки в конце строки, без пустых рамок слева
             org.apache.poi.ss.usermodel.Row footerRow = sheet.createRow(rowIdx + 1);
             org.apache.poi.ss.usermodel.Cell labelCell = footerRow.createCell(6);
             labelCell.setCellValue("ИТОГО ПО СКЛАДУ:");
@@ -804,7 +803,12 @@ public class AdminManagementController {
 
             java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
             workbook.write(out);
-            return new ResponseEntity<>(out.toByteArray(), createExcelHeaders("Inventory_Rivento.xlsx"), org.springframework.http.HttpStatus.OK);
+
+            org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+            headers.setContentType(org.springframework.http.MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"));
+            headers.setContentDispositionFormData("attachment", "Inventory_Rivento.xlsx");
+
+            return new ResponseEntity<>(out.toByteArray(), headers, org.springframework.http.HttpStatus.OK);
         } catch (Exception e) {
             return new ResponseEntity<>(org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR);
         }
