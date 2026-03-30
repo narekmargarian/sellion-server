@@ -229,16 +229,28 @@ public class AdminManagementController {
     public ResponseEntity<?> editProduct(@PathVariable Long id, @RequestBody Map<String, Object> payload) {
         return productRepository.findById(id).map(p -> {
             String oldInfo = "Остаток: " + p.getStockQuantity() + ", Цена: " + p.getPrice();
+
             p.setName((String) payload.get("name"));
 
             // ЦЕНА ПРОДАЖИ
             Object priceVal = payload.get("price");
             p.setPrice(priceVal != null ? new BigDecimal(priceVal.toString()) : BigDecimal.ZERO);
 
-            // СЕБЕСТОИМОСТЬ (Важно для отчетов прибыли)
+            // СЕБЕСТОИМОСТЬ
             if (payload.containsKey("purchasePrice")) {
                 Object purVal = payload.get("purchasePrice");
                 p.setPurchasePrice(purVal != null ? new BigDecimal(purVal.toString()) : BigDecimal.ZERO);
+            }
+
+            // СРОК ГОДНОСТИ (Исправлено сохранение в БД)
+            if (payload.get("expiryDate") != null && !payload.get("expiryDate").toString().isEmpty()) {
+                try {
+                    p.setExpiryDate(LocalDate.parse(payload.get("expiryDate").toString()));
+                } catch (Exception e) {
+                    log.error("Ошибка парсинга даты: " + payload.get("expiryDate"));
+                }
+            } else {
+                p.setExpiryDate(null);
             }
 
             p.setStockQuantity(((Number) payload.get("stockQuantity")).intValue());
@@ -251,11 +263,44 @@ public class AdminManagementController {
             productRepository.save(p);
 
             recordAudit(id, "PRODUCT", "ИЗМЕНЕНИЕ ТОВАРА",
-                    "Было [" + oldInfo + "]. Стало [Остаток: " + p.getStockQuantity() + ", Цена: " + p.getPrice() + "]");
+                    "Было [" + oldInfo + "]. Стало [Остаток: " + p.getStockQuantity() + ", Цена: " + p.getPrice() + ", Срок: " + p.getExpiryDate() + "]");
 
             return ResponseEntity.ok(Map.of("message", "Данные товара обновлены"));
         }).orElse(ResponseEntity.notFound().build());
     }
+
+//    @PutMapping("/products/{id}/edit")
+//    @Transactional(rollbackFor = Exception.class)
+//    public ResponseEntity<?> editProduct(@PathVariable Long id, @RequestBody Map<String, Object> payload) {
+//        return productRepository.findById(id).map(p -> {
+//            String oldInfo = "Остаток: " + p.getStockQuantity() + ", Цена: " + p.getPrice();
+//            p.setName((String) payload.get("name"));
+//
+//            // ЦЕНА ПРОДАЖИ
+//            Object priceVal = payload.get("price");
+//            p.setPrice(priceVal != null ? new BigDecimal(priceVal.toString()) : BigDecimal.ZERO);
+//
+//            // СЕБЕСТОИМОСТЬ (Важно для отчетов прибыли)
+//            if (payload.containsKey("purchasePrice")) {
+//                Object purVal = payload.get("purchasePrice");
+//                p.setPurchasePrice(purVal != null ? new BigDecimal(purVal.toString()) : BigDecimal.ZERO);
+//            }
+//
+//            p.setStockQuantity(((Number) payload.get("stockQuantity")).intValue());
+//            p.setBarcode((String) payload.get("barcode"));
+//            p.setItemsPerBox(((Number) payload.get("itemsPerBox")).intValue());
+//            p.setCategory((String) payload.get("category"));
+//            p.setHsnCode((String) payload.get("hsnCode"));
+//            p.setUnit((String) payload.get("unit"));
+//
+//            productRepository.save(p);
+//
+//            recordAudit(id, "PRODUCT", "ИЗМЕНЕНИЕ ТОВАРА",
+//                    "Было [" + oldInfo + "]. Стало [Остаток: " + p.getStockQuantity() + ", Цена: " + p.getPrice() + "]");
+//
+//            return ResponseEntity.ok(Map.of("message", "Данные товара обновлены"));
+//        }).orElse(ResponseEntity.notFound().build());
+//    }
 
     @PutMapping("/returns/{id}/edit")
     @Transactional(rollbackFor = Exception.class)

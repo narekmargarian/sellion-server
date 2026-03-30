@@ -1640,13 +1640,86 @@ function toggleProductEdit(isEdit) {
 }
 
 
+// async function saveProductChanges(id) {
+//     // 1. Собираем данные (ID полей теперь соответствуют новой форме 4x2)
+//     const data = {
+//         category: document.getElementById('edit-product-category').value,
+//         price: parseFloat(document.getElementById('edit-product-price').value) || 0,
+//         hsnCode: document.getElementById('edit-product-hsn').value,
+//         expiryDate: document.getElementById('edit-product-expiry').value,
+//
+//         name: document.getElementById('edit-product-name').value,
+//         stockQuantity: parseInt(document.getElementById('edit-product-qty').value) || 0,
+//         barcode: document.getElementById('edit-product-barcode').value,
+//         itemsPerBox: parseInt(document.getElementById('edit-product-perbox').value) || 0,
+//         unit: document.getElementById('edit-product-unit').value
+//     };
+//
+//     try {
+//         // 2. Отправка на сервер через PUT
+//         await secureFetch(`/api/admin/products/${id}/edit`, {
+//             method: 'PUT',
+//             body: data
+//         });
+//
+//         // 3. Обновляем локальный массив данных Sellion 2026
+//         const idx = productsData.findIndex(p => p.id == id);
+//         if (idx !== -1) {
+//             productsData[idx] = {...productsData[idx], ...data};
+//
+//             // 4. Умное обновление строки в основной таблице склада
+//             const row = document.querySelector(`tr[onclick*="openProductDetails(${id})"]`);
+//             if (row) {
+//                 // Название (внутри div для стиля)
+//                 const nameDiv = row.cells[0].querySelector('div');
+//                 if (nameDiv) nameDiv.innerText = data.name;
+//
+//                 // Цена
+//                 row.cells[1].innerText = data.price.toLocaleString() + ' ֏';
+//
+//                 // Остаток (Badge-стиль)
+//                 const qtyBadge = row.cells[2].querySelector('span');
+//                 if (qtyBadge) {
+//                     qtyBadge.innerText = data.stockQuantity + ' шт.';
+//                     qtyBadge.className = data.stockQuantity > 10 ? 'badge bg-light text-dark' : 'badge bg-danger text-white';
+//                 }
+//
+//                 // Упаковка + Единица измерения
+//                 row.cells[3].innerText = `${data.itemsPerBox} ${data.unit}/уп`;
+//
+//                 // Штрих-код
+//                 row.cells[4].innerText = data.barcode || '---';
+//
+//                 // Срок годности
+//                 if (row.cells[5]) {
+//                     row.cells[5].innerText = data.expiryDate ? formatDate(data.expiryDate) : '---';
+//                     // Подсветка красным, если срок истекает
+//                     const isExpired = data.expiryDate && new Date(data.expiryDate) < new Date(new Date().getTime() + 30 * 24 * 60 * 60 * 1000);
+//                     row.cells[5].className = isExpired ? 'text-danger fw-bold' : '';
+//                 }
+//             }
+//         }
+//
+//         showToast("Товар успешно обновлен", "success");
+//
+//         // 5. Возвращаемся в режим просмотра деталей с новыми данными
+//         openProductDetails(id);
+//
+//     } catch (e) {
+//         console.error("Ошибка сохранения продукта:", e);
+//         showToast("Не удалось сохранить изменения", "error");
+//     }
+// }
+
 async function saveProductChanges(id) {
-    // 1. Собираем данные (ID полей теперь соответствуют новой форме 4x2)
+    // 1. Собираем данные
+    const expiryValue = document.getElementById('edit-product-expiry').value;
+
     const data = {
         category: document.getElementById('edit-product-category').value,
         price: parseFloat(document.getElementById('edit-product-price').value) || 0,
         hsnCode: document.getElementById('edit-product-hsn').value,
-        expiryDate: document.getElementById('edit-product-expiry').value,
+        expiryDate: expiryValue || null, // Отправляем строку YYYY-MM-DD или null
 
         name: document.getElementById('edit-product-name').value,
         stockQuantity: parseInt(document.getElementById('edit-product-qty').value) || 0,
@@ -1656,61 +1729,60 @@ async function saveProductChanges(id) {
     };
 
     try {
-        // 2. Отправка на сервер через PUT
-        await secureFetch(`/api/admin/products/${id}/edit`, {
+        // 2. Отправка на сервер
+        const response = await secureFetch(`/api/admin/products/${id}/edit`, {
             method: 'PUT',
             body: data
         });
 
-        // 3. Обновляем локальный массив данных Sellion 2026
+        // 3. Обновляем локальный массив
         const idx = productsData.findIndex(p => p.id == id);
         if (idx !== -1) {
             productsData[idx] = {...productsData[idx], ...data};
 
-            // 4. Умное обновление строки в основной таблице склада
+            // 4. Обновление строки в таблице
             const row = document.querySelector(`tr[onclick*="openProductDetails(${id})"]`);
             if (row) {
-                // Название (внутри div для стиля)
                 const nameDiv = row.cells[0].querySelector('div');
                 if (nameDiv) nameDiv.innerText = data.name;
 
-                // Цена
                 row.cells[1].innerText = data.price.toLocaleString() + ' ֏';
 
-                // Остаток (Badge-стиль)
                 const qtyBadge = row.cells[2].querySelector('span');
                 if (qtyBadge) {
                     qtyBadge.innerText = data.stockQuantity + ' шт.';
                     qtyBadge.className = data.stockQuantity > 10 ? 'badge bg-light text-dark' : 'badge bg-danger text-white';
                 }
 
-                // Упаковка + Единица измерения
                 row.cells[3].innerText = `${data.itemsPerBox} ${data.unit}/уп`;
-
-                // Штрих-код
                 row.cells[4].innerText = data.barcode || '---';
 
-                // Срок годности
                 if (row.cells[5]) {
+                    // Используем вспомогательную функцию formatDate для отображения DD.MM.YYYY
                     row.cells[5].innerText = data.expiryDate ? formatDate(data.expiryDate) : '---';
-                    // Подсветка красным, если срок истекает
-                    const isExpired = data.expiryDate && new Date(data.expiryDate) < new Date(new Date().getTime() + 30 * 24 * 60 * 60 * 1000);
-                    row.cells[5].className = isExpired ? 'text-danger fw-bold' : '';
+
+                    // Подсветка, если срок менее 30 дней
+                    const expDate = data.expiryDate ? new Date(data.expiryDate) : null;
+                    const threshold = new Date();
+                    threshold.setDate(threshold.getDate() + 30);
+
+                    if (expDate && expDate < threshold) {
+                        row.cells[5].className = 'text-danger fw-bold';
+                    } else {
+                        row.cells[5].className = '';
+                    }
                 }
             }
         }
 
         showToast("Товар успешно обновлен", "success");
-
-        // 5. Возвращаемся в режим просмотра деталей с новыми данными
         openProductDetails(id);
 
     } catch (e) {
         console.error("Ошибка сохранения продукта:", e);
-        showToast("Не удалось сохранить изменения", "error");
+        showToast("Ошибка доступа или некорректные данные", "error");
     }
 }
-
 
 
 async function deleteClient(id) {
