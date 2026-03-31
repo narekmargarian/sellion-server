@@ -1,6 +1,7 @@
 package com.sellion.sellionserver.config;
 
 import com.sellion.sellionserver.repository.ManagerApiKeyRepository;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -39,35 +40,54 @@ public class SecurityConfig {
                         .cacheControl(cache -> cache.disable())
                 )
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                .csrf(csrf -> csrf.ignoringRequestMatchers("/ws-sellion/**", "/api/**", "/logout"))
+                .csrf(csrf -> csrf.ignoringRequestMatchers("/ws-sellion/**", "/api/**"))
                 .addFilterBefore(apiKeyAuthFilter(), UsernamePasswordAuthenticationFilter.class)
+
+                // КРИТИЧНО: Чтобы API не выдавало HTML-страницу логина при ошибках
+                .exceptionHandling(exceptions -> exceptions
+                        .defaultAuthenticationEntryPointFor(
+                                (request, response, authException) -> response.sendError(HttpServletResponse.SC_UNAUTHORIZED),
+                                request -> request.getRequestURI().startsWith("/api/") // Простая проверка пути без матчера
+                        )
+                )
+
 
                 .authorizeHttpRequests(auth -> auth
                         // 1. ПУБЛИЧНЫЕ РЕСУРСЫ
                         .requestMatchers("/", "/login", "/css/**", "/js/**", "/img/**", "/ws-sellion/**", "/favicon.ico").permitAll()
                         .requestMatchers("/api/public/**").permitAll()
 
-                        // 2. ЖЕСТКОЕ ОГРАНИЧЕНИЕ (Только для Админа)
+                        // 2. АДМИНИСТРИРОВАНИЕ (ТОЛЬКО АДМИН)
                         // Вкладки Персонал, Менеджеры и Настройки защищены здесь
                         .requestMatchers("/api/admin/settings/**", "/api/admin/users/**", "/api/admin/manager-keys/**").hasRole("ADMIN")
+                        .requestMatchers("/api/admin/orders/write-off").hasAnyRole("ADMIN","OPERATOR")
 
-                        // 3. СКЛАД, ЗАКАЗЫ, ВОЗВРАТЫ, КЛИЕНТЫ, АКЦИИ (Админ + Оператор равны)
-                        // Теперь Оператор может делать ВСЁ: удалять, менять цены, делать инвентаризацию
-                        .requestMatchers("/api/products/**", "/api/admin/products/**").hasAnyRole("ADMIN", "OPERATOR")
-                        .requestMatchers("/api/orders/**", "/api/admin/orders/**").hasAnyRole("ADMIN", "OPERATOR")
-                        .requestMatchers("/api/returns/**", "/api/admin/returns/**").hasAnyRole("ADMIN", "OPERATOR")
-                        .requestMatchers("/api/clients/**", "/api/admin/clients/**").hasAnyRole("ADMIN", "OPERATOR")
-                        .requestMatchers("/api/admin/promos/**").hasAnyRole("ADMIN", "OPERATOR")
+                        // 3. СКЛАД / ПРОДУКТЫ
+                        // Инвентаризация, создание и удаление — даем доступ ADMIN, OPERATOR, ACCOUNTANT по вашему запросу
+                        .requestMatchers("/api/products/create", "/api/products/import", "/api/admin/products/*/inventory").hasAnyRole("ADMIN", "OPERATOR", "ACCOUNTANT")
+                        .requestMatchers(HttpMethod.DELETE, "/api/products/**").hasAnyRole("ADMIN", "OPERATOR", "ACCOUNTANT")
+                        .requestMatchers(HttpMethod.POST, "/api/products/**").hasAnyRole("ADMIN", "OPERATOR", "ACCOUNTANT")
+                        .requestMatchers(HttpMethod.PUT, "/api/products/**").hasAnyRole("ADMIN", "OPERATOR", "ACCOUNTANT")
+                        // Просмотр доступен всем, включая MANAGER (мобилка)
+                        .requestMatchers("/api/products/**", "/api/admin/products/**").hasAnyRole("ADMIN", "OPERATOR", "ACCOUNTANT", "MANAGER")
 
-                        // 4. ДОСТУП ДЛЯ БУХГАЛТЕРА (Просмотр и отчеты)
-                        .requestMatchers(HttpMethod.GET, "/api/**").hasAnyRole("ADMIN", "OPERATOR", "ACCOUNTANT")
-                        .requestMatchers("/api/reports/**", "/api/payments/**", "/admin/invoices/**").hasAnyRole("ADMIN", "ACCOUNTANT", "OPERATOR")
+                        // 4. ЗАКАЗЫ И ВОЗВРАТЫ
+                        .requestMatchers("/api/orders/**", "/api/returns/**", "/api/admin/orders/**", "/api/admin/returns/**").hasAnyRole("ADMIN", "OPERATOR", "ACCOUNTANT", "MANAGER")
 
-                        // 5. ВЕБ-ИНТЕРФЕЙС
+                        // 5. КЛИЕНТЫ И АКЦИИ
+                        .requestMatchers("/api/clients/**", "/api/admin/clients/**").hasAnyRole("ADMIN", "OPERATOR", "ACCOUNTANT", "MANAGER")
+                        .requestMatchers("/api/admin/promos/**").hasAnyRole("ADMIN", "OPERATOR", "ACCOUNTANT", "MANAGER")
+
+                        // 6. ПЕЧАТЬ И ОТЧЕТЫ
+                        .requestMatchers("/admin/invoices/print/**", "/admin/orders/print/**", "/admin/returns/print/**", "/admin/logistic/**").hasAnyRole("ADMIN", "OPERATOR", "ACCOUNTANT")
+                        .requestMatchers("/api/payments/**", "/api/reports/**", "/admin/invoices/**").hasAnyRole("ADMIN", "ACCOUNTANT", "OPERATOR")
+
+                        // 7. WEB-ИНТЕРФЕЙС
                         .requestMatchers("/admin/**").hasAnyRole("ADMIN", "OPERATOR", "ACCOUNTANT")
 
                         .anyRequest().authenticated()
                 )
+
                 .formLogin(form -> form
                         .loginPage("/login")
                         .defaultSuccessUrl("/admin", true)
@@ -107,7 +127,6 @@ public class SecurityConfig {
 }
 
 
-//
 //@Configuration
 //@EnableWebSecurity
 //@EnableMethodSecurity
