@@ -1061,12 +1061,12 @@
                                     <i class="bi bi-bank me-1"></i> БАНК
                                 </h6>
                                 <div class="mb-2">
-                                    <label class="label-small mb-1">Банк</label>
+                                    <label class="label-small mb-1">Имя Банк</label>
                                     <input type="text" id="set-COMPANY_BANK_NAME" class="form-control form-control-sm"
                                            th:value="${@companySettings.getSetting('COMPANY_BANK_NAME', '---')}">
                                 </div>
                                 <div>
-                                    <label class="label-small mb-1">IBAN</label>
+                                    <label class="label-small mb-1">Счет</label>
                                     <input type="text" id="set-COMPANY_BANK_ACCOUNT"
                                            class="form-control form-control-sm"
                                            th:value="${@companySettings.getSetting('COMPANY_BANK_ACCOUNT', '---')}">
@@ -1511,7 +1511,7 @@
                                                                             placeholder="Напитки..."></div>
                     <div><label class="label-small">ЦЕНА (֏)</label><input type="number" id="new-p-price"
                                                                            class="form-control" placeholder="0"></div>
-                    <div><label class="label-small">КОД SKU (1С)</label><input type="text" id="new-p-hsn"
+                    <div><label class="label-small">КОД ВЭД (ԱՏԳ)</label><input type="text" id="new-p-hsn"
                                                                                class="form-control"
                                                                                placeholder="Код..."></div>
                     <div><label class="label-small">СРОК ГОДНОСТИ</label><input type="date" id="new-p-expiry"

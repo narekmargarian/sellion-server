@@ -1570,7 +1570,7 @@ async function openProductDetails(id) {
             <div class="modal-info-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; background: #f8fafc; padding: 15px; border-radius: 10px; border: 1px solid #e2e8f0; margin-bottom: 10px;">
                 <div><small style="color: #64748b; font-weight: 700;">КАТЕГОРИЯ:</small><br><b>${p.category || '---'}</b></div>
                 <div><small style="color: #64748b; font-weight: 700;">ЦЕНА:</small><br><b class="price-up">${(p.price || 0).toLocaleString()} ֏</b></div>
-                <div><small style="color: #64748b; font-weight: 700;">КОД SKU (1С):</small><br><b style="font-family: monospace;">${p.hsnCode || '---'}</b></div>
+                <div><small style="color: #64748b; font-weight: 700;">КОД ВЭД (ԱՏԳ):</small><br><b style="font-family: monospace;">${p.hsnCode || '---'}</b></div>
                 <div><small style="color: #64748b; font-weight: 700;">СРОК ГОДНОСТИ:</small><br><b>${p.expiryDate ? formatDate(p.expiryDate) : '---'}</b></div>
             </div>
             <div class="modal-info-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; background: #fff; padding: 15px; border-radius: 10px; border: 1px solid #e2e8f0;">
