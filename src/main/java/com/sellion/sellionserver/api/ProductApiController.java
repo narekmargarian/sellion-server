@@ -98,7 +98,7 @@ public class ProductApiController {
     }
 
 
-    @PreAuthorize("hasRole('ADMIN')")
+//    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/import")
     @Transactional
     public ResponseEntity<ApiResponse<?>> importProducts(@RequestParam("file") MultipartFile file) {
@@ -177,7 +177,7 @@ public class ProductApiController {
         return ResponseEntity.ok(ApiResponse.ok("История движений товара " + name, history));
     }
 
-    @PreAuthorize("hasRole('ADMIN')")
+//    @PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping("/{id}")
     @Transactional
     // ИДЕАЛЬНО: Стандартизированный ответ ApiResponse
