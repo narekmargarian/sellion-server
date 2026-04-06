@@ -1038,17 +1038,23 @@
                                     <div class="col-8">
                                         <label class="label-small mb-1">Название компании</label>
                                         <input type="text" id="set-COMPANY_NAME" class="form-control form-control-sm"
-                                               th:value="${@companySettings.getSetting('COMPANY_NAME', 'Սելլիոն ՍՊԸ')}">
+                                               th:value="${@companySettings.getSetting('COMPANY_NAME', 'ՌԻՎՆԵՏՈ ՍՊԸ')}">
                                     </div>
                                     <div class="col-4">
                                         <label class="label-small mb-1">ИНН (ՀՎՀՀ)</label>
                                         <input type="text" id="set-COMPANY_INN" class="form-control form-control-sm"
-                                               th:value="${@companySettings.getSetting('COMPANY_INN', '01234567')}">
+                                               th:value="${@companySettings.getSetting('COMPANY_INN', '00543482')}">
                                     </div>
                                     <div class="col-12">
-                                        <label class="label-small mb-1">Юридический адрес</label>
+                                        <label class="label-small mb-1">Адрес</label>
                                         <input type="text" id="set-COMPANY_ADDRESS" class="form-control form-control-sm"
                                                th:value="${@companySettings.getSetting('COMPANY_ADDRESS', 'ՀՀ, ք. Երևան')}">
+                                    </div>
+
+                                    <div class="col-12">
+                                        <label class="label-small mb-1">Юридический адрес</label>
+                                        <input type="text"  class="form-control form-control-sm"
+                                                value="ՀՀ, ք. Երևան, Նոր Արեշ 15փ 9շ 43 բն" >
                                     </div>
                                 </div>
                             </div>

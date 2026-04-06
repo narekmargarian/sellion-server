@@ -11,7 +11,7 @@ import org.springframework.stereotype.Service;
 import java.util.HashMap;
 import java.util.Map;
 
-@Service
+@Service("companySettings")
 @RequiredArgsConstructor
 public class CompanySettings {
     private final CompanySettingRepository companySettingRepository;
@@ -30,11 +30,11 @@ public class CompanySettings {
 
     public Map<String, String> getSellerData() {
         Map<String, String> data = new HashMap<>();
-        data.put("name", getSetting("COMPANY_NAME", "Սելլիոն ՍՊԸ"));
-        data.put("inn", getSetting("COMPANY_INN", "01234567"));
-        data.put("address", getSetting("COMPANY_ADDRESS", "ՀՀ, ք. Երևան"));
-        data.put("bank", getSetting("COMPANY_BANK", "Ամերիա Բանկ"));
-        data.put("iban", getSetting("COMPANY_BANK_ACCOUNT", "157000..."));
+        data.put("name", getSetting("COMPANY_NAME", "ՌԻՎԵՆՏՈ ՍՊԸ"));
+        data.put("inn", getSetting("COMPANY_INN", "00543482"));
+        data.put("address", getSetting("COMPANY_ADDRESS", "ՀՀ, ք. Երևան Շիրակի 4/12"));
+        data.put("bank", getSetting("COMPANY_BANK", "Կոնվերս Բանկ"));
+        data.put("iban", getSetting("COMPANY_BANK_ACCOUNT", "1930098840505900"));
         return data;
     }
 
