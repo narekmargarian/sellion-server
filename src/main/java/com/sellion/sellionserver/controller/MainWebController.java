@@ -66,21 +66,28 @@ public class MainWebController {
             Model model) {
 
         // --- 1. ЛОГИКА ДАТ (ЗАКАЗЫ И ВОЗВРАТЫ - БЕЗ ИЗМЕНЕНИЙ) ---
-        LocalDate startD = parseSafe(orderStartDate, LocalDate.now());
-        LocalDate endD = parseSafe(orderEndDate, startD);
-        LocalDateTime oStartDT = startD.atStartOfDay();
-        LocalDateTime oEndDT = endD.atTime(LocalTime.MAX);
 
-        LocalDate startR = parseSafe(returnStartDate, LocalDate.now());
-        LocalDate endR = parseSafe(returnEndDate, startR);
-        LocalDateTime rStartDT = startR.atStartOfDay();
-        LocalDateTime rEndDT = endR.atTime(LocalTime.MAX);
+        LocalDateTime oStartDT = parseSafeDateTime(orderStartDate, LocalDateTime.now().with(LocalTime.MIN));
+        LocalDateTime oEndDT = parseSafeDateTime(orderEndDate, LocalDateTime.now().with(LocalTime.MAX));
 
-        // --- ЛОГИКА ДАТ ДЛЯ ИНВОЙСОВ ---
-        LocalDate invStartD = parseSafe(invoiceStart, LocalDate.now().withDayOfMonth(1));
-        LocalDate invEndD = parseSafe(invoiceEnd, LocalDate.now());
-        LocalDateTime invStartDT = invStartD.atStartOfDay();
-        LocalDateTime invEndDT = invEndD.atTime(LocalTime.MAX);
+
+        LocalDateTime rStartDT = parseSafeDateTime(returnStartDate, LocalDateTime.now().with(LocalTime.MIN));
+        LocalDateTime rEndDT = parseSafeDateTime(returnEndDate, LocalDateTime.now().with(LocalTime.MAX));
+
+        // Используем тот же метод parseSafeDateTime
+        LocalDateTime invStartDT = parseSafeDateTime(invoiceStart, LocalDateTime.now().withDayOfMonth(1).with(LocalTime.MIN));
+        LocalDateTime invEndDT = parseSafeDateTime(invoiceEnd, LocalDateTime.now().with(LocalTime.MAX));
+
+// Передаем отформатированные строки обратно в модель для инпутов
+        java.time.format.DateTimeFormatter displayFormatter = java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm");
+        model.addAttribute("invoiceStart", invStartDT.format(displayFormatter));
+        model.addAttribute("invoiceEnd", invEndDT.format(displayFormatter));
+
+
+        model.addAttribute("orderStartDate", oStartDT.format(displayFormatter));
+        model.addAttribute("orderEndDate", oEndDT.format(displayFormatter));
+        model.addAttribute("returnStartDate", rStartDT.format(displayFormatter));
+        model.addAttribute("returnEndDate", rEndDT.format(displayFormatter));
 
         // --- 2. ЛОГИКА ДЛЯ ЗАКАЗОВ ---
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
@@ -170,8 +177,8 @@ public class MainWebController {
 
 
         // Если даты не пришли в URL, ставим текущий месяц
-        LocalDate pStart = parseSafe(promoStart, LocalDate.now().withDayOfMonth(1));
-        LocalDate pEnd = parseSafe(promoEnd, LocalDate.now().withDayOfMonth(LocalDate.now().lengthOfMonth()));
+        LocalDate pStart = parseSafeDateTime(promoStart, LocalDateTime.now().withDayOfMonth(1).with(LocalTime.MIN)).toLocalDate();
+        LocalDate pEnd = parseSafeDateTime(promoEnd, LocalDateTime.now().withDayOfMonth(LocalDate.now().lengthOfMonth()).with(LocalTime.MAX)).toLocalDate();
 
         // Отдаем акции именно за этот период
         model.addAttribute("promos", promoRepository.findByPeriod(pStart, pEnd));
@@ -183,9 +190,9 @@ public class MainWebController {
 
 
 
-        addModel(page, orderManagerId, returnManagerId, model, ordersPage, totalOrdersSum, rawSales, rawPurchaseCost, netProfitBD, avgCheck, limitedLogs, invoicesList, totalInvoiceDebt, totalPaidSum, startD, endD, allReturns, totalReturnsSum, startR, endR);
+        addModel(page, orderManagerId, returnManagerId, model, ordersPage, totalOrdersSum, rawSales, rawPurchaseCost, netProfitBD, avgCheck, limitedLogs, invoicesList, totalInvoiceDebt, totalPaidSum, oStartDT.toLocalDate(), oEndDT.toLocalDate(), allReturns, totalReturnsSum, rStartDT.toLocalDate(), rEndDT.toLocalDate());
 
-        addInvModel(invoicePage, invoiceManager, invoiceStatus, model, invoicesList, invoicesPage, invStartD, invEndD);
+        addInvModel(invoicePage, invoiceManager, invoiceStatus, model, invoicesList, invoicesPage, invStartDT.toLocalDate(), invEndDT.toLocalDate());
         groupAndWarehouse(activeTab, clientPage, clientCategory, clientSearch, model, managersForUI, managerStats, invoicesList);
         return "dashboard";
 
@@ -229,6 +236,7 @@ public class MainWebController {
         model.addAttribute("returnStartDate", startR.toString());
         model.addAttribute("returnEndDate", endR.toString());
         model.addAttribute("selectedReturnManager", returnManagerId);
+
     }
 
 
@@ -318,8 +326,25 @@ public class MainWebController {
     }
 
 
-    private LocalDate parseSafe(String d, LocalDate def) {
-        if (d == null || d.isEmpty()) return def;
-        try { return LocalDate.parse(d); } catch (Exception e) { return def; }
+    private LocalDateTime parseSafeDateTime(String d, LocalDateTime def) {
+        if (d == null || d.trim().isEmpty()) return def;
+        try {
+            // Если дата в формате 08.04.2026 21:09 (с точками)
+            if (d.contains(".")) {
+                // Поддерживаем формат с секундами и без
+                java.time.format.DateTimeFormatter formatter = java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm[:ss]");
+                return LocalDateTime.parse(d, formatter);
+            }
+            // Если дата в формате 2026-04-08T21:09 (стандарт БД)
+            return LocalDateTime.parse(d.replace(" ", "T"));
+        } catch (Exception e) {
+            // Если пришла только дата без времени, добавляем время начала или конца дня
+            try {
+                java.time.format.DateTimeFormatter dateOnly = java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy");
+                return LocalDate.parse(d.split(" ")[0], dateOnly).atStartOfDay();
+            } catch (Exception e2) {
+                return def;
+            }
+        }
     }
 }
