@@ -169,55 +169,98 @@ public class AdminManagementController {
     }
 
 
+//
+//    @PostMapping("/orders/{id}/cancel")
+//    @Transactional(rollbackFor = Exception.class)
+//    public ResponseEntity<?> cancelOrder(@PathVariable Long id) {
+//        // 1. Поиск заказа с ручной проверкой (чтобы не кидать 500 ошибку через orElseThrow)
+//        Optional<Order> orderOpt = orderRepository.findById(id);
+//
+//        if (orderOpt.isEmpty()) {
+//            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+//                    .body(Map.of("error", "Заказ №" + id + " не найден в системе."));
+//        }
+//
+//        Order order = orderOpt.get();
+//
+//        // 2. Блокировка отмены, если уже выставлен счет (Инвойс)
+//        if (order.getInvoiceId() != null) {
+//            return ResponseEntity.badRequest()
+//                    .body(Map.of("error", "Нельзя отменить заказ с выставленным счетом!"));
+//        }
+//
+//        // 3. ЗАЩИТА ОТ ПОВТОРНОЙ ОТМЕНЫ (Ключевое исправление)
+//        if (order.getStatus() == OrderStatus.CANCELLED) {
+//            // Возвращаем 400 Bad Request, который поймает ваш JS fetch
+//            return ResponseEntity.badRequest()
+//                    .body(Map.of("error", "Этот заказ уже был отменен ранее."));
+//        }
+//
+//        // 4. СКЛАД: Возвращаем товары в свободный остаток
+//        try {
+//            stockService.returnItemsToStock(order.getItems(), "Отмена заказа #" + id, "ADMIN");
+//        } catch (Exception e) {
+//            return ResponseEntity.internalServerError()
+//                    .body(Map.of("error", "Ошибка при возврате товара на склад: " + e.getMessage()));
+//        }
+//
+//        // 5. ФИНАНСЫ: Обнуляем суммы
+//        order.setTotalAmount(BigDecimal.ZERO);
+//        order.setTotalPurchaseCost(BigDecimal.ZERO);
+//        order.setPurchaseCost(BigDecimal.ZERO);
+//
+//        // 6. Статус и сохранение
+//        order.setStatus(OrderStatus.CANCELLED);
+//        orderRepository.save(order);
+//
+//        // 7. Аудит
+//        recordAudit(id, "ORDER", "ОТМЕНА", "Заказ отменен. Товары вернулись на склад. Суммы обнулены.");
+//
+//        return ResponseEntity.ok(Map.of(
+//                "message", "Заказ успешно отменен, товар вернулся на склад",
+//                "id", id
+//        ));
+//    }
+
 
     @PostMapping("/orders/{id}/cancel")
     @Transactional(rollbackFor = Exception.class)
     public ResponseEntity<?> cancelOrder(@PathVariable Long id) {
-        // 1. Поиск заказа с ручной проверкой (чтобы не кидать 500 ошибку через orElseThrow)
+        // 1. Поиск заказа
         Optional<Order> orderOpt = orderRepository.findById(id);
 
         if (orderOpt.isEmpty()) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(Map.of("error", "Заказ №" + id + " не найден в системе."));
+                    .body(Map.of("error", "Заказ №" + id + " не найден."));
         }
 
         Order order = orderOpt.get();
 
-        // 2. Блокировка отмены, если уже выставлен счет (Инвойс)
+        // 2. Блокировка, если есть Инвойс
         if (order.getInvoiceId() != null) {
             return ResponseEntity.badRequest()
-                    .body(Map.of("error", "Нельзя отменить заказ с выставленным счетом!"));
+                    .body(Map.of("error", "Нельзя удалить заказ с выставленным счетом!"));
         }
 
-        // 3. ЗАЩИТА ОТ ПОВТОРНОЙ ОТМЕНЫ (Ключевое исправление)
-        if (order.getStatus() == OrderStatus.CANCELLED) {
-            // Возвращаем 400 Bad Request, который поймает ваш JS fetch
-            return ResponseEntity.badRequest()
-                    .body(Map.of("error", "Этот заказ уже был отменен ранее."));
-        }
-
-        // 4. СКЛАД: Возвращаем товары в свободный остаток
+        // 3. СКЛАД: Возвращаем товары перед тем как стереть данные
         try {
-            stockService.returnItemsToStock(order.getItems(), "Отмена заказа #" + id, "ADMIN");
+            // У тебя в сущности Map<Long, Integer> items, передаем его в сервис
+            stockService.returnItemsToStock(order.getItems(), "Удаление заказа #" + id, "ADMIN");
         } catch (Exception e) {
             return ResponseEntity.internalServerError()
-                    .body(Map.of("error", "Ошибка при возврате товара на склад: " + e.getMessage()));
+                    .body(Map.of("error", "Ошибка склада: " + e.getMessage()));
         }
 
-        // 5. ФИНАНСЫ: Обнуляем суммы
-        order.setTotalAmount(BigDecimal.ZERO);
-        order.setTotalPurchaseCost(BigDecimal.ZERO);
-        order.setPurchaseCost(BigDecimal.ZERO);
+        // 4. УДАЛЕНИЕ ИЗ БД (Ключевое действие)
+        // Благодаря @ElementCollection в сущности, записи из таблиц order_items
+        // и order_applied_promos удалятся автоматически (CASCADE по умолчанию).
+        orderRepository.delete(order);
 
-        // 6. Статус и сохранение
-        order.setStatus(OrderStatus.CANCELLED);
-        orderRepository.save(order);
-
-        // 7. Аудит
-        recordAudit(id, "ORDER", "ОТМЕНА", "Заказ отменен. Товары вернулись на склад. Суммы обнулены.");
+        // 5. Аудит (Используем сохраненный ID, так как объект 'order' уже помечен на удаление)
+        recordAudit(id, "ORDER", "УДАЛЕНИЕ", "Заказ полностью удален. Суммы больше не учитываются.");
 
         return ResponseEntity.ok(Map.of(
-                "message", "Заказ успешно отменен, товар вернулся на склад",
+                "message", "Заказ успешно удален из базы данных",
                 "id", id
         ));
     }

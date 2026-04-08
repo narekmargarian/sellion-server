@@ -1102,24 +1102,55 @@ function printInvoiceInline(url) {
 }
 
 
+// function showTab(tabId) {
+//     document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+//     const target = document.getElementById(tabId);
+//     if (target) target.classList.add('active');
+//
+//     document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+//     const btnId = tabId.replace('tab-', 'btn-');
+//     const activeBtn = document.getElementById(btnId);
+//     if (activeBtn) activeBtn.classList.add('active');
+//
+//     localStorage.setItem('sellion_tab', tabId);
+//
+//     // 2. Вызываем обновление только если мы перешли на главную вкладку
+//     if (tabId === 'tab-main') {
+//         updateDashboardStats();
+//     }
+// }
 function showTab(tabId) {
+    // 1. Переключение видимости вкладок
     document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
     const target = document.getElementById(tabId);
     if (target) target.classList.add('active');
 
+    // 2. Визуальное выделение активной кнопки в меню
     document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
     const btnId = tabId.replace('tab-', 'btn-');
     const activeBtn = document.getElementById(btnId);
     if (activeBtn) activeBtn.classList.add('active');
 
+    // 3. Сохранение текущей вкладки
     localStorage.setItem('sellion_tab', tabId);
 
-    // 2. Вызываем обновление только если мы перешли на главную вкладку
+    // 4. Исправление формата дат во всех инпутах (чтобы 08.04 не стало 04.08)
+    document.querySelectorAll('input[type="date"]').forEach(input => {
+        let val = input.value;
+        if (val && val.includes('.')) {
+            const parts = val.split('.');
+            if (parts.length === 3 && parts[0].length === 2) {
+                // Превращаем DD.MM.YYYY в YYYY-MM-DD
+                input.value = `${parts[2]}-${parts[1]}-${parts[0]}`;
+            }
+        }
+    });
+
+    // 5. Обновление статистики для главной вкладки
     if (tabId === 'tab-main') {
         updateDashboardStats();
     }
 }
-
 function updateDashboardStats() {
     const statAvgCheck = document.getElementById('stat-avg-check');
     const statPendingOrders = document.getElementById('stat-pending-orders');

@@ -66,19 +66,19 @@ public class MainWebController {
             Model model) {
 
         // --- 1. ЛОГИКА ДАТ (ЗАКАЗЫ И ВОЗВРАТЫ - БЕЗ ИЗМЕНЕНИЙ) ---
-        LocalDate startD = (orderStartDate != null && !orderStartDate.isEmpty()) ? LocalDate.parse(orderStartDate) : LocalDate.now();
-        LocalDate endD = (orderEndDate != null && !orderEndDate.isEmpty()) ? LocalDate.parse(orderEndDate) : startD;
+        LocalDate startD = parseSafe(orderStartDate, LocalDate.now());
+        LocalDate endD = parseSafe(orderEndDate, startD);
         LocalDateTime oStartDT = startD.atStartOfDay();
         LocalDateTime oEndDT = endD.atTime(LocalTime.MAX);
 
-        LocalDate startR = (returnStartDate != null && !returnStartDate.isEmpty()) ? LocalDate.parse(returnStartDate) : LocalDate.now();
-        LocalDate endR = (returnEndDate != null && !returnEndDate.isEmpty()) ? LocalDate.parse(returnEndDate) : startR;
+        LocalDate startR = parseSafe(returnStartDate, LocalDate.now());
+        LocalDate endR = parseSafe(returnEndDate, startR);
         LocalDateTime rStartDT = startR.atStartOfDay();
         LocalDateTime rEndDT = endR.atTime(LocalTime.MAX);
 
         // --- ЛОГИКА ДАТ ДЛЯ ИНВОЙСОВ ---
-        LocalDate invStartD = (invoiceStart != null && !invoiceStart.isEmpty()) ? LocalDate.parse(invoiceStart) : LocalDate.now().withDayOfMonth(1);
-        LocalDate invEndD = (invoiceEnd != null && !invoiceEnd.isEmpty()) ? LocalDate.parse(invoiceEnd) : LocalDate.now();
+        LocalDate invStartD = parseSafe(invoiceStart, LocalDate.now().withDayOfMonth(1));
+        LocalDate invEndD = parseSafe(invoiceEnd, LocalDate.now());
         LocalDateTime invStartDT = invStartD.atStartOfDay();
         LocalDateTime invEndDT = invEndD.atTime(LocalTime.MAX);
 
@@ -136,32 +136,42 @@ public class MainWebController {
 
         List<Invoice> invoicesList = invoicesPage.getContent();
 
-        long activeOrdersCount = allOrdersForPeriod.stream().filter(o -> o.getStatus() != OrderStatus.CANCELLED).count();
+        long activeOrdersCount = allOrdersForPeriod.size();
         BigDecimal avgCheck = (activeOrdersCount == 0) ? BigDecimal.ZERO : rawSales.divide(BigDecimal.valueOf(activeOrdersCount), 2, RoundingMode.HALF_UP);
-        List<AuditLog> limitedLogs = auditLogRepository.findAllByOrderByTimestampDesc().stream().limit(15).toList();
+        List<AuditLog> limitedLogs = auditLogRepository.findTop50ByOrderByTimestampDesc();
 
-        // --- 5. ЛОГИКА KPI МЕНЕДЖЕРОВ ---
+        // --- 5. ЛОГИКА KPI МЕНЕДЖЕРОВ (ОПТИМИЗИРОВАНО) ---
         List<String> managersForUI = ManagerId.getAllDisplayNames();
         Map<String, ManagerKpiDTO> managerStats = new HashMap<>();
         LocalDate now = LocalDate.now();
+
         for (String mName : managersForUI) {
-            BigDecimal mSales = orderRepository.findByManagerId(mName).stream().filter(o -> o.getStatus() != OrderStatus.CANCELLED).map(o -> o.getTotalAmount() != null ? o.getTotalAmount() : BigDecimal.ZERO).reduce(BigDecimal.ZERO, BigDecimal::add);
-            BigDecimal mReturns = returnOrderRepository.findByManagerId(mName).stream().filter(r -> r.getStatus() == ReturnStatus.CONFIRMED).map(r -> r.getTotalAmount() != null ? r.getTotalAmount() : BigDecimal.ZERO).reduce(BigDecimal.ZERO, BigDecimal::add);
+            // Используем уже существующий список allOrdersForPeriod вместо запроса к репозиторию
+            BigDecimal mSales = allOrdersForPeriod.stream()
+                    .filter(o -> mName.equals(o.getManagerId()) && o.getStatus() != OrderStatus.CANCELLED)
+                    .map(o -> o.getTotalAmount() != null ? o.getTotalAmount() : BigDecimal.ZERO)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            // Используем уже существующий список allReturns
+            BigDecimal mReturns = allReturns.stream()
+                    .filter(r -> mName.equals(r.getManagerId()) && r.getStatus() == ReturnStatus.CONFIRMED)
+                    .map(r -> r.getTotalAmount() != null ? r.getTotalAmount() : BigDecimal.ZERO)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
             ManagerKpiDTO dto = new ManagerKpiDTO(mSales, mReturns);
-            ManagerTarget target = managerTargetRepository.findByManagerIdAndMonthAndYear(mName, now.getMonth(), Year.of(now.getYear()));
+
+            // Таргет оставляем из БД, так как это точечный запрос на конкретный месяц
+            ManagerTarget target = managerTargetRepository.findByManagerIdAndMonthAndYear(
+                    mName, now.getMonth(), Year.of(now.getYear()));
+
             dto.setTargetAmount(target != null ? target.getTargetAmount() : BigDecimal.ZERO);
             managerStats.put(mName, dto);
         }
 
 
         // Если даты не пришли в URL, ставим текущий месяц
-        LocalDate pStart = (promoStart != null && !promoStart.isEmpty())
-                ? LocalDate.parse(promoStart)
-                : LocalDate.now().withDayOfMonth(1);
-
-        LocalDate pEnd = (promoEnd != null && !promoEnd.isEmpty())
-                ? LocalDate.parse(promoEnd)
-                : LocalDate.now().withDayOfMonth(LocalDate.now().lengthOfMonth());
+        LocalDate pStart = parseSafe(promoStart, LocalDate.now().withDayOfMonth(1));
+        LocalDate pEnd = parseSafe(promoEnd, LocalDate.now().withDayOfMonth(LocalDate.now().lengthOfMonth()));
 
         // Отдаем акции именно за этот период
         model.addAttribute("promos", promoRepository.findByPeriod(pStart, pEnd));
@@ -220,89 +230,6 @@ public class MainWebController {
         model.addAttribute("returnEndDate", endR.toString());
         model.addAttribute("selectedReturnManager", returnManagerId);
     }
-
-//
-//    private void groupAndWarehouse(String activeTab, int clientPage, String clientCategory,
-//                                   String clientSearch, Model model, List<String> managersForUI,
-//                                   Map<String, ManagerKpiDTO> managerStats, List<Invoice> invoices) {
-//        // 1. Склад: Получаем активные товары с сортировкой
-//        List<Product> activeProducts = Optional.ofNullable(productRepository.findAllByIsDeletedFalse()).orElse(new ArrayList<>());
-//
-//        Map<String, List<Product>> groupedProducts = activeProducts.stream()
-//                .filter(Objects::nonNull)
-//                .peek(p -> {
-//                    if (p.getCategory() == null || p.getCategory().isBlank()) p.setCategory("Без категории");
-//                })
-//                .collect(Collectors.groupingBy(
-//                        Product::getCategory,
-//                        TreeMap::new,
-//                        Collectors.collectingAndThen(Collectors.toList(), list -> {
-//                            list.sort(Comparator.comparing(Product::getName));
-//                            return list;
-//                        })
-//                ));
-//
-//        model.addAttribute("groupedProducts", groupedProducts);
-//        model.addAttribute("products", activeProducts);
-//
-//        // 2. Логика PAGE + SEARCH для Клиентов (Исправлено)
-//        int pageSize = 50;
-//        Pageable pageable = PageRequest.of(clientPage, pageSize, Sort.by("name").ascending());
-//        Page<Client> clientsPage;
-//
-//        // Очистка параметров для поиска
-//        String searchKeyword = (clientSearch != null && !clientSearch.trim().isEmpty()) ? clientSearch.trim() : null;
-//        String categoryFilter = (clientCategory != null && !clientCategory.trim().isEmpty()) ? clientCategory.trim() : null;
-//
-//        // Глобальный поиск по базе через репозиторий
-//        if (searchKeyword != null || categoryFilter != null) {
-//            // Вызываем новый метод поиска, который ищет по имени И адресу И категории
-//            clientsPage = clientRepository.searchClients(searchKeyword, categoryFilter, pageable);
-//        } else {
-//            clientsPage = clientRepository.findAllByIsDeletedFalse(pageable);
-//        }
-//
-//        model.addAttribute("clients", clientsPage.getContent());
-//        model.addAttribute("clientCurrentPage", clientPage);
-//        model.addAttribute("clientTotalPages", clientsPage.getTotalPages());
-//        model.addAttribute("clientTotalElements", clientsPage.getTotalElements());
-//        model.addAttribute("selectedCategory", clientCategory);
-//        model.addAttribute("clientSearch", clientSearch); // Чтобы значение осталось в инпуте
-//        model.addAttribute("clientCategories", clientRepository.findUniqueCategories());
-//
-//        // 3. Персонал и KPI
-//        model.addAttribute("users", Optional.ofNullable(userRepository.findAll()).orElse(new ArrayList<>()));
-//        model.addAttribute("managers", managersForUI);
-//        model.addAttribute("managersKPI", managersForUI);
-//        model.addAttribute("managerStats", managerStats);
-//
-//
-//
-//        // 4. Логика просрочки
-//        LocalDateTime limitDate = LocalDateTime.now().minusDays(30);
-//        Set<String> overdueClients = invoices.stream()
-//                .filter(inv -> inv != null && !"PAID".equals(inv.getStatus()))
-//                .filter(inv -> inv.getCreatedAt() != null && inv.getCreatedAt().isBefore(limitDate))
-//                .map(Invoice::getShopName)
-//                .filter(Objects::nonNull)
-//                .collect(Collectors.toSet());
-//        model.addAttribute("overdueClients", overdueClients);
-//
-//        // 5. Карта долгов для JS
-//        List<Client> allActiveForMap = clientRepository.findAllByIsDeletedFalse();
-//        Map<String, BigDecimal> clientDebts = allActiveForMap.stream()
-//                .filter(c -> c != null && c.getName() != null)
-//                .collect(Collectors.toMap(
-//                        Client::getName,
-//                        c -> c.getDebt() != null ? c.getDebt() : BigDecimal.ZERO,
-//                        (existing, replacement) -> existing
-//                ));
-//
-//        model.addAttribute("clientDebts", clientDebts);
-//        model.addAttribute("paymentMethods", PaymentMethod.values());
-//        model.addAttribute("returnReasons", ReasonsReturn.values());
-//        model.addAttribute("activeTab", activeTab);
-//    }
 
 
 
@@ -365,8 +292,8 @@ public class MainWebController {
 
         // 4. ЛОГИКА ПРОСРОЧКИ (БЕЗ ИЗМЕНЕНИЙ)
         LocalDateTime limitDate = LocalDateTime.now().minusDays(30);
-        Set<String> overdueClients = invoices.stream()
-                .filter(inv -> inv != null && !"PAID".equals(inv.getStatus()))
+        List<Invoice> allUnpaid = invoiceRepository.findAllByStatusNot("PAID");
+        Set<String> overdueClients = allUnpaid.stream()
                 .filter(inv -> inv.getCreatedAt() != null && inv.getCreatedAt().isBefore(limitDate))
                 .map(Invoice::getShopName)
                 .filter(Objects::nonNull)
@@ -391,4 +318,8 @@ public class MainWebController {
     }
 
 
+    private LocalDate parseSafe(String d, LocalDate def) {
+        if (d == null || d.isEmpty()) return def;
+        try { return LocalDate.parse(d); } catch (Exception e) { return def; }
+    }
 }

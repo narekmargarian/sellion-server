@@ -53,4 +53,6 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
             @Param("status") String status,
             Pageable pageable);
 
+
+    List<Invoice> findAllByStatusNot(String status);
 }
