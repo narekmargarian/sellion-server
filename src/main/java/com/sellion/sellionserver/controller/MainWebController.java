@@ -67,17 +67,17 @@ public class MainWebController {
 
         // --- 1. ЛОГИКА ДАТ (ЗАКАЗЫ И ВОЗВРАТЫ - БЕЗ ИЗМЕНЕНИЙ) ---
 
-        LocalDateTime oStartDT = parseSafeDateTime(orderStartDate, LocalDateTime.now().with(LocalTime.MIN));
-        LocalDateTime oEndDT = parseSafeDateTime(orderEndDate, LocalDateTime.now().with(LocalTime.MAX));
+        // Заказы
+        LocalDateTime oStartDT = parseSafeDateTime(orderStartDate, LocalDateTime.now().with(LocalTime.MIN), false);
+        LocalDateTime oEndDT = parseSafeDateTime(orderEndDate, LocalDateTime.now().with(LocalTime.MAX), true);
 
+// Возвраты
+        LocalDateTime rStartDT = parseSafeDateTime(returnStartDate, LocalDateTime.now().with(LocalTime.MIN), false);
+        LocalDateTime rEndDT = parseSafeDateTime(returnEndDate, LocalDateTime.now().with(LocalTime.MAX), true);
 
-        LocalDateTime rStartDT = parseSafeDateTime(returnStartDate, LocalDateTime.now().with(LocalTime.MIN));
-        LocalDateTime rEndDT = parseSafeDateTime(returnEndDate, LocalDateTime.now().with(LocalTime.MAX));
-
-        // Используем тот же метод parseSafeDateTime
-        LocalDateTime invStartDT = parseSafeDateTime(invoiceStart, LocalDateTime.now().withDayOfMonth(1).with(LocalTime.MIN));
-        LocalDateTime invEndDT = parseSafeDateTime(invoiceEnd, LocalDateTime.now().with(LocalTime.MAX));
-
+// Инвойсы
+        LocalDateTime invStartDT = parseSafeDateTime(invoiceStart, LocalDateTime.now().withDayOfMonth(1).with(LocalTime.MIN), false);
+        LocalDateTime invEndDT = parseSafeDateTime(invoiceEnd, LocalDateTime.now().with(LocalTime.MAX), true);
 // Передаем отформатированные строки обратно в модель для инпутов
         java.time.format.DateTimeFormatter html5PickerFormat = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
@@ -179,16 +179,20 @@ public class MainWebController {
         }
 
 
-        // Если даты не пришли в URL, ставим текущий месяц
-        LocalDate pStart = parseSafeDateTime(promoStart, LocalDateTime.now().withDayOfMonth(1).with(LocalTime.MIN)).toLocalDate();
-        LocalDate pEnd = parseSafeDateTime(promoEnd, LocalDateTime.now().withDayOfMonth(LocalDate.now().lengthOfMonth()).with(LocalTime.MAX)).toLocalDate();
+        // 1. Для pStart (Начало периода)
+// Правильно: .withDayOfMonth(1) - устанавливаем первое число
+        LocalDate pStart = parseSafeDateTime(promoStart,
+                LocalDateTime.now().withDayOfMonth(1).with(LocalTime.MIN), false).toLocalDate();
 
-        // Отдаем акции именно за этот период
+// 2. Для pEnd (Конец периода)
+// Правильно: .withDayOfMonth(LocalDate.now().lengthOfMonth()) - устанавливаем последний день
+        LocalDate pEnd = parseSafeDateTime(promoEnd,
+                LocalDateTime.now().withDayOfMonth(LocalDate.now().lengthOfMonth()).with(LocalTime.MAX), true).toLocalDate();
+
+// Передаем в модель
         model.addAttribute("promos", promoRepository.findByPeriod(pStart, pEnd));
-
-        // ПРИНЦИПИАЛЬНО: Отдаем даты обратно, чтобы инпуты их не теряли
-        model.addAttribute("promoStartDefault", pStart.toString());
-        model.addAttribute("promoEndDefault", pEnd.toString());
+        model.addAttribute("promoStart", pStart.toString());
+        model.addAttribute("promoEnd", pEnd.toString());
 
 
 
@@ -244,7 +248,7 @@ public class MainWebController {
 
         java.time.format.DateTimeFormatter isoDate = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
-        // Передаем ЧИСТУЮ дату без времени и точек
+        // Обязательно передаем отформатированные строки обратно
         model.addAttribute("orderStartDate", startD.format(isoDate));
         model.addAttribute("orderEndDate", endD.format(isoDate));
 
@@ -339,37 +343,34 @@ public class MainWebController {
     }
 
 
-    private LocalDateTime parseSafeDateTime(String d, LocalDateTime def) {
+    private LocalDateTime parseSafeDateTime(String d, LocalDateTime def, boolean isEnd) {
         if (d == null || d.trim().isEmpty()) return def;
         try {
-            // 1. ПОДДЕРЖКА ФОРМАТА БРАУЗЕРА (2026-04-08)
-            // Если есть дефисы и нет точек — это стандартный HTML5 input date
+            LocalDateTime dt;
             if (d.contains("-") && !d.contains(".")) {
-                // Если в строке есть время (содержит T или пробел)
+                // Формат HTML5: 2026-04-08
                 if (d.contains("T") || d.contains(" ")) {
-                    return LocalDateTime.parse(d.replace(" ", "T"));
+                    dt = LocalDateTime.parse(d.replace(" ", "T"));
+                } else {
+                    dt = LocalDate.parse(d).atStartOfDay();
                 }
-                // Если это просто дата 2026-04-08
-                return LocalDate.parse(d).atStartOfDay();
+            } else if (d.contains(".")) {
+                // Формат с точками: 08.04.2026
+                if (d.contains(":")) {
+                    dt = LocalDateTime.parse(d, java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm[:ss]"));
+                } else {
+                    dt = LocalDate.parse(d, java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy")).atStartOfDay();
+                }
+            } else {
+                dt = LocalDateTime.parse(d.replace(" ", "T"));
             }
 
-            // 2. ПОДДЕРЖКА ФОРМАТА С ТОЧКАМИ (08.04.2026 21:09)
-            if (d.contains(".")) {
-                java.time.format.DateTimeFormatter formatter =
-                        java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy[ HH:mm[:ss]]");
-
-                // Если в строке нет времени, parse выбросит ошибку, поймаем её ниже
-                if (!d.contains(" ")) {
-                    return LocalDate.parse(d, java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy")).atStartOfDay();
-                }
-                return LocalDateTime.parse(d, formatter);
+            // КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: если это дата "ПО", ставим конец дня
+            if (isEnd && dt.toLocalTime().equals(LocalTime.MIN)) {
+                return dt.with(LocalTime.MAX);
             }
-
-            // 3. УНИВЕРСАЛЬНЫЙ ISO ПАРСИНГ
-            return LocalDateTime.parse(d.replace(" ", "T"));
-
+            return dt;
         } catch (Exception e) {
-            // Если ничего не подошло, возвращаем значение по умолчанию
             return def;
         }
     }

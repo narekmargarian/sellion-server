@@ -2538,59 +2538,46 @@ setDefaultInvoiceDates();
 //     return dateVal;
 // }
 
-
 function formatDate(dateVal) {
     if (!dateVal || dateVal === '---' || dateVal === null || dateVal === '') return '---';
 
-    // 1. ЗАЩИТА ОТ ПРЫЖКОВ: Если дата уже ДД.ММ.ГГГГ, не трогаем её
-    // Это решит проблему 08.04 -> 04.08 при повторном клике
-    if (typeof dateVal === 'string' && /^\d{2}\.\d{2}\.\d{4}/.test(dateVal)) {
-        return dateVal;
+    // 1. Если это объект из Java (самый надежный способ)
+    if (typeof dateVal === 'object' && dateVal.year) {
+        const d = String(dateVal.dayOfMonth || dateVal.day || 1).padStart(2, '0');
+        const m = String(dateVal.monthValue || dateVal.month || 1).padStart(2, '0');
+        const y = dateVal.year;
+        const h = String(dateVal.hour || 0).padStart(2, '0');
+        const min = String(dateVal.minute || 0).padStart(2, '0');
+        return `${d}.${m}.${y} ${h}:${min}`;
     }
 
-    try {
-        // 2. Если пришел объект LocalDateTime из Java (JSON)
-        if (typeof dateVal === 'object' && dateVal.year) {
-            const d = String(dateVal.dayOfMonth || dateVal.day || 1).padStart(2, '0');
-            const m = String(dateVal.monthValue || dateVal.month || 1).padStart(2, '0');
-            const y = dateVal.year;
-            const h = String(dateVal.hour || 0).padStart(2, '0');
-            const min = String(dateVal.minute || 0).padStart(2, '0');
-            return `${d}.${m}.${y} ${h}:${min}`;
-        }
+    let s = String(dateVal).trim();
 
-        // 3. Если пришла строка (ISO или системная)
-        if (typeof dateVal === 'string') {
-            let clean = dateVal.trim().replace(/[,/]/g, '.');
+    // 2. Если дата уже ДД.ММ.ГГГГ ЧЧ:ММ — НЕ ТРОГАЕМ
+    // Это предотвращает "прыжки" 08.04 -> 04.08
+    if (/^\d{2}\.\d{2}\.\d{4}/.test(s)) {
+        return s;
+    }
 
-            // Обработка ISO формата (2026-04-09T01:23 или 2026-04-09)
-            if (clean.includes('-')) {
-                const parts = clean.split(/[T ]/);
-                const dParts = parts[0].split('-');
-                if (dParts.length === 3) {
-                    const date = `${dParts[2]}.${dParts[1]}.${dParts[0]}`;
-                    const time = (parts[1] && parts[1].length >= 5) ? ' ' + parts[1].substring(0, 5) : '';
-                    return `${date}${time}`;
-                }
+    // 3. Если это ISO формат (ГГГГ-ММ-ДД...)
+    if (s.includes('-')) {
+        try {
+            const parts = s.split(/[T ]/);
+            const dParts = parts[0].split('-');
+            if (dParts.length === 3) {
+                // Пересобираем из ГГГГ-ММ-ДД в ДД.ММ.ГГГГ
+                const dateStr = `${dParts[2]}.${dParts[1]}.${dParts[0]}`;
+                const timeStr = parts[1] ? ' ' + parts[1].substring(0, 5) : '';
+                return dateStr + timeStr;
             }
-        }
-
-        // 4. Резервный вариант (если пришел Timestamp или странная строка)
-        const date = new Date(dateVal);
-        if (!isNaN(date.getTime())) {
-            const d = String(date.getDate()).padStart(2, '0');
-            const m = String(date.getMonth() + 1).padStart(2, '0');
-            const y = date.getFullYear();
-            // Для резерва время не берем, чтобы не напутать пояса
-            return `${d}.${m}.${y}`;
-        }
-
-    } catch (e) {
-        console.warn("Ошибка форматирования даты:", dateVal);
+        } catch (e) {}
     }
 
-    return dateVal;
+    return s;
 }
+
+
+
 
 const fmt = formatDate;
 const formatOrderDate = formatDate;
