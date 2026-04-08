@@ -169,59 +169,6 @@ public class AdminManagementController {
     }
 
 
-//
-//    @PostMapping("/orders/{id}/cancel")
-//    @Transactional(rollbackFor = Exception.class)
-//    public ResponseEntity<?> cancelOrder(@PathVariable Long id) {
-//        // 1. Поиск заказа с ручной проверкой (чтобы не кидать 500 ошибку через orElseThrow)
-//        Optional<Order> orderOpt = orderRepository.findById(id);
-//
-//        if (orderOpt.isEmpty()) {
-//            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-//                    .body(Map.of("error", "Заказ №" + id + " не найден в системе."));
-//        }
-//
-//        Order order = orderOpt.get();
-//
-//        // 2. Блокировка отмены, если уже выставлен счет (Инвойс)
-//        if (order.getInvoiceId() != null) {
-//            return ResponseEntity.badRequest()
-//                    .body(Map.of("error", "Нельзя отменить заказ с выставленным счетом!"));
-//        }
-//
-//        // 3. ЗАЩИТА ОТ ПОВТОРНОЙ ОТМЕНЫ (Ключевое исправление)
-//        if (order.getStatus() == OrderStatus.CANCELLED) {
-//            // Возвращаем 400 Bad Request, который поймает ваш JS fetch
-//            return ResponseEntity.badRequest()
-//                    .body(Map.of("error", "Этот заказ уже был отменен ранее."));
-//        }
-//
-//        // 4. СКЛАД: Возвращаем товары в свободный остаток
-//        try {
-//            stockService.returnItemsToStock(order.getItems(), "Отмена заказа #" + id, "ADMIN");
-//        } catch (Exception e) {
-//            return ResponseEntity.internalServerError()
-//                    .body(Map.of("error", "Ошибка при возврате товара на склад: " + e.getMessage()));
-//        }
-//
-//        // 5. ФИНАНСЫ: Обнуляем суммы
-//        order.setTotalAmount(BigDecimal.ZERO);
-//        order.setTotalPurchaseCost(BigDecimal.ZERO);
-//        order.setPurchaseCost(BigDecimal.ZERO);
-//
-//        // 6. Статус и сохранение
-//        order.setStatus(OrderStatus.CANCELLED);
-//        orderRepository.save(order);
-//
-//        // 7. Аудит
-//        recordAudit(id, "ORDER", "ОТМЕНА", "Заказ отменен. Товары вернулись на склад. Суммы обнулены.");
-//
-//        return ResponseEntity.ok(Map.of(
-//                "message", "Заказ успешно отменен, товар вернулся на склад",
-//                "id", id
-//        ));
-//    }
-
 
     @PostMapping("/orders/{id}/cancel")
     @Transactional(rollbackFor = Exception.class)
@@ -312,38 +259,7 @@ public class AdminManagementController {
         }).orElse(ResponseEntity.notFound().build());
     }
 
-//    @PutMapping("/products/{id}/edit")
-//    @Transactional(rollbackFor = Exception.class)
-//    public ResponseEntity<?> editProduct(@PathVariable Long id, @RequestBody Map<String, Object> payload) {
-//        return productRepository.findById(id).map(p -> {
-//            String oldInfo = "Остаток: " + p.getStockQuantity() + ", Цена: " + p.getPrice();
-//            p.setName((String) payload.get("name"));
-//
-//            // ЦЕНА ПРОДАЖИ
-//            Object priceVal = payload.get("price");
-//            p.setPrice(priceVal != null ? new BigDecimal(priceVal.toString()) : BigDecimal.ZERO);
-//
-//            // СЕБЕСТОИМОСТЬ (Важно для отчетов прибыли)
-//            if (payload.containsKey("purchasePrice")) {
-//                Object purVal = payload.get("purchasePrice");
-//                p.setPurchasePrice(purVal != null ? new BigDecimal(purVal.toString()) : BigDecimal.ZERO);
-//            }
-//
-//            p.setStockQuantity(((Number) payload.get("stockQuantity")).intValue());
-//            p.setBarcode((String) payload.get("barcode"));
-//            p.setItemsPerBox(((Number) payload.get("itemsPerBox")).intValue());
-//            p.setCategory((String) payload.get("category"));
-//            p.setHsnCode((String) payload.get("hsnCode"));
-//            p.setUnit((String) payload.get("unit"));
-//
-//            productRepository.save(p);
-//
-//            recordAudit(id, "PRODUCT", "ИЗМЕНЕНИЕ ТОВАРА",
-//                    "Было [" + oldInfo + "]. Стало [Остаток: " + p.getStockQuantity() + ", Цена: " + p.getPrice() + "]");
-//
-//            return ResponseEntity.ok(Map.of("message", "Данные товара обновлены"));
-//        }).orElse(ResponseEntity.notFound().build());
-//    }
+
 
     @PutMapping("/returns/{id}/edit")
     @Transactional(rollbackFor = Exception.class)

@@ -79,15 +79,18 @@ public class MainWebController {
         LocalDateTime invEndDT = parseSafeDateTime(invoiceEnd, LocalDateTime.now().with(LocalTime.MAX));
 
 // Передаем отформатированные строки обратно в модель для инпутов
-        java.time.format.DateTimeFormatter displayFormatter = java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm");
-        model.addAttribute("invoiceStart", invStartDT.format(displayFormatter));
-        model.addAttribute("invoiceEnd", invEndDT.format(displayFormatter));
+        java.time.format.DateTimeFormatter html5PickerFormat = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
+// Передаем именно в этом формате!
+        model.addAttribute("orderStartDate", oStartDT.format(html5PickerFormat));
+        model.addAttribute("orderEndDate", oEndDT.format(html5PickerFormat));
 
-        model.addAttribute("orderStartDate", oStartDT.format(displayFormatter));
-        model.addAttribute("orderEndDate", oEndDT.format(displayFormatter));
-        model.addAttribute("returnStartDate", rStartDT.format(displayFormatter));
-        model.addAttribute("returnEndDate", rEndDT.format(displayFormatter));
+        model.addAttribute("returnStartDate", rStartDT.format(html5PickerFormat));
+        model.addAttribute("returnEndDate", rEndDT.format(html5PickerFormat));
+
+// Для инвойсов (если там тоже input type="date")
+        model.addAttribute("invoiceStart", invStartDT.format(html5PickerFormat));
+        model.addAttribute("invoiceEnd", invEndDT.format(html5PickerFormat));
 
         // --- 2. ЛОГИКА ДЛЯ ЗАКАЗОВ ---
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
@@ -202,11 +205,16 @@ public class MainWebController {
         model.addAttribute("invoices", invoicesList);
         model.addAttribute("invCurrentPage", invoicePage);
         model.addAttribute("invTotalPages", invoicesPage.getTotalPages());
-        model.addAttribute("invoiceStart", invStartD.toString());
-        model.addAttribute("invoiceEnd", invEndD.toString());
+
+        // ИСПРАВЛЕНО: Только yyyy-MM-dd для корректной работы input type="date"
+        java.time.format.DateTimeFormatter isoDate = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd");
+        model.addAttribute("invoiceStart", invStartD.format(isoDate));
+        model.addAttribute("invoiceEnd", invEndD.format(isoDate));
+
         model.addAttribute("selectedInvManager", invoiceManager);
         model.addAttribute("selectedInvStatus", invoiceStatus);
     }
+
 
 
     private static void addModel(int page, String orderManagerId, String returnManagerId, Model model, Page<Order> ordersPage, BigDecimal totalOrdersSum, BigDecimal rawSales, BigDecimal rawPurchaseCost, BigDecimal netProfitBD, BigDecimal avgCheck, List<AuditLog> limitedLogs, List<Invoice> invoices, BigDecimal totalInvoiceDebt, BigDecimal totalPaidSum, LocalDate startD, LocalDate endD, List<ReturnOrder> allReturns, BigDecimal totalReturnsSum, LocalDate startR, LocalDate endR) {
@@ -226,17 +234,22 @@ public class MainWebController {
         model.addAttribute("totalInvoiceDebt", totalInvoiceDebt);
         model.addAttribute("totalPaidSum", totalPaidSum);
 
-        model.addAttribute("orderStartDate", startD.toString());
-        model.addAttribute("orderEndDate", endD.toString());
+
         model.addAttribute("selectedOrderManager", orderManagerId);
 
         model.addAttribute("returns", allReturns);
         model.addAttribute("totalReturnsCount", allReturns.size());
         model.addAttribute("totalReturnsSum", totalReturnsSum);
-        model.addAttribute("returnStartDate", startR.toString());
-        model.addAttribute("returnEndDate", endR.toString());
         model.addAttribute("selectedReturnManager", returnManagerId);
 
+        java.time.format.DateTimeFormatter isoDate = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
+        // Передаем ЧИСТУЮ дату без времени и точек
+        model.addAttribute("orderStartDate", startD.format(isoDate));
+        model.addAttribute("orderEndDate", endD.format(isoDate));
+
+        model.addAttribute("returnStartDate", startR.format(isoDate));
+        model.addAttribute("returnEndDate", endR.format(isoDate));
     }
 
 
@@ -329,22 +342,36 @@ public class MainWebController {
     private LocalDateTime parseSafeDateTime(String d, LocalDateTime def) {
         if (d == null || d.trim().isEmpty()) return def;
         try {
-            // Если дата в формате 08.04.2026 21:09 (с точками)
+            // 1. ПОДДЕРЖКА ФОРМАТА БРАУЗЕРА (2026-04-08)
+            // Если есть дефисы и нет точек — это стандартный HTML5 input date
+            if (d.contains("-") && !d.contains(".")) {
+                // Если в строке есть время (содержит T или пробел)
+                if (d.contains("T") || d.contains(" ")) {
+                    return LocalDateTime.parse(d.replace(" ", "T"));
+                }
+                // Если это просто дата 2026-04-08
+                return LocalDate.parse(d).atStartOfDay();
+            }
+
+            // 2. ПОДДЕРЖКА ФОРМАТА С ТОЧКАМИ (08.04.2026 21:09)
             if (d.contains(".")) {
-                // Поддерживаем формат с секундами и без
-                java.time.format.DateTimeFormatter formatter = java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm[:ss]");
+                java.time.format.DateTimeFormatter formatter =
+                        java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy[ HH:mm[:ss]]");
+
+                // Если в строке нет времени, parse выбросит ошибку, поймаем её ниже
+                if (!d.contains(" ")) {
+                    return LocalDate.parse(d, java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy")).atStartOfDay();
+                }
                 return LocalDateTime.parse(d, formatter);
             }
-            // Если дата в формате 2026-04-08T21:09 (стандарт БД)
+
+            // 3. УНИВЕРСАЛЬНЫЙ ISO ПАРСИНГ
             return LocalDateTime.parse(d.replace(" ", "T"));
+
         } catch (Exception e) {
-            // Если пришла только дата без времени, добавляем время начала или конца дня
-            try {
-                java.time.format.DateTimeFormatter dateOnly = java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy");
-                return LocalDate.parse(d.split(" ")[0], dateOnly).atStartOfDay();
-            } catch (Exception e2) {
-                return def;
-            }
+            // Если ничего не подошло, возвращаем значение по умолчанию
+            return def;
         }
     }
+
 }

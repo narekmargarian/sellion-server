@@ -15,7 +15,6 @@ function roundHalfUp(num) {
 }
 
 
-
 function openModal(id) {
     const modal = document.getElementById(id);
     if (!modal) return console.error(`Модальное окно с ID ${id} не найдено.`);
@@ -166,14 +165,14 @@ function printSelectedOperations(type) {
     frame.parentNode.replaceChild(newFrame, frame);
 
     // Вешаем событие ОДИН раз
-    newFrame.addEventListener('load', function() {
+    newFrame.addEventListener('load', function () {
         if (newFrame.contentWindow.location.href === "about:blank") return;
 
         setTimeout(() => {
             newFrame.contentWindow.focus();
             newFrame.contentWindow.print();
         }, 300);
-    }, { once: true });
+    }, {once: true});
 
     submitAsPost(url, selectedIds, 'printFrame');
 }
@@ -238,7 +237,7 @@ async function confirmReturn(id) {
                 // 3. Отправка запроса на подтверждение
                 const response = await fetch(`/api/admin/returns/${id}/confirm`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
+                    headers: {'Content-Type': 'application/json'}
                 });
 
                 const result = await response.json();
@@ -259,7 +258,7 @@ async function confirmReturn(id) {
                         location.reload();
                     }, 800);
                 } else {
-                    showToast(result.error || "Ошибка при подтверждении", "error");
+                    showToast("Ошибка при подтверждении", "error");
                     if (confirmBtn) confirmBtn.disabled = false;
                 }
             } catch (e) {
@@ -1000,7 +999,9 @@ function initSmartClientSearch(inputId, datalistId) {
             const clients = await response.json();
             fullClientsData = clients;
             datalist.innerHTML = clients.map(c => `<option value="${c.name}">`).join('');
-        } catch (err) { console.error("Ошибка поиска клиентов:", err); }
+        } catch (err) {
+            console.error("Ошибка поиска клиентов:", err);
+        }
     };
 
     input.addEventListener('input', updateSearch);
@@ -1063,7 +1064,6 @@ function initSmartClientSearch(inputId, datalistId) {
 }
 
 
-
 function toggleSelectAll(className, source) {
     document.querySelectorAll(`.${className}`).forEach(cb => cb.checked = source.checked);
 }
@@ -1102,62 +1102,32 @@ function printInvoiceInline(url) {
 }
 
 
-// function showTab(tabId) {
-//     document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
-//     const target = document.getElementById(tabId);
-//     if (target) target.classList.add('active');
-//
-//     document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
-//     const btnId = tabId.replace('tab-', 'btn-');
-//     const activeBtn = document.getElementById(btnId);
-//     if (activeBtn) activeBtn.classList.add('active');
-//
-//     localStorage.setItem('sellion_tab', tabId);
-//
-//     // 2. Вызываем обновление только если мы перешли на главную вкладку
-//     if (tabId === 'tab-main') {
-//         updateDashboardStats();
-//     }
-// }
 function showTab(tabId) {
-    // 1. Переключение видимости вкладок
     document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
     const target = document.getElementById(tabId);
     if (target) target.classList.add('active');
 
-    // 2. Визуальное выделение активной кнопки в меню
     document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
     const btnId = tabId.replace('tab-', 'btn-');
     const activeBtn = document.getElementById(btnId);
     if (activeBtn) activeBtn.classList.add('active');
 
-    // 3. Сохранение текущей вкладки
     localStorage.setItem('sellion_tab', tabId);
 
-    // 4. Исправление формата дат во всех инпутах (чтобы 08.04 не стало 04.08)
-    document.querySelectorAll('input[type="date"]').forEach(input => {
-        let val = input.value;
-        if (val && val.includes('.')) {
-            const parts = val.split('.');
-            if (parts.length === 3 && parts[0].length === 2) {
-                // Превращаем DD.MM.YYYY в YYYY-MM-DD
-                input.value = `${parts[2]}-${parts[1]}-${parts[0]}`;
-            }
-        }
-    });
 
-    // 5. Обновление статистики для главной вкладки
+    // 2. Вызываем обновление только если мы перешли на главную вкладку
     if (tabId === 'tab-main') {
         updateDashboardStats();
     }
 }
+
 function updateDashboardStats() {
     const statAvgCheck = document.getElementById('stat-avg-check');
     const statPendingOrders = document.getElementById('stat-pending-orders');
     const onlineList = document.getElementById('online-users-list');
 
     // Настройки формата: 1 знак после запятой
-    const f = { minimumFractionDigits: 1, maximumFractionDigits: 1 };
+    const f = {minimumFractionDigits: 1, maximumFractionDigits: 1};
 
     // Расчет данных
     const totalSum = ordersData.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
@@ -1462,7 +1432,7 @@ window.printOrder = function (id) {
     printAction(url);
 }
 
-window.printAction = function(url) {
+window.printAction = function (url) {
     const frame = document.getElementById('printFrame');
     if (!frame) return;
 
@@ -1472,7 +1442,7 @@ window.printAction = function(url) {
 
     // 2. ПРОВЕРКА ДОСТУПА ПЕРЕД ПЕЧАТЬЮ
     // Вместо прямой вставки в src, сначала проверяем, есть ли у пользователя права
-    fetch(url, { method: 'GET' })
+    fetch(url, {method: 'GET'})
         .then(response => {
             // Если fetch вернул 200, значит доступ есть и страница готова
             showToast("⏳ Подготовка документа...", "info");
@@ -1480,7 +1450,7 @@ window.printAction = function(url) {
             setTimeout(() => {
                 frame.src = url;
 
-                frame.onload = function() {
+                frame.onload = function () {
                     if (frame.contentWindow.location.href.includes("about:blank")) return;
 
                     // 3. РЕНДЕРИНГ И ПЕЧАТЬ
@@ -1658,7 +1628,6 @@ function enableProductEdit() {
         <button class="btn-primary" style="background:#64748b" onclick="openProductDetails(${p.id})">Отмена</button>
     `;
 }
-
 
 
 function toggleProductEdit(isEdit) {
@@ -1926,7 +1895,7 @@ function downloadExcel(type) {
                 showToast(`Отчет успешно скачан!`, 'success');
             } else {
                 // Пытаемся получить текст ошибки от сервера (JSON)
-                const errorData = await response.json().catch(() => ({ message: "Ошибка сервера (500/404)" }));
+                const errorData = await response.json().catch(() => ({message: "Ошибка сервера (500/404)"}));
                 showToast(errorData.message || 'Не удалось сгенерировать файл', 'error');
             }
         })
@@ -2517,12 +2486,70 @@ function setDefaultInvoiceDates() {
 setDefaultInvoiceDates();
 
 
+// function formatDate(dateVal) {
+//     if (!dateVal || dateVal === '---' || dateVal === null) return '---';
+//
+//     try {
+//         // 1. Если пришел объект LocalDateTime из Java
+//         if (typeof dateVal === 'object' && dateVal.year) {
+//             const d = String(dateVal.dayOfMonth || dateVal.day || 1).padStart(2, '0');
+//             const m = String(dateVal.monthValue || dateVal.month || 1).padStart(2, '0');
+//             const y = dateVal.year;
+//             const h = String(dateVal.hour || 0).padStart(2, '0');
+//             const min = String(dateVal.minute || 0).padStart(2, '0');
+//             return `${d}.${m}.${y} ${h}:${min}`;
+//         }
+//
+//         // 2. Если пришла строка (ISO или обычная)
+//         if (typeof dateVal === 'string') {
+//             let clean = dateVal.replace(/[,/]/g, '.');
+//
+//             // ISO формат: 2026-01-20T01:17:00
+//             if (clean.includes('T') || (clean.includes('-') && clean.includes(':'))) {
+//                 const parts = clean.split(/[T ]/);
+//                 const dParts = parts[0].split('-');
+//                 if (dParts.length === 3) {
+//                     const date = `${dParts[2]}.${dParts[1]}.${dParts[0]}`;
+//                     const time = parts[1].substring(0, 5);
+//                     return `${date} ${time}`;
+//                 }
+//             }
+//
+//             // Только дата: 2026-01-20
+//             if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) {
+//                 const d = clean.split('-');
+//                 return `${d[2]}.${d[1]}.${d[0]}`;
+//             }
+//         }
+//
+//         // Резервный вариант через стандартный Date
+//         const date = new Date(dateVal);
+//         if (!isNaN(date.getTime())) {
+//             const d = String(date.getDate()).padStart(2, '0');
+//             const m = String(date.getMonth() + 1).padStart(2, '0');
+//             const y = date.getFullYear();
+//             return `${d}.${m}.${y}`;
+//         }
+//
+//     } catch (e) {
+//         console.warn("Ошибка форматирования даты:", dateVal);
+//     }
+//
+//     return dateVal;
+// }
+
 
 function formatDate(dateVal) {
-    if (!dateVal || dateVal === '---' || dateVal === null) return '---';
+    if (!dateVal || dateVal === '---' || dateVal === null || dateVal === '') return '---';
+
+    // 1. ЗАЩИТА ОТ ПРЫЖКОВ: Если дата уже ДД.ММ.ГГГГ, не трогаем её
+    // Это решит проблему 08.04 -> 04.08 при повторном клике
+    if (typeof dateVal === 'string' && /^\d{2}\.\d{2}\.\d{4}/.test(dateVal)) {
+        return dateVal;
+    }
 
     try {
-        // 1. Если пришел объект LocalDateTime из Java
+        // 2. Если пришел объект LocalDateTime из Java (JSON)
         if (typeof dateVal === 'object' && dateVal.year) {
             const d = String(dateVal.dayOfMonth || dateVal.day || 1).padStart(2, '0');
             const m = String(dateVal.monthValue || dateVal.month || 1).padStart(2, '0');
@@ -2532,34 +2559,29 @@ function formatDate(dateVal) {
             return `${d}.${m}.${y} ${h}:${min}`;
         }
 
-        // 2. Если пришла строка (ISO или обычная)
+        // 3. Если пришла строка (ISO или системная)
         if (typeof dateVal === 'string') {
-            let clean = dateVal.replace(/[,/]/g, '.');
+            let clean = dateVal.trim().replace(/[,/]/g, '.');
 
-            // ISO формат: 2026-01-20T01:17:00
-            if (clean.includes('T') || (clean.includes('-') && clean.includes(':'))) {
+            // Обработка ISO формата (2026-04-09T01:23 или 2026-04-09)
+            if (clean.includes('-')) {
                 const parts = clean.split(/[T ]/);
                 const dParts = parts[0].split('-');
                 if (dParts.length === 3) {
                     const date = `${dParts[2]}.${dParts[1]}.${dParts[0]}`;
-                    const time = parts[1].substring(0, 5);
-                    return `${date} ${time}`;
+                    const time = (parts[1] && parts[1].length >= 5) ? ' ' + parts[1].substring(0, 5) : '';
+                    return `${date}${time}`;
                 }
-            }
-
-            // Только дата: 2026-01-20
-            if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) {
-                const d = clean.split('-');
-                return `${d[2]}.${d[1]}.${d[0]}`;
             }
         }
 
-        // Резервный вариант через стандартный Date
+        // 4. Резервный вариант (если пришел Timestamp или странная строка)
         const date = new Date(dateVal);
         if (!isNaN(date.getTime())) {
             const d = String(date.getDate()).padStart(2, '0');
             const m = String(date.getMonth() + 1).padStart(2, '0');
             const y = date.getFullYear();
+            // Для резерва время не берем, чтобы не напутать пояса
             return `${d}.${m}.${y}`;
         }
 
@@ -2675,7 +2697,6 @@ async function executeManualPost(endpoint, data, saveBtn) {
 }
 
 
-
 function calculateCurrentTempTotal() {
     let total = 0;
     Object.entries(tempItems).forEach(([pId, pQty]) => {
@@ -2761,7 +2782,7 @@ function updateQtyAndRecalculate(pId, shouldRedraw = false) {
     const rowSum = roundHalfUp(priceWithDiscount * newQty);
 
     // Обновляем ячейки
-    const f = { minimumFractionDigits: 1, maximumFractionDigits: 1 };
+    const f = {minimumFractionDigits: 1, maximumFractionDigits: 1};
     const subtotalCell = document.getElementById(`total-row-${pId}`);
     const priceCell = row.querySelector('.item-price-cell');
 
@@ -2782,8 +2803,8 @@ function updateQtyAndRecalculate(pId, shouldRedraw = false) {
         let total = 0;
         Object.entries(tempItems).forEach(([id, q]) => {
             let pr = (isReturnOrWriteOff && window.tempItemPrices && window.tempItemPrices[id])
-                     ? window.tempItemPrices[id]
-                     : (productsData.find(prod => prod.id == id)?.price || 0);
+                ? window.tempItemPrices[id]
+                : (productsData.find(prod => prod.id == id)?.price || 0);
             total += roundHalfUp(pr * q);
         });
         const totalEl = document.getElementById('order-total-price');
@@ -2795,7 +2816,7 @@ function updateQtyAndRecalculate(pId, shouldRedraw = false) {
 
 function updateFinalTotalDisplay(shopPercent) {
     let total = 0;
-    const f = { minimumFractionDigits: 1, maximumFractionDigits: 1 };
+    const f = {minimumFractionDigits: 1, maximumFractionDigits: 1};
 
     const modalTitleEl = document.getElementById('modal-title');
     const modalTitle = modalTitleEl ? modalTitleEl.innerText.toUpperCase() : "";
@@ -3217,7 +3238,7 @@ async function saveFullChanges(id) {
             // ФИНАЛЬНЫЙ ЗАПРОС НА СОХРАНЕНИЕ
             const response = await fetch(`/api/admin/orders/${id}/full-edit`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify(data)
             });
 
@@ -3234,7 +3255,7 @@ async function saveFullChanges(id) {
                         if (cleanMessage.includes(productNameInRow.trim())) {
                             row.style.backgroundColor = "#fee2e2";
                             row.style.border = "2px solid #ef4444";
-                            row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            row.scrollIntoView({behavior: 'smooth', block: 'center'});
                         }
                     });
                 }
@@ -3243,11 +3264,12 @@ async function saveFullChanges(id) {
             }
 
             showToast("Заказ успешно обновлен", "success");
-            setTimeout(() => { window.location.reload(); }, 800);
+            setTimeout(() => {
+                window.location.reload();
+            }, 800);
 
         } catch (e) {
             console.error("Ошибка при сохранении заказа:", e);
-            showToast("Критическая ошибка: " + e.message, "error");
             if (saveBtn) saveBtn.disabled = false;
         }
     });
@@ -3270,15 +3292,21 @@ async function executeEditRequest(data, btn) {
             setTimeout(() => location.reload(), 600);
         } else {
             const err = await response.json();
-            showToast(err.error || "Ошибка при сохранении", "error");
-            if (btn) { btn.disabled = false; btn.innerText = "Сохранить"; }
+            console.error("Ошибка при сохранении :", err.error);
+            showToast("Ошибка при сохранении", "error");
+            if (btn) {
+                btn.disabled = false;
+                btn.innerText = "Сохранить";
+            }
         }
     } catch (e) {
         showToast("Ошибка сети", "error");
-        if (btn) { btn.disabled = false; btn.innerText = "Сохранить"; }
+        if (btn) {
+            btn.disabled = false;
+            btn.innerText = "Сохранить";
+        }
     }
 }
-
 
 
 async function performEditSubmit(id, shopName, deliveryDate, items, promoMap) {
@@ -3296,7 +3324,7 @@ async function performEditSubmit(id, shopName, deliveryDate, items, promoMap) {
 
     const response = await fetch(`/api/admin/orders/${id}/full-edit`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(data)
     });
 
@@ -3305,7 +3333,8 @@ async function performEditSubmit(id, shopName, deliveryDate, items, promoMap) {
         setTimeout(() => location.reload(), 800);
     } else {
         const err = await response.json();
-        showToast(err.error || "Ошибка сохранения", "error");
+        console.error("Ошибка сохранения :", err.error);
+        showToast("Ошибка сохранения", "error");
     }
 }
 
@@ -3372,15 +3401,15 @@ async function saveReturnChanges(id) {
         // 4. Отправка на сервер
         const response = await fetch(`/api/admin/returns/${id}/edit`, {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {'Content-Type': 'application/json'},
             body: JSON.stringify(data)
         });
 
         if (response.ok) {
             // 5. Обновление локальных данных (по желанию, так как ниже reload)
             if (originalReturn) {
-                originalReturn.items = { ...itemsToSave };
-                originalReturn.itemPrices = { ...itemPricesToSave };
+                originalReturn.items = {...itemsToSave};
+                originalReturn.itemPrices = {...itemPricesToSave};
                 originalReturn.shopName = data.shopName;
             }
 
@@ -3388,7 +3417,8 @@ async function saveReturnChanges(id) {
             setTimeout(() => location.reload(), 600);
         } else {
             const err = await response.json();
-            showToast(err.error || "Ошибка сохранения", "error");
+            console.error("Ошибка при сохранении :", err.error);
+            showToast("Ошибка сохранения", "error");
         }
 
     } catch (e) {
@@ -3408,7 +3438,7 @@ function enableReturnEdit(id) {
 
     // ИСПРАВЛЕНО: Копируем сохраненные цены в буфер редактирования
     // Если цен в документе еще нет (старый возврат), renderItemsTable возьмет базовые
-    window.tempItemPrices = ret.itemPrices ? { ...ret.itemPrices } : {};
+    window.tempItemPrices = ret.itemPrices ? {...ret.itemPrices} : {};
 
     // КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: СБРОС ПРОЦЕНТА
     const percentInput = document.getElementById('order-discount-percent') || document.getElementById('new-op-percent');
@@ -3443,9 +3473,9 @@ function enableReturnEdit(id) {
                 <label style="font-size:11px; font-weight:800; color:#9f1239;">ПРИЧИНА</label>
                 <select id="edit-ret-reason" class="form-select">
                     ${returnReasons.map(r => {
-                        const val = (typeof r === 'object') ? (r.name || r) : r;
-                        return `<option value="${val}" ${ret.returnReason === val ? 'selected' : ''}>${translateReason(val)}</option>`;
-                    }).join('')}
+        const val = (typeof r === 'object') ? (r.name || r) : r;
+        return `<option value="${val}" ${ret.returnReason === val ? 'selected' : ''}>${translateReason(val)}</option>`;
+    }).join('')}
                 </select>
             </div>
             <div style="margin-top:10px;">
@@ -3480,7 +3510,7 @@ function openReturnDetails(id) {
     if (!ret) return showToast("Возврат не найден", "error");
 
     tempItems = syncTempItems(ret.items);
-    window.tempItemPrices = ret.itemPrices ? { ...ret.itemPrices } : {};
+    window.tempItemPrices = ret.itemPrices ? {...ret.itemPrices} : {};
 
     const isConfirmed = ret.status === 'CONFIRMED';
 
@@ -3598,7 +3628,7 @@ async function saveClientChanges(id) {
         // Если прав нет, глобальный fetch сделает Promise.reject и код уйдет в catch
         await fetch(`/api/admin/clients/${id}/edit`, {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {'Content-Type': 'application/json'},
             body: JSON.stringify(data)
         });
 
@@ -3640,7 +3670,6 @@ function applyClientCategoryFilter(category) {
     // Переходим по новой ссылке
     window.location.href = url.toString();
 }
-
 
 
 function filterTable(inputId, tableBodyId) {
@@ -3693,13 +3722,13 @@ function printDailySummary() {
     const newFrame = frame.cloneNode(true);
     frame.parentNode.replaceChild(newFrame, frame);
 
-    newFrame.addEventListener('load', function() {
+    newFrame.addEventListener('load', function () {
         if (newFrame.contentWindow.location.href === "about:blank") return;
         setTimeout(() => {
             newFrame.contentWindow.focus();
             newFrame.contentWindow.print();
         }, 300);
-    }, { once: true });
+    }, {once: true});
 
     submitAsPost(url, selectedIds, 'printFrame');
 }
@@ -3869,7 +3898,7 @@ function initDeliveryDateLogic() {
     dateInput.min = toISODate(new Date());
 
     // 3. Защита от ручного выбора воскресенья
-    dateInput.addEventListener('change', function() {
+    dateInput.addEventListener('change', function () {
         const selected = new Date(this.value);
         if (selected.getDay() === 0) {
             showToast("Воскресенье — выходной. Пожалуйста, выберите рабочий день.", "info");
@@ -3954,7 +3983,7 @@ function updatePromoTimers() {
             if (diffDays > 0) {
                 el.innerText = `${diffDays} дн.`;
                 el.style.color = diffDays <= 1 ? "red" : "green";
-                if(diffDays <= 1) el.classList.add('fw-bold');
+                if (diffDays <= 1) el.classList.add('fw-bold');
             } else {
                 el.innerText = "Истекло";
                 el.style.color = "red";
@@ -4128,11 +4157,15 @@ function renderPromosList(promos) {
 }
 
 function getStatusClass(status) {
-    switch(status) {
-        case 'ACTIVE': return 'bg-success';
-        case 'FINISHED': return 'bg-secondary';
-        case 'PENDING': return 'bg-warning text-dark';
-        default: return 'bg-light text-dark';
+    switch (status) {
+        case 'ACTIVE':
+            return 'bg-success';
+        case 'FINISHED':
+            return 'bg-secondary';
+        case 'PENDING':
+            return 'bg-warning text-dark';
+        default:
+            return 'bg-light text-dark';
     }
 }
 
@@ -4181,7 +4214,7 @@ async function openPromoDetails(id) {
 
     // Сохраняем в глобальную переменную для функции печати и редактирования
     currentPromoData = promo;
-    tempPromoItems = { ...promo.items };
+    tempPromoItems = {...promo.items};
 
     // 1. Заголовок модального окна
     document.getElementById('modal-title').innerHTML = `📢 Акция: ${promo.title} ${promo.confirmed ? '<span class="badge bg-success" style="margin-left:10px;">ПОДТВЕРЖДЕНО</span>' : ''}`;
@@ -4199,22 +4232,22 @@ async function openPromoDetails(id) {
     // 3. Отрисовка таблицы товаров (в режиме просмотра)
     renderPromoItemsTable(false);
 
- // Внутри функции openPromoDetails
- const footer = document.getElementById('order-footer-actions');
- let buttonsHtml = `<button class="btn-primary" style="background:#475569" onclick="printPromoAct(${promo.id})">🖨 Печать</button>`;
+    // Внутри функции openPromoDetails
+    const footer = document.getElementById('order-footer-actions');
+    let buttonsHtml = `<button class="btn-primary" style="background:#475569" onclick="printPromoAct(${promo.id})">🖨 Печать</button>`;
 
- if (!promo.confirmed) {
-     buttonsHtml += `
+    if (!promo.confirmed) {
+        buttonsHtml += `
          <button class="btn-primary" style="background:#10b981" onclick="confirmPromoAction(${promo.id})">✅ ПОДТВЕРДИТЬ</button>
          <button class="btn-primary" onclick="enablePromoEdit(${promo.id})">✏️ Изменить</button>
          <button class="btn-primary" style="background:#ef4444" onclick="deletePromoAction(${promo.id})">🗑 Удалить</button>
      `;
- } else {
-     buttonsHtml += `<div style="color:#15803d; font-weight:700; padding: 0 10px;">✅ ПОДТВЕРЖДЕНО</div>`;
- }
+    } else {
+        buttonsHtml += `<div style="color:#15803d; font-weight:700; padding: 0 10px;">✅ ПОДТВЕРЖДЕНО</div>`;
+    }
 
- buttonsHtml += `<button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-order-view')">Закрыть</button>`;
- footer.innerHTML = buttonsHtml;
+    buttonsHtml += `<button class="btn-primary" style="background:#64748b" onclick="closeModal('modal-order-view')">Закрыть</button>`;
+    footer.innerHTML = buttonsHtml;
 
 
     openModal('modal-order-view');
@@ -4222,7 +4255,7 @@ async function openPromoDetails(id) {
 
 async function confirmPromoAction(id) {
     showConfirmModal("Подтвердить акцию?", "После подтверждения редактирование будет невозможно!", async () => {
-        const res = await fetch(`/api/admin/promos/${id}/confirm`, { method: 'POST' });
+        const res = await fetch(`/api/admin/promos/${id}/confirm`, {method: 'POST'});
         if (res.ok) {
             showToast("Акция подтверждена!", "success");
             location.reload();
@@ -4272,7 +4305,7 @@ async function checkAndApplyPromos(orderItems, onApplied) {
 
     // ПОЛУЧАЕМ ВЫБРАННОГО В МОДАЛКЕ МЕНЕДЖЕРА (1011, 1012 и т.д.)
     const selectedManagerId = document.getElementById('new-op-manager')?.value ||
-                              document.getElementById('promo-manager')?.value;
+        document.getElementById('promo-manager')?.value;
 
     const overlay = document.getElementById('promo-checker-overlay');
     const container = document.getElementById('promo-list-container');
@@ -4416,7 +4449,7 @@ async function submitPromo(isEdit = false, promoId = null) {
         // Если прав нет (403), выполнение ПРЕРВЕТСЯ здесь и уйдет в catch
         await fetch(url, {
             method: method,
-            headers: { 'Content-Type': 'application/json' },
+            headers: {'Content-Type': 'application/json'},
             body: JSON.stringify(data)
         });
 
@@ -4573,7 +4606,7 @@ function printPromoAct(promoId) {
     const printWindow = window.open('', '_blank', 'width=800,height=600');
 
     // Настройки формата для печати (1 знак после запятой)
-    const f = { minimumFractionDigits: 1, maximumFractionDigits: 1 };
+    const f = {minimumFractionDigits: 1, maximumFractionDigits: 1};
 
     let itemsHtml = '';
     let index = 1;
@@ -4672,7 +4705,7 @@ function saveOrderWithPromos(selectedPromos, baseData, submitFunction) {
     // Добавляем акционные данные в объект для сервера
     baseData.appliedPromoItems = promoMap;
 
-    // Вызываем финальную отправку (которую мы уже прописали в saveFullChanges)
+    // Вызываем финальную отправку (которую мы уже прописали в)
     submitFunction(baseData);
 }
 
@@ -4738,7 +4771,7 @@ function recalculateAllPricesByPercent() {
     if (isNaN(percent)) percent = 0;
 
     // Настройки формата: всегда 1 знак после запятой для вывода текста
-    const f = { minimumFractionDigits: 1, maximumFractionDigits: 1 };
+    const f = {minimumFractionDigits: 1, maximumFractionDigits: 1};
 
     // Определяем активную таблицу (создание или редактирование)
     const modalCreate = document.getElementById('modal-order-create');
@@ -4799,39 +4832,36 @@ function handleLogout() {
     });
 }
 
-async function handleCreateInvoice(orderId) {
-    try {
-        const response = await fetch(`/admin/invoices/create-from-order/${orderId}`, {
-            method: 'POST',
-            headers: window.apiHeaders
-        });
+function handleCreateInvoice(orderId) {
+    showConfirmModal("Подтверждение", "Выставить счет и списать товар?", () => {
+        // 1. Создаем форму "на лету"
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = `/admin/invoices/create-from-order/${orderId}`;
 
-        // ПЕРВОЕ: Если статус 200 (OK), сразу показываем успех и выходим
-        if (response.ok) {
-            showToast("Счет успешно выставлен", "success");
-            setTimeout(() => location.reload(), 1000);
-            return;
+        // 2. Добавляем CSRF токен (берем из любой формы на странице)
+        const csrfInput = document.querySelector('input[name="_csrf"]');
+        if (csrfInput) {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = '_csrf';
+            input.value = csrfInput.value;
+            form.appendChild(input);
         }
 
-        // ВТОРОЕ: Если мы дошли сюда, значит статус не OK. Проверяем на ошибку.
-        const result = await response.json().catch(() => ({}));
-        if (result.error) {
-            console.log("Действие отменено: " + result.error);
-            // Тост с ошибкой покажет твой глобальный перехватчик
-        }
+        // 3. Отправляем. Страница перезагрузится.
+        document.body.appendChild(form);
+        form.submit();
 
-    } catch (e) {
-        console.error("Ошибка при создании счета:", e);
-    }
+        // После этого Контроллер в Java сделает редирект,
+        // и вы увидите красную плашку "Недостаточно товара: Манго"
+    });
 }
-
-
-
 
 
 // 1. Обработка клика по вкладкам
 document.querySelectorAll('.tab-link, [data-tab]').forEach(tab => {
-    tab.addEventListener('click', function() {
+    tab.addEventListener('click', function () {
         // Учитываем разные варианты атрибутов (href или data-tab)
         const targetId = this.getAttribute('href')?.replace('#', '') || this.getAttribute('data-tab');
 
@@ -4866,7 +4896,6 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 
-
 document.addEventListener("DOMContentLoaded", async () => {
 
     const originalFetch = window.fetch;
@@ -4889,15 +4918,32 @@ document.addEventListener("DOMContentLoaded", async () => {
                 }
 
                 if (serverMessage) {
-                    errorMessage = serverMessage;
+                    // Чистим текст от "400 BAD_REQUEST", кавычек и системного мусора
+                    errorMessage = serverMessage
+                        .replace(/^\d+\s+[A-Z_]+\s+"?|"?$/g, '')
+                        .trim();
+
+
                 } else {
                     switch (response.status) {
-                        case 400: errorMessage = "Некорректный запрос. Проверьте данные"; break;
-                        case 403: errorMessage = "Доступ запрещен: Недостаточно прав"; break;
-                        case 404: errorMessage = "Запрошенный ресурс не найден"; break;
-                        case 408: errorMessage = "Время ожидания истекло"; break;
-                        case 500: errorMessage = "Критическая ошибка сервера"; break;
-                        case 503: errorMessage = "Сервис временно недоступен"; break;
+                        case 400:
+                            errorMessage = "Некорректный запрос. Проверьте данные";
+                            break;
+                        case 403:
+                            errorMessage = "Доступ запрещен: Недостаточно прав";
+                            break;
+                        case 404:
+                            errorMessage = "Запрошенный ресурс не найден";
+                            break;
+                        case 408:
+                            errorMessage = "Время ожидания истекло";
+                            break;
+                        case 500:
+                            errorMessage = "Критическая ошибка сервера";
+                            break;
+                        case 503:
+                            errorMessage = "Сервис временно недоступен";
+                            break;
                     }
                 }
 
@@ -4923,7 +4969,6 @@ document.addEventListener("DOMContentLoaded", async () => {
             return Promise.reject(error);
         }
     };
-
 
 
     const setDefaultInvoiceDates = () => {
@@ -5040,4 +5085,3 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
 
 });
-

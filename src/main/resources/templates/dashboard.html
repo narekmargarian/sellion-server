@@ -74,6 +74,11 @@
 
 </div>
 
+<!-- Скрытые элементы для хранения сообщений от сервера -->
+<div id="java-error-message" th:if="${error}" th:text="${error}" style="display:none;"></div>
+<div id="java-success-message" th:if="${success}" th:text="${success}" style="display:none;"></div>
+
+
 <div class="main">
     <div class="scroll-area">
 
@@ -1770,7 +1775,24 @@
             const paymentMethods = /*[[${paymentMethods}]]*/ [] ?? [];
             const returnReasons = /*[[${returnReasons}]]*/ [] ?? [];
 
+
             console.log("ERP System 2026 initialized. Data status: OK");
+        </script>
+        <!-- Скрипт-мостик: превращает ошибки из Java в твои красивые Toast-уведомления -->
+        <script>
+            document.addEventListener("DOMContentLoaded", function() {
+                // Проверяем, есть ли ошибка от сервера
+                const errorEl = document.getElementById('java-error-message');
+                if (errorEl && errorEl.innerText.trim() !== "") {
+                    showToast(errorEl.innerText, 'error');
+                }
+
+                // Проверяем, есть ли успех от сервера
+                const successEl = document.getElementById('java-success-message');
+                if (successEl && successEl.innerText.trim() !== "") {
+                    showToast(successEl.innerText, 'success');
+                }
+            });
         </script>
 
 

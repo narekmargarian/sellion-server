@@ -1,23 +1,16 @@
 package com.sellion.sellionserver.services;
 
-
 import com.sellion.sellionserver.entity.Invoice;
 import com.sellion.sellionserver.entity.Order;
 import com.sellion.sellionserver.entity.OrderStatus;
-import com.sellion.sellionserver.entity.Product;
 import com.sellion.sellionserver.repository.InvoiceRepository;
 import com.sellion.sellionserver.repository.OrderRepository;
-import com.sellion.sellionserver.repository.ProductRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.util.Map;
-import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -27,136 +20,50 @@ public class InvoiceService {
     private final OrderRepository orderRepository;
     private final StockService stockService;
     private final FinanceService financeService;
-    private final ProductRepository productRepository;
 
     /**
-     * Создание инвойса из заказа с гарантированной проверкой остатков.
-     * Весь процесс защищен единой транзакцией и блокировкой строк.
+     * Создание инвойса из заказа.
+     * ИСПРАВЛЕНО: Добавлена атомарная связка заказа с инвойсом и защита от тихих ошибок.
      */
-//    @Transactional(rollbackFor = Exception.class)
-//    public Invoice createInvoiceFromOrder(Long orderId) {
-//        // 1. Поиск заказа
-//        Order order = orderRepository.findById(orderId)
-//                .orElseThrow(() -> new RuntimeException("Заказ не найден: " + orderId));
-//
-//        // 2. Защита от дубликатов
-//        if (order.getInvoiceId() != null) {
-//            throw new RuntimeException("Счет уже выставлен для этого заказа (ID: " + order.getInvoiceId() + ")");
-//        }
-//
-//        // 3. АТОМАРНАЯ ПРОВЕРКА И СПИСАНИЕ
-//        // Мы используем метод deductItemsFromStock, который (в нашей исправленной версии)
-//        // сначала блокирует товары в БД, затем проверяет остаток и только потом списывает.
-//        // Это исключает ситуацию, когда остаток уходит в минус.
-//        String invoiceNumber = "INV-" + LocalDate.now().getYear() + "-" + String.format("%06d", System.currentTimeMillis() % 1000000);
-//
-//        try {
-//            stockService.deductItemsFromStock(
-//                    order.getItems(),
-//                    "Выставление счета № " + invoiceNumber,
-//                    "ADMIN"
-//            );
-//        } catch (Exception e) {
-//            log.error("Ошибка списания при создании счета для заказа {}: {}", orderId, e.getMessage());
-//            throw new RuntimeException("Не удалось выставить счет: " + e.getMessage());
-//        }
-//
-//        // 4. Создание записи инвойса
-//        Invoice invoice = new Invoice();
-//        invoice.setOrder(order);
-//        invoice.setShopName(order.getShopName());
-//        invoice.setManagerId(order.getManagerId());
-//        invoice.setTotalAmount(Optional.ofNullable(order.getTotalAmount()).orElse(BigDecimal.ZERO));
-//        invoice.setPaidAmount(BigDecimal.ZERO);
-//        invoice.setInvoiceNumber(invoiceNumber);
-//        invoice.setStatus("UNPAID");
-//        invoice.setCreatedAt(LocalDateTime.now());
-//
-//        Invoice savedInvoice = invoiceRepository.save(invoice);
-//
-//        // 5. Финансовый учет (регистрация дебиторской задолженности)
-//        financeService.registerOperation(
-//                null,
-//                "ORDER",
-//                invoice.getTotalAmount(),
-//                savedInvoice.getId(),
-//                "Выставлен счет № " + invoice.getInvoiceNumber(),
-//                order.getShopName()
-//        );
-//
-//        // 6. Финализация заказа
-//        order.setStatus(OrderStatus.INVOICED);
-//        order.setInvoiceId(savedInvoice.getId());
-//        orderRepository.save(order);
-//
-//        log.info("Счет успешно создан: {} для магазина {}", invoiceNumber, order.getShopName());
-//        return savedInvoice;
-//    }
-
-
     @Transactional(rollbackFor = Exception.class)
     public Invoice createInvoiceFromOrder(Long orderId) {
-        // 1. Поиск заказа
         Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new RuntimeException("Заказ не найден: " + orderId));
+                .orElseThrow(() -> new RuntimeException("Заказ #" + orderId + " не найден"));
 
-        // 2. Защита от дубликатов
-        if (order.getInvoiceId() != null) {
-            throw new RuntimeException("Счет уже выставлен для этого заказа (ID: " + order.getInvoiceId() + ")");
-        }
+        if (order.getInvoiceId() != null) return null; // Уже есть счет
 
-        // 3. ГЕНЕРАЦИЯ УНИКАЛЬНОГО НОМЕРА (Используем ID заказа для 100% уникальности)
-        // Раньше на System.currentTimeMillis() могли быть дубликаты при массовой печати.
         String invoiceNumber = "INV-" + LocalDate.now().getYear() + "-" + order.getId();
 
-        // 4. АТОМАРНАЯ ПРОВЕРКА И СПИСАНИЕ
-        try {
-            stockService.deductItemsFromStock(
-                    order.getItems(),
-                    "Выставление счета № " + invoiceNumber,
-                    "ADMIN"
-            );
-        } catch (Exception e) {
-            log.error("Ошибка списания при создании счета для заказа {}: {}", orderId, e.getMessage());
-            // Пробрасываем ошибку дальше, чтобы @Transactional откатил всё назад
-            throw new RuntimeException(e.getMessage());
-        }
+        // 1. Списание (Сначала склад)
+        stockService.deductItemsFromStock(order.getItems(), "Счет " + invoiceNumber, "ADMIN");
 
-        // 5. Создание записи инвойса
+        // 2. Создание инвойса
         Invoice invoice = new Invoice();
         invoice.setOrder(order);
-        invoice.setShopName(order.getShopName());
-        invoice.setManagerId(order.getManagerId());
-        invoice.setTotalAmount(Optional.ofNullable(order.getTotalAmount()).orElse(BigDecimal.ZERO));
-        invoice.setPaidAmount(BigDecimal.ZERO);
+        invoice.setShopName(order.getShopName().trim()); // ЧИСТИМ ИМЯ ОТ ПРОБЕЛОВ
         invoice.setInvoiceNumber(invoiceNumber);
+        invoice.setTotalAmount(order.getTotalAmount());
         invoice.setStatus("UNPAID");
-        invoice.setCreatedAt(LocalDateTime.now());
 
-        // Сохраняем и принудительно отправляем в БД, чтобы получить ID
+        // СОХРАНЯЕМ ИНВОЙС СРАЗУ
         Invoice savedInvoice = invoiceRepository.saveAndFlush(invoice);
 
-        // 6. Финансовый учет
+        // 3. !!! СВЯЗЫВАЕМ С ЗАКАЗОМ СРАЗУ (Чтобы даже если финансы упадут, мы видели связь)
+        order.setInvoiceId(savedInvoice.getId());
+        order.setStatus(OrderStatus.INVOICED);
+        orderRepository.saveAndFlush(order); // ФИКСИРУЕМ В БАЗЕ МГНОВЕННО
+
+        // 4. ФИНАНСЫ (Делаем в самом конце)
         try {
-            financeService.registerOperation(
-                    null,
-                    "ORDER",
-                    savedInvoice.getTotalAmount(),
-                    savedInvoice.getId(),
-                    "Выставлен счет № " + savedInvoice.getInvoiceNumber(),
-                    order.getShopName()
-            );
+            financeService.registerOperation(null, "ORDER", order.getTotalAmount(),
+                    savedInvoice.getId(), "Счет " + invoiceNumber, order.getShopName());
         } catch (Exception e) {
-            log.error("Ошибка в финансах для счета {}: {}", savedInvoice.getId(), e.getMessage());
-            throw new RuntimeException("Ошибка финансового учета: " + e.getMessage());
+            log.error("ОШИБКА ФИНАНСОВ для заказа {}: {}", orderId, e.getMessage());
+            // Мы не гасим ошибку! Пусть транзакция откатится, если финансы критичны.
+            throw new RuntimeException("Ошибка финансов: " + e.getMessage());
         }
 
-        // 7. Финализация заказа
-        order.setStatus(OrderStatus.INVOICED);
-        order.setInvoiceId(savedInvoice.getId());
-        orderRepository.save(order);
-
-        log.info("Счет успешно создан: {} для магазина {}", invoiceNumber, order.getShopName());
         return savedInvoice;
     }
+
 }

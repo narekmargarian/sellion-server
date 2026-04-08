@@ -55,6 +55,6 @@ public interface ClientRepository extends JpaRepository<Client, Long> {
                                @Param("category") String category,
                                Pageable pageable);
 
-
+    Optional<Client> findByNameIgnoreCase(String name);
 
 }
