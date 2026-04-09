@@ -179,22 +179,25 @@ public class MainWebController {
         }
 
 
-        // 1. Для pStart (Начало периода)
-// Правильно: .withDayOfMonth(1) - устанавливаем первое число
-        LocalDate pStart = parseSafeDateTime(promoStart,
-                LocalDateTime.now().withDayOfMonth(1).with(LocalTime.MIN), false).toLocalDate();
+        // Если параметры пустые, берем начало и конец текущего месяца
+        LocalDate defaultStart = LocalDate.now().withDayOfMonth(1);
+        LocalDate defaultEnd = LocalDate.now().withDayOfMonth(LocalDate.now().lengthOfMonth());
 
-// 2. Для pEnd (Конец периода)
-// Правильно: .withDayOfMonth(LocalDate.now().lengthOfMonth()) - устанавливаем последний день
-        LocalDate pEnd = parseSafeDateTime(promoEnd,
-                LocalDateTime.now().withDayOfMonth(LocalDate.now().lengthOfMonth()).with(LocalTime.MAX), true).toLocalDate();
+        LocalDate pStart = (promoStart != null && !promoStart.isEmpty())
+                ? parseSafeDateTime(promoStart, defaultStart.atStartOfDay(), false).toLocalDate()
+                : defaultStart;
+
+        LocalDate pEnd = (promoEnd != null && !promoEnd.isEmpty())
+                ? parseSafeDateTime(promoEnd, defaultEnd.atTime(LocalTime.MAX), true).toLocalDate()
+                : defaultEnd;
 
 // Передаем в модель
         model.addAttribute("promos", promoRepository.findByPeriod(pStart, pEnd));
         model.addAttribute("promoStart", pStart.toString());
         model.addAttribute("promoEnd", pEnd.toString());
-
-
+// Добавляем эти атрибуты для input th:value="${promoStartDefault}" в HTML
+        model.addAttribute("promoStartDefault", pStart.toString());
+        model.addAttribute("promoEndDefault", pEnd.toString());
 
 
         addModel(page, orderManagerId, returnManagerId, model, ordersPage, totalOrdersSum, rawSales, rawPurchaseCost, netProfitBD, avgCheck, limitedLogs, invoicesList, totalInvoiceDebt, totalPaidSum, oStartDT.toLocalDate(), oEndDT.toLocalDate(), allReturns, totalReturnsSum, rStartDT.toLocalDate(), rEndDT.toLocalDate());
@@ -218,7 +221,6 @@ public class MainWebController {
         model.addAttribute("selectedInvManager", invoiceManager);
         model.addAttribute("selectedInvStatus", invoiceStatus);
     }
-
 
 
     private static void addModel(int page, String orderManagerId, String returnManagerId, Model model, Page<Order> ordersPage, BigDecimal totalOrdersSum, BigDecimal rawSales, BigDecimal rawPurchaseCost, BigDecimal netProfitBD, BigDecimal avgCheck, List<AuditLog> limitedLogs, List<Invoice> invoices, BigDecimal totalInvoiceDebt, BigDecimal totalPaidSum, LocalDate startD, LocalDate endD, List<ReturnOrder> allReturns, BigDecimal totalReturnsSum, LocalDate startR, LocalDate endR) {
@@ -255,7 +257,6 @@ public class MainWebController {
         model.addAttribute("returnStartDate", startR.format(isoDate));
         model.addAttribute("returnEndDate", endR.format(isoDate));
     }
-
 
 
     private void groupAndWarehouse(String activeTab, int clientPage, String clientCategory,

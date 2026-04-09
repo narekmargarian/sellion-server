@@ -191,9 +191,13 @@ public class PromoApiController {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Акция не найдена"));
 
         String currentUser = principal.getName();
-        boolean isAdmin = currentUser.equalsIgnoreCase("ADMIN") || currentUser.equalsIgnoreCase("Офис");
+// Проверяем не только имя, но и наличие роли через authorities
+        boolean hasPrivileges = currentUser.equalsIgnoreCase("ADMIN") ||
+                currentUser.equalsIgnoreCase("Офис") ||
+                ((org.springframework.security.core.Authentication) principal).getAuthorities().stream()
+                        .anyMatch(a -> a.getAuthority().equals("ROLE_OPERATOR") || a.getAuthority().equals("ROLE_ADMIN"));
 
-        if (!isAdmin && !promo.getManagerId().equals(currentUser)) {
+        if (!hasPrivileges && !promo.getManagerId().equals(currentUser)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Доступ запрещен"));
         }
 
