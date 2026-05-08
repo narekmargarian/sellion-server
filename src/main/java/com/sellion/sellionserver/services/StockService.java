@@ -110,8 +110,7 @@ public class StockService {
 
             int qty = entry.getValue();
             if (p.getStockQuantity() < qty) {
-                throw new RuntimeException("Недостаточно товара: " + p.getName());
-            }
+                throw new RuntimeException("Недостаточно на складе! В наличии: " + p.getStockQuantity());            }
 
             p.setStockQuantity(p.getStockQuantity() - qty);
             productRepository.save(p);

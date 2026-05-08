@@ -84,4 +84,21 @@ public class GlobalExceptionHandler {
         model.addAttribute("errorCode", "500");
         return "error";
     }
+
+    // 5. Специальная обработка для бизнес-исключений (Нехватка товара и т.д.)
+    @ExceptionHandler(RuntimeException.class)
+    public Object handleRuntimeException(RuntimeException ex, HttpServletRequest request, Model model) {
+        log.warn("Бизнес-ошибка: {}", ex.getMessage());
+
+        // Если запрос пришел от AJAX (JS), даже если в адресе нет /api/
+        String requestedWith = request.getHeader("X-Requested-With");
+        if (isApiRequest(request) || "XMLHttpRequest".equals(requestedWith) || request.getHeader("Accept").contains("application/json")) {
+            return ResponseEntity.badRequest().body(ApiResponse.error(ex.getMessage()));
+        }
+
+        model.addAttribute("errorTitle", "Ошибка выполнения");
+        model.addAttribute("errorMessage", ex.getMessage());
+        model.addAttribute("errorCode", "400");
+        return "error";
+    }
 }
