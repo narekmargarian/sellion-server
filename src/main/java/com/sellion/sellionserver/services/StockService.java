@@ -99,7 +99,6 @@ public class StockService {
     public void reserveItemsFromStock(Map<Long, Integer> items, String reason) {
         if (items == null || items.isEmpty()) return;
 
-        // Блокируем товары, чтобы никто другой не изменил остаток в эту секунду
         List<Product> products = productRepository.findAllByIdWithLock(items.keySet());
         Map<Long, Product> productMap = products.stream()
                 .collect(Collectors.toMap(Product::getId, Function.identity()));
@@ -109,8 +108,14 @@ public class StockService {
             if (p == null) throw new RuntimeException("Товар не найден: " + entry.getKey());
 
             int qty = entry.getValue();
+
+            // Проверяем наличие, используя правильное имя метода getStockQuantity()
             if (p.getStockQuantity() < qty) {
-                throw new RuntimeException("Недостаточно на складе! В наличии: " + p.getStockQuantity());            }
+                throw new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.BAD_REQUEST,
+                        "Պահեստում բավարար քանակ չկա: Առկա է` " + p.getStockQuantity()
+                );
+            }
 
             p.setStockQuantity(p.getStockQuantity() - qty);
             productRepository.save(p);
