@@ -85,20 +85,19 @@ public class GlobalExceptionHandler {
         return "error";
     }
 
-    // 5. Специальная обработка для бизнес-исключений (Нехватка товара и т.д.)
     @ExceptionHandler(RuntimeException.class)
-    public Object handleRuntimeException(RuntimeException ex, HttpServletRequest request, Model model) {
-        log.warn("Бизнес-ошибка: {}", ex.getMessage());
+    public Object handleRuntime(RuntimeException ex, HttpServletRequest request, Model model) {
+        // Логируем, чтобы видеть в консоли, что происходит
+        log.warn("Runtime exception caught: {}", ex.getMessage());
 
-        // Если запрос пришел от AJAX (JS), даже если в адресе нет /api/
-        String requestedWith = request.getHeader("X-Requested-With");
-        if (isApiRequest(request) || "XMLHttpRequest".equals(requestedWith) || request.getHeader("Accept").contains("application/json")) {
+        // Если это AJAX-запрос (от нашего JS)
+        if (request.getHeader("Accept").contains("application/json") || isApiRequest(request)) {
+            // Мы возвращаем статус 400 (Bad Request), а не 500!
+            // Это важно, чтобы Spring не считал это "крахом системы"
             return ResponseEntity.badRequest().body(ApiResponse.error(ex.getMessage()));
         }
 
-        model.addAttribute("errorTitle", "Ошибка выполнения");
         model.addAttribute("errorMessage", ex.getMessage());
-        model.addAttribute("errorCode", "400");
         return "error";
     }
 }
