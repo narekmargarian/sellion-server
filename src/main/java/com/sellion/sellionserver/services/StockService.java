@@ -1,5 +1,7 @@
 package com.sellion.sellionserver.services;
 
+import com.sellion.sellionserver.entity.Order;
+import com.sellion.sellionserver.entity.OrderStatus;
 import com.sellion.sellionserver.entity.Product;
 import com.sellion.sellionserver.entity.StockMovement;
 import com.sellion.sellionserver.repository.ProductRepository;
@@ -26,18 +28,35 @@ public class StockService {
     private final ProductRepository productRepository;
     private final StockMovementRepository movementRepository;
 
+
+
     /**
      * Атомарное списание товара с блокировкой строк БД.
      * Используется при выставлении счета.
      */
-    @Transactional(rollbackFor = Exception.class)
-    public void deductItemsFromStock(Map<Long, Integer> items, String reason, String operator) {
-        if (items == null || items.isEmpty()) return;
 
-        // 1. Блокируем все товары заказа в БД одним запросом для предотвращения Race Condition
+    /**
+     * Атомарное списание товара с блокировкой строк БД.
+     * Исправлено: добавлена защита от повторного списания (Double Deduction)
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void deductItemsFromStock(Order order, String operator) {
+        if (order == null || order.getItems() == null || order.getItems().isEmpty()) return;
+
+        // ГИГАНТСКАЯ ОШИБКА БЫЛА ТУТ: Если у заказа уже есть invoiceId,
+        // значит товар уже был списан ранее. Выходим, чтобы не списать второй раз.
+        if (order.getInvoiceId() != null) {
+            log.warn("Попытка повторного списания для заказа №{}. Операция отменена.", order.getId());
+            return;
+        }
+
+        Map<Long, Integer> items = order.getItems();
+        String reason = "Заказ #" + (order.getId() != null ? order.getId() : "NEW");
+
+        // 1. Блокируем товары для предотвращения Race Condition
         List<Product> products = productRepository.findAllByIdWithLock(items.keySet());
         Map<Long, Product> productMap = products.stream()
-                .collect(Collectors.toMap(Product::getId, java.util.function.Function.identity()));
+                .collect(Collectors.toMap(Product::getId, Function.identity()));
 
         for (Map.Entry<Long, Integer> entry : items.entrySet()) {
             Long productId = entry.getKey();
@@ -47,17 +66,24 @@ public class StockService {
 
             Product p = productMap.get(productId);
             if (p == null) {
-                throw new RuntimeException("Критическая ошибка: Товар ID " + productId + " не найден при списании!");
+                throw new RuntimeException("Критическая ошибка: Товар ID " + productId + " не найден!");
             }
 
-            // 2. Проверка остатка на заблокированном объекте
+            // Если заказ был в статусе RESERVED, значит остаток уже был уменьшен
+            // методом reserveItemsFromStock. В этом случае ПОВТОРНО списывать не нужно.
+            if (order.getStatus() == OrderStatus.RESERVED) {
+                log.info("Товар {} уже был зарезервирован для заказа {}, пропускаем списание остатка.", p.getName(), order.getId());
+                continue;
+            }
+
+            // 2. Проверка остатка
             int currentStock = (p.getStockQuantity() != null) ? p.getStockQuantity() : 0;
             if (currentStock < qtyToDeduct) {
-                throw new RuntimeException("Недостаточно товара: " + p.getName() +
-                        " (Нужно: " + qtyToDeduct + ", в наличии: " + currentStock + ")");
+                throw new RuntimeException("Недостаточно товара на складе: " + p.getName() +
+                        " (Требуется: " + qtyToDeduct + ", В наличии: " + currentStock + ")");
             }
 
-            // 3. Обновление и сохранение
+            // 3. Списание
             p.setStockQuantity(currentStock - qtyToDeduct);
             productRepository.save(p);
 
@@ -68,46 +94,39 @@ public class StockService {
     /**
      * Резервирование товара (для заказов с Android) с блокировкой.
      */
+// МЕТОД ДЛЯ ЭТАПА 1 (СОЗДАНИЕ/РЕЗЕРВ)
     @Transactional(rollbackFor = Exception.class)
     public void reserveItemsFromStock(Map<Long, Integer> items, String reason) {
         if (items == null || items.isEmpty()) return;
 
-        // Блокируем товары для безопасного резерва
+        // Блокируем товары, чтобы никто другой не изменил остаток в эту секунду
         List<Product> products = productRepository.findAllByIdWithLock(items.keySet());
         Map<Long, Product> productMap = products.stream()
-                .collect(Collectors.toMap(Product::getId, java.util.function.Function.identity()));
+                .collect(Collectors.toMap(Product::getId, Function.identity()));
 
         for (Map.Entry<Long, Integer> entry : items.entrySet()) {
-            Long productId = entry.getKey();
-            Integer qty = entry.getValue();
+            Product p = productMap.get(entry.getKey());
+            if (p == null) throw new RuntimeException("Товар не найден: " + entry.getKey());
 
-            if (qty == null || qty <= 0) continue;
-
-            Product p = productMap.get(productId);
-            if (p == null) {
-                throw new RuntimeException("Товар ID " + productId + " не найден для резерва");
+            int qty = entry.getValue();
+            if (p.getStockQuantity() < qty) {
+                throw new RuntimeException("Недостаточно товара: " + p.getName());
             }
 
-            int currentStock = (p.getStockQuantity() != null) ? p.getStockQuantity() : 0;
-            if (currentStock < qty) {
-                throw new RuntimeException("Не удалось зарезервировать " + p.getName() + ". Недостаточно остатка.");
-            }
-
-            p.setStockQuantity(currentStock - qty);
+            p.setStockQuantity(p.getStockQuantity() - qty);
             productRepository.save(p);
-
-            logMovement(p.getName(), -qty, "RESERVE", reason, "SYSTEM_SYNC");
+            logMovement(p.getName(), -qty, "RESERVE", reason);
         }
     }
 
     /**
      * Возврат товара на склад (отмена заказа или возврат от клиента).
      */
+// В файле StockService.java исправь заголовок метода:
     @Transactional(rollbackFor = Exception.class)
-    public void returnItemsToStock(Map<Long, Integer> items, String reason, String operator) {
+    public void returnItemsToStock(Map<Long, Integer> items, String reason, String operator) { // Добавили 3-й параметр
         if (items == null || items.isEmpty()) return;
 
-        // Блокируем для безопасного прибавления
         List<Product> products = productRepository.findAllByIdWithLock(items.keySet());
         Map<Long, Product> productMap = products.stream()
                 .collect(Collectors.toMap(Product::getId, java.util.function.Function.identity()));
@@ -119,12 +138,21 @@ public class StockService {
                     int currentStock = (p.getStockQuantity() != null) ? p.getStockQuantity() : 0;
                     p.setStockQuantity(currentStock + qty);
                     productRepository.save(p);
+                    // Передаем оператора в лог
                     logMovement(p.getName(), qty, "RETURN", reason, operator);
-                } else {
-                    log.warn("Попытка возврата несуществующего товара ID: {}", productId);
                 }
             }
         });
+    }
+
+    private void logMovement(String name, int qty, String type, String reason) {
+        StockMovement m = new StockMovement();
+        m.setProductName(name);
+        m.setQuantityChange(qty);
+        m.setType(type);
+        m.setReason(reason);
+        m.setTimestamp(LocalDateTime.now());
+        movementRepository.save(m);
     }
 
     /**
@@ -146,15 +174,16 @@ public class StockService {
     /**
      * Логирование движений (сохранено полностью).
      */
-    @Transactional(propagation = Propagation.REQUIRED)
     public void logMovement(String name, Integer qty, String type, String reason, String operator) {
         StockMovement m = new StockMovement();
         m.setProductName(name);
         m.setQuantityChange(qty);
         m.setType(type);
         m.setReason(reason);
-        m.setOperator(operator != null ? operator : "UNKNOWN");
+        m.setOperator(operator != null ? operator : "SYSTEM"); // Записываем кто нажал кнопку
         m.setTimestamp(LocalDateTime.now());
         movementRepository.save(m);
     }
+
+
 }

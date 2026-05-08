@@ -18,26 +18,33 @@ import java.time.LocalDate;
 public class InvoiceService {
     private final InvoiceRepository invoiceRepository;
     private final OrderRepository orderRepository;
-    private final StockService stockService;
+    // stockService здесь больше не нужен для списания, так как списание на Этапе 1
     private final FinanceService financeService;
 
     /**
-     * Создание инвойса из заказа.
-     * ИСПРАВЛЕНО: Добавлена атомарная связка заказа с инвойсом и защита от тихих ошибок.
+     * ЭТАП 2: Создание инвойса из зарезервированного заказа.
+     * Склад НЕ трогаем, так как товар уже списан при сохранении заказа (статус RESERVED).
      */
-
     @Transactional(rollbackFor = Exception.class)
     public Invoice createInvoiceFromOrder(Long orderId) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new RuntimeException("Заказ #" + orderId + " не найден"));
 
-        if (order.getInvoiceId() != null) return null;
+        // 1. Проверка на дубликат инвойса
+        if (order.getInvoiceId() != null) {
+            log.warn("Для заказа #{} уже существует инвойс ID: {}", orderId, order.getInvoiceId());
+            return null;
+        }
 
-        // КРИТИЧНО: УДАЛЯЕМ строку stockService.deductItemsFromStock(...),
-        // так как товар уже был вычтен методом reserveItemsFromStock при создании заказа.
+        // 2. КРИТИЧЕСКАЯ ПРОВЕРКА: Инвойс можно создать только если товар уже зарезервирован
+        if (order.getStatus() != OrderStatus.RESERVED) {
+            throw new RuntimeException("Ошибка: Нельзя выставить счет. Заказ должен иметь статус RESERVED (товар списан). " +
+                    "Текущий статус: " + order.getStatus());
+        }
 
         String invoiceNumber = "INV-" + LocalDate.now().getYear() + "-" + order.getId();
 
+        // 3. Создание записи Инвойса
         Invoice invoice = new Invoice();
         invoice.setOrder(order);
         invoice.setShopName(order.getShopName().trim());
@@ -47,18 +54,29 @@ public class InvoiceService {
 
         Invoice savedInvoice = invoiceRepository.saveAndFlush(invoice);
 
+        // 4. Обновление заказа: привязываем инвойс и переводим в финальный статус PROCESSED
         order.setInvoiceId(savedInvoice.getId());
-        order.setStatus(OrderStatus.INVOICED);
+        order.setStatus(OrderStatus.PROCESSED); // <--- ЭТАП 2: Завершение сделки
         orderRepository.saveAndFlush(order);
 
+        // 5. ФИНАНСЫ: Увеличиваем долг клиента
         try {
-            financeService.registerOperation(null, "ORDER", order.getTotalAmount(),
-                    savedInvoice.getId(), "Счет " + invoiceNumber, order.getShopName());
+            financeService.registerOperation(
+                    null,
+                    "ORDER",
+                    order.getTotalAmount(),
+                    savedInvoice.getId(),
+                    "Счет " + invoiceNumber,
+                    order.getShopName()
+            );
         } catch (Exception e) {
+            log.error("Критическая ошибка при регистрации финансов для инвойса {}", invoiceNumber);
             throw new RuntimeException("Ошибка финансов: " + e.getMessage());
         }
 
+        log.info("Инвойс {} успешно создан для магазина {}. Статус заказа изменен на PROCESSED",
+                invoiceNumber, order.getShopName());
+
         return savedInvoice;
     }
-
 }

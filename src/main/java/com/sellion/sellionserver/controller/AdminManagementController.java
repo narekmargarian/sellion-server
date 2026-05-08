@@ -630,38 +630,39 @@ public class AdminManagementController {
     @PostMapping("/orders/write-off")
     @Transactional(rollbackFor = Exception.class)
     public ResponseEntity<?> createWriteOff(@RequestBody Order order) {
-        // 1. Предварительная настройка
+        // 1. Настройка параметров списания
         order.setType(OrderType.WRITE_OFF);
         order.setStatus(OrderStatus.PROCESSED);
         order.setManagerId("Офис");
         order.setCreatedAt(LocalDateTime.now());
         order.setDiscountPercent(BigDecimal.ZERO);
+        order.setShopName("СПИСАНИЕ");
 
         if (order.getNeedsSeparateInvoice() == null) {
             order.setNeedsSeparateInvoice(false);
         }
 
-        // 2. Списание со склада
-        // УБРАЛИ внутренний try-catch. Если прав нет (403) или товара мало (RuntimeException),
-        // Spring сам вернет нужный статус, а наш JS-fetch его поймает и ПРЕРВЕТ выполнение.
-        stockService.deductItemsFromStock(order.getItems(),
-                "Списание: " + (order.getComment() != null ? order.getComment() : "Без описания"), "ADMIN");
-
-        // 3. Расчет себестоимости
+        // 2. Расчет финансовых показателей (себестоимости)
         Map<String, BigDecimal> totals = calculateTotalSaleAndCostWithDiscount(order.getItems(), BigDecimal.ZERO);
-
-        // 4. Установка финансовых показателей
         order.setTotalAmount(BigDecimal.ZERO);
         order.setTotalPurchaseCost(totals.get("totalCost"));
         order.setPurchaseCost(totals.get("totalCost"));
 
-        // 5. Сохранение и лог
+        // 3. СОХРАНЕНИЕ: Получаем полноценный объект Order с ID из базы
         Order saved = orderRepository.save(order);
-        recordAudit(saved.getId(), "ORDER", "СПИСАНИЕ",
-                "Проведено списание. Себестоимость: " + order.getTotalPurchaseCost() + " ֏");
 
-        // Этот ответ придет ТОЛЬКО если не было ошибок доступа и товара хватило
-        return ResponseEntity.ok(Map.of("message", "Списание успешно проведено"));
+        // 4. СПИСАНИЕ: Теперь передаем объект Order (saved), как и требует метод
+        // Это исправляет ошибку "Required type: Order, Provided: Map"
+        stockService.deductItemsFromStock(saved, "ADMIN");
+
+        // 5. Логирование
+        recordAudit(saved.getId(), "ORDER", "СПИСАНИЕ",
+                "Проведено списание. Себестоимость: " + saved.getTotalPurchaseCost() + " ֏");
+
+        return ResponseEntity.ok(Map.of(
+                "id", saved.getId(),
+                "message", "Списание успешно проведено"
+        ));
     }
 
 
@@ -826,5 +827,47 @@ public class AdminManagementController {
         cell.setCellStyle(style);
     }
 
+
+    @PostMapping("/orders/save")
+    @Transactional
+    public String saveNewOrder(@ModelAttribute Order order) {
+        order.setStatus(OrderStatus.RESERVED); // Всегда RESERVED при сохранении
+
+        // Списываем склад сразу
+        stockService.reserveItemsFromStock(order.getItems(), "Новый заказ: " + order.getShopName());
+
+        orderRepository.save(order);
+        return "redirect:/admin/orders";
+    }
+
+
+    // ЭТАП 3: ИДЕАЛЬНОЕ РЕДАКТИРОВАНИЕ
+    @PostMapping("/orders/update/{id}")
+    @Transactional(rollbackFor = Exception.class)
+    public String updateOrder(@PathVariable Long id, @ModelAttribute Order updatedData) {
+        // 1. Берем старую копию заказа из БД
+        Order existingOrder = orderRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Заказ не найден"));
+        stockService.returnItemsToStock(existingOrder.getItems(), "Корректировка заказа #" + id, "ADMIN");
+        existingOrder.setItems(updatedData.getItems());
+        existingOrder.setTotalAmount(updatedData.getTotalAmount()); // Важно для финансов!
+        existingOrder.setDiscountPercent(updatedData.getDiscountPercent());
+        existingOrder.setShopName(updatedData.getShopName());
+        stockService.reserveItemsFromStock(existingOrder.getItems(), "Обновление заказа #" + id);
+        orderRepository.save(existingOrder);
+        return "redirect:/admin/orders";
+    }
+
+    // УДАЛЕНИЕ ЗАКАЗА
+    @PostMapping("/orders/delete/{id}")
+    @Transactional
+    public String deleteOrder(@PathVariable Long id) {
+        Order order = orderRepository.findById(id).orElseThrow();
+
+        // Возвращаем товар на склад перед удалением
+        stockService.returnItemsToStock(order.getItems(), "Удаление заказа #" + id, "ADMIN");
+        orderRepository.delete(order);
+        return "redirect:/admin/orders";
+    }
 
 }

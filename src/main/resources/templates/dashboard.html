@@ -224,14 +224,18 @@
             </div>
 
             <div class="pagination-wrapper" th:if="${totalPages > 1}"
-                 style="
-                 margin-top: 20px; display: flex; gap: 10px; justify-content: center;">
-                <a th:href="@{/admin(activeTab='tab-orders', page=${currentPage - 1}, orderStartDate=${orderStartDate}, orderEndDate=${orderEndDate})}"
+                 style="margin-top: 20px; display: flex; gap: 10px; justify-content: center;">
+
+                <!-- Кнопка НАЗАД -->
+                <a th:href="@{/admin(activeTab='tab-orders', page=${currentPage - 1}, orderStartDate=${orderStartDate}, orderEndDate=${orderEndDate}, orderManagerId=${selectedOrderManager})}"
                    th:if="${currentPage > 0}" class="btn-ghost">← Назад</a>
+
                 <span style="align-self: center; font-weight: 700;">
-            Страница <span th:text="${currentPage + 1}"></span> из <span th:text="${totalPages}"></span>
-        </span>
-                <a th:href="@{/admin(activeTab='tab-orders', page=${currentPage + 1}, orderStartDate=${orderStartDate}, orderEndDate=${orderEndDate})}"
+        Страница <span th:text="${currentPage + 1}"></span> из <span th:text="${totalPages}"></span>
+    </span>
+
+                <!-- Кнопка ВПЕРЕД -->
+                <a th:href="@{/admin(activeTab='tab-orders', page=${currentPage + 1}, orderStartDate=${orderStartDate}, orderEndDate=${orderEndDate}, orderManagerId=${selectedOrderManager})}"
                    th:if="${currentPage < totalPages - 1}" class="btn-ghost">Вперед →</a>
             </div>
         </div>

@@ -8,6 +8,7 @@ let tempItems = {};
 let managerIdList = [];
 let tempPromoItems = {};
 let currentPromoData = null;
+let selectedOrderIds = JSON.parse(localStorage.getItem('selectedOrders')) || [];
 
 function roundHalfUp(num) {
 
@@ -175,6 +176,9 @@ function printSelectedOperations(type) {
     }, {once: true});
 
     submitAsPost(url, selectedIds, 'printFrame');
+
+    localStorage.removeItem('selectedOrders');
+    selectedOrderIds = [];
 }
 
 
@@ -2100,17 +2104,6 @@ function validateDate(dateStr) {
     return true;
 }
 
-
-document.addEventListener('change', function (e) {
-    if (e.target.classList.contains('correction-checkbox') || e.target.id === 'select-all-corrections') {
-        const checked = document.querySelectorAll('.correction-checkbox:checked').length;
-        const counter = document.getElementById('selected-count');
-        if (counter) {
-            counter.innerText = checked;
-        }
-    }
-});
-
 function toggleAllCorrections(source) {
     const checkboxes = document.querySelectorAll('.correction-checkbox');
     checkboxes.forEach(cb => {
@@ -3160,14 +3153,18 @@ async function saveFullChanges(id) {
 
     // 1. Сбор товаров из UI
     const itemsToSave = {};
+    let totalSum = 0; // Добавляем расчет суммы для передачи на бэкенд
+
     document.querySelectorAll('.qty-input-active').forEach(input => {
         const pId = input.id.replace('input-qty-', '');
         const val = parseInt(input.value);
         if (!isNaN(val) && val > 0) {
             itemsToSave[pId] = val;
-            tempItems[pId] = val;
-        } else {
-            delete tempItems[pId];
+
+            // Расчет суммы (если у тебя есть доступ к ценам в этом месте)
+            const row = input.closest('tr');
+            const price = parseFloat(row.dataset.currentPrice) || 0;
+            totalSum += price * val;
         }
     });
 
@@ -3176,13 +3173,10 @@ async function saveFullChanges(id) {
     }
 
     // Блокируем кнопку сохранения
-    const saveBtn = event?.target;
-    if (saveBtn && saveBtn.tagName === 'BUTTON') saveBtn.disabled = true;
+    const saveBtn = document.querySelector(`button[onclick="saveFullChanges(${id})"]`);
+    if (saveBtn) saveBtn.disabled = true;
 
-    // 2. ВЫЗЫВАЕМ ПРОВЕРКУ АКЦИЙ (ОТКРОЕТ ОКНО)
     checkAndApplyPromos(itemsToSave, async (selectedPromos) => {
-
-        // Формируем карту акций для сервера
         const promoMap = {};
         selectedPromos.forEach(promo => {
             if (promo.items) {
@@ -3192,12 +3186,11 @@ async function saveFullChanges(id) {
             }
         });
 
-        // 3. ПОДГОТОВКА ДАННЫХ ДЛЯ ОТПРАВКИ
-        const percentInput = document.getElementById('order-discount-percent') || document.getElementById('new-op-percent');
+        const percentInput = document.getElementById('order-discount-percent');
         let discountPercent = percentInput ? parseFloat(percentInput.value) || 0 : 0;
 
+        // ПОДГОТОВКА ДАННЫХ (в соответствии с сущностью Order на Java)
         const data = {
-            id: id,
             shopName: shopName,
             deliveryDate: deliveryDate,
             paymentMethod: document.getElementById('edit-payment').value,
@@ -3206,62 +3199,36 @@ async function saveFullChanges(id) {
             discountPercent: discountPercent,
             comment: document.getElementById('edit-comment')?.value || "",
             items: itemsToSave,
-            appliedPromoItems: promoMap // ПЕРЕДАЕМ ВЫБРАННЫЕ АКЦИИ
+            appliedPromoItems: promoMap,
+            totalAmount: totalSum // Передаем итоговую сумму
         };
 
         try {
-            // Проверка магазина
-            const checkRes = await fetch(`/api/clients/search-fast?keyword=${encodeURIComponent(shopName)}`);
-            const clients = await checkRes.json();
-            const foundClient = clients.find(c => c.name.toLowerCase() === shopName.toLowerCase());
-
-            if (!foundClient) {
-                shopInput.style.border = "2px solid #ef4444";
-                if (saveBtn) saveBtn.disabled = false;
-                return showToast(`Ошибка: Магазин "${shopName}" не найден!`, "error");
-            }
-            data.shopName = foundClient.name;
-
-            // ФИНАЛЬНЫЙ ЗАПРОС НА СОХРАНЕНИЕ
+            // ФИНАЛЬНЫЙ ЗАПРОС (Путь совпадает с @PutMapping("/admin/orders/{id}/full-edit"))
             const response = await fetch(`/api/admin/orders/${id}/full-edit`, {
                 method: 'PUT',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify(data)
             });
 
-            const result = await response.json();
-
             if (!response.ok) {
+                const result = await response.json();
                 let rawMsg = result.message || result.error || "Ошибка сервера";
-                let cleanMessage = rawMsg.replace(/^\d+\s+[A-Z_]+\s+"?|"?$/g, '').trim();
-                showToast(cleanMessage, "error");
-
-                if (cleanMessage.includes("Недостаточно")) {
-                    document.querySelectorAll('#order-items-body tr').forEach(row => {
-                        const productNameInRow = row.cells[0]?.innerText || "";
-                        if (cleanMessage.includes(productNameInRow.trim())) {
-                            row.style.backgroundColor = "#fee2e2";
-                            row.style.border = "2px solid #ef4444";
-                            row.scrollIntoView({behavior: 'smooth', block: 'center'});
-                        }
-                    });
-                }
+                showToast(rawMsg, "error");
                 if (saveBtn) saveBtn.disabled = false;
                 return;
             }
 
             showToast("Заказ успешно обновлен", "success");
-            setTimeout(() => {
-                window.location.reload();
-            }, 800);
+            setTimeout(() => window.location.reload(), 800);
 
         } catch (e) {
-            console.error("Ошибка при сохранении заказа:", e);
+            console.error("Ошибка сети:", e);
+            showToast("Ошибка соединения с сервером", "error");
             if (saveBtn) saveBtn.disabled = false;
         }
     });
 }
-
 // Универсальный метод отправки изменений
 async function executeEditRequest(data, btn) {
     try {
@@ -4862,6 +4829,62 @@ document.querySelectorAll('.tab-link, [data-tab]').forEach(tab => {
         }
     });
 });
+
+
+// 2. Слушатель изменений
+document.addEventListener('change', function (e) {
+    // Работаем с чекбоксами заказов
+    if (e.target.classList.contains('order-print-check')) {
+        const id = e.target.value;
+
+        if (e.target.checked) {
+            if (!selectedOrderIds.includes(id)) selectedOrderIds.push(id);
+        } else {
+            selectedOrderIds = selectedOrderIds.filter(itemId => itemId !== id);
+        }
+
+        localStorage.setItem('selectedOrderIds', JSON.stringify(selectedOrderIds));
+        updateSelectedCounter();
+    }
+
+    // Логика "Выбрать все"
+    if (e.target.id === 'select-all-orders' || e.target.onclick?.toString().includes('toggleSelectAll')) {
+        const checkboxes = document.querySelectorAll('.order-print-check');
+        checkboxes.forEach(cb => {
+            const id = cb.value;
+            if (e.target.checked) {
+                if (!selectedOrderIds.includes(id)) selectedOrderIds.push(id);
+            } else {
+                selectedOrderIds = selectedOrderIds.filter(itemId => itemId !== id);
+            }
+        });
+        localStorage.setItem('selectedOrderIds', JSON.stringify(selectedOrderIds));
+        updateSelectedCounter();
+    }
+});
+
+// 3. Функция обновления счетчика (твоя старая логика, но теперь глобальная)
+function updateSelectedCounter() {
+    const counter = document.getElementById('selected-count');
+    if (counter) {
+        // Считаем общее количество из памяти, а не только на странице
+        counter.innerText = selectedOrderIds.length;
+    }
+}
+
+// 4. ВОССТАНОВЛЕНИЕ ГАЛОЧЕК (вызывать при загрузке страницы)
+function restoreCheckboxes() {
+    const checkboxes = document.querySelectorAll('.order-print-check');
+    checkboxes.forEach(cb => {
+        if (selectedOrderIds.includes(cb.value)) {
+            cb.checked = true;
+        }
+    });
+    updateSelectedCounter();
+}
+
+// Запускаем восстановление сразу после загрузки DOM
+document.addEventListener('DOMContentLoaded', restoreCheckboxes);
 
 // 2. Автозагрузка при старте страницы (если вкладка Акции открыта по умолчанию)
 window.addEventListener('DOMContentLoaded', () => {
