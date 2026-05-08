@@ -1162,20 +1162,18 @@ function updateDashboardStats() {
 
 
 async function deleteReturnOrder(id) {
-    showConfirmModal("Удалить возврат?", "Вы уверены, что хотите удалить этот возврат?", async () => {
-        try {
-            const response = await fetch(`/api/admin/returns/${id}/delete`, {method: 'POST'});
+    showConfirm(
+        "Ջնջել վերադարձը?",
+        "Դուք վստա՞հ եք, որ ցանկանում եք ջնջել այս վերադարձը:",
+        async () => {
+            // Логика удаления
+            const response = await fetch(`/api/returns/${id}`, { method: 'DELETE' });
             if (response.ok) {
-                showToast("Возврат удален", "success");
+                showToast("Ջնջված է", "success");
                 location.reload();
-            } else {
-                const error = await response.json();
-                showToast(error.error || "Ошибка удаления возврата", "error");
             }
-        } catch (e) {
-            showToast("Ошибка сети", "error");
         }
-    });
+    );
 }
 
 
@@ -1366,6 +1364,38 @@ function showConfirmModal(title, text, onConfirm) {
     modal.showModal();
 }
 
+
+function showConfirm(title, message, onConfirm) {
+    const modal = document.getElementById('customModal');
+
+    // Устанавливаем тексты
+    document.getElementById('modalTitle').innerText = title || "Հաստատում";
+    document.getElementById('modalMessage').innerText = message || "";
+
+    // Показываем (flex включает центрирование)
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+
+    const confirmBtn = document.getElementById('modalConfirmBtn');
+
+    // Очистка событий, чтобы не было дублей
+    const newConfirmBtn = confirmBtn.cloneNode(true);
+    confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+
+    newConfirmBtn.onclick = () => {
+        onConfirm();
+        closeCustomModal();
+    };
+
+    // Закрытие при нажатии "Отмена"
+    document.getElementById('modalCancelBtn').onclick = closeCustomModal;
+}
+
+function closeCustomModal() {
+    const modal = document.getElementById('customModal');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+}
 
 function openCreateUserModal() {
     openModal('modal-user-create');

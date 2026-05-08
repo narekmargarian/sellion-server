@@ -1749,17 +1749,39 @@
         </div>
 
 
-        <dialog id="confirm-modal" class="confirm-modal-image-style">
-            <div class="confirm-modal-content">
-                <h3 id="confirm-title" class="confirm-title-image-style">Удалить возврат?</h3>
-                <p id="confirm-text" class="confirm-text-image-style">Вы уверены, что хотите удалить этот возврат?</p>
+        <div id="customModal" class="fixed inset-0 z-[3000] hidden items-center justify-center p-4">
+            <!-- Фон с размытием -->
+            <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onclick="closeCustomModal()"></div>
 
-                <div class="confirm-actions-image-style">
-                    <button class="btn-primary btn-danger" id="confirm-yes">Да</button>
-                    <button class="btn-primary btn-secondary" id="confirm-no">Нет</button>
+            <!-- Контент модального окна -->
+            <div class="relative bg-white rounded-[2.5rem] shadow-2xl max-w-md w-full p-8 transform transition-all border border-gray-100">
+                <div class="text-center">
+                    <!-- Иконка -->
+                    <div id="modalIcon" class="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-red-50 text-red-600 mb-6">
+                        <i class="fa-solid fa-triangle-exclamation text-2xl"></i>
+                    </div>
+
+                    <!-- Заголовок -->
+                    <h3 id="modalTitle" class="text-xl font-black uppercase italic text-slate-900 mb-2">Հաստատում</h3>
+                    <!-- Сообщение -->
+                    <p id="modalMessage" class="text-xs font-bold text-gray-500 uppercase leading-relaxed mb-8"></p>
+
+                    <!-- Кнопки -->
+                    <div class="flex gap-3">
+                        <button id="modalCancelBtn" class="flex-1 px-6 py-4 rounded-2xl font-black uppercase text-[10px] text-slate-400 hover:bg-gray-50 transition-all">
+                            Չեղարկել
+                        </button>
+                        <button id="modalConfirmBtn" class="flex-1 bg-slate-900 text-white px-6 py-4 rounded-2xl font-black uppercase text-[10px] hover:bg-[#63AA2F] transition-all shadow-lg active:scale-95">
+                            Հաստատել
+                        </button>
+                    </div>
                 </div>
             </div>
-        </dialog>
+        </div>
+
+
+
+
 
         <div id="toast-container"></div>
 
