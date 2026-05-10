@@ -32,4 +32,9 @@ public interface ReturnOrderRepository extends JpaRepository<ReturnOrder, Long> 
     boolean existsByAndroidId(String androidId);
     List<ReturnOrder> findByManagerIdAndCreatedAtBetween(String managerId, LocalDateTime start, LocalDateTime end);
 
+    @Query("SELECT r.id FROM ReturnOrder r WHERE (:mId IS NULL OR r.managerId = :mId) " +
+            "AND r.createdAt >= :start AND r.createdAt <= :end")
+    List<Long> findAllIdsByFilters(@Param("mId") String mId,
+                                   @Param("start") LocalDateTime start,
+                                   @Param("end") LocalDateTime end);
 }

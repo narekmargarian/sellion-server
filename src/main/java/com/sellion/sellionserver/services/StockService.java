@@ -95,7 +95,10 @@ public class StockService {
      * Резервирование товара (для заказов с Android) с блокировкой.
      */
 // МЕТОД ДЛЯ ЭТАПА 1 (СОЗДАНИЕ/РЕЗЕРВ)
-    @Transactional(rollbackFor = Exception.class)
+    @Transactional(
+            rollbackFor = Exception.class,
+            noRollbackFor = org.springframework.web.server.ResponseStatusException.class
+    )
     public void reserveItemsFromStock(Map<Long, Integer> items, String reason) {
         if (items == null || items.isEmpty()) return;
 

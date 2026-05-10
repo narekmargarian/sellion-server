@@ -22,6 +22,7 @@ import java.time.LocalTime;
 import java.time.Year;
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.Objects;
 
 
 @Controller
@@ -117,6 +118,8 @@ public class MainWebController {
                 .map(o -> o.getTotalPurchaseCost() != null ? o.getTotalPurchaseCost() : BigDecimal.ZERO)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
+
+
         // --- 3. ЛОГИКА ДЛЯ ВОЗВРАТОВ ---
         List<ReturnOrder> allReturns = (returnManagerId != null && !returnManagerId.isEmpty())
                 ? returnOrderRepository.findReturnsByManagerAndDateRange(returnManagerId, rStartDT, rEndDT)
@@ -198,6 +201,22 @@ public class MainWebController {
 // Добавляем эти атрибуты для input th:value="${promoStartDefault}" в HTML
         model.addAttribute("promoStartDefault", pStart.toString());
         model.addAttribute("promoEndDefault", pEnd.toString());
+
+
+        List<Long> allOrderIds = allOrdersForPeriod.stream()
+                .map(Order::getId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
+
+// Собираем ID всех возвратов за выбранный период
+        List<Long> allReturnIds = allReturns.stream()
+                .map(ReturnOrder::getId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
+
+// Передаем списки в модель, чтобы JavaScript в dashboard.html их увидел
+        model.addAttribute("allOrderIds", allOrderIds);
+        model.addAttribute("allReturnIds", allReturnIds);
 
 
         addModel(page, orderManagerId, returnManagerId, model, ordersPage, totalOrdersSum, rawSales, rawPurchaseCost, netProfitBD, avgCheck, limitedLogs, invoicesList, totalInvoiceDebt, totalPaidSum, oStartDT.toLocalDate(), oEndDT.toLocalDate(), allReturns, totalReturnsSum, rStartDT.toLocalDate(), rEndDT.toLocalDate());

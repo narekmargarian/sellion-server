@@ -76,6 +76,11 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     @Query("SELECT o FROM Order o WHERE o.createdAt >= :start AND o.createdAt <= :end AND o.status != 'CANCELLED'")
     List<Order> findOrdersForPrintSummary(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 
+    @Query("SELECT o.id FROM Order o WHERE (:mId IS NULL OR o.managerId = :mId) " +
+            "AND o.createdAt >= :start AND o.createdAt <= :end")
+    List<Long> findAllIdsByFilters(@Param("mId") String mId,
+                                   @Param("start") LocalDateTime start,
+                                   @Param("end") LocalDateTime end);
 
 }
 

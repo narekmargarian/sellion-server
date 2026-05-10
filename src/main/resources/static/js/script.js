@@ -8,13 +8,20 @@ let tempItems = {};
 let managerIdList = [];
 let tempPromoItems = {};
 let currentPromoData = null;
-let selectedOrderIds = JSON.parse(localStorage.getItem('selectedOrders')) || [];
+
+let selectedOrderIds = JSON.parse(localStorage.getItem('selectedOrderIds')) || [];
+let selectedReturnIds = JSON.parse(localStorage.getItem('selectedReturnIds')) || [];
+
 
 function roundHalfUp(num) {
 
     return Math.round((num + Number.EPSILON) * 100) / 100;
 }
 
+function saveAllToStorage() {
+    localStorage.setItem('selectedOrderIds', JSON.stringify(selectedOrderIds));
+    localStorage.setItem('selectedReturnIds', JSON.stringify(selectedReturnIds));
+}
 
 function openModal(id) {
     const modal = document.getElementById(id);
@@ -149,37 +156,37 @@ function syncTempItems(items) {
 }
 
 
-function printSelectedOperations(type) {
-    const checkboxClass = type === 'order' ? '.order-print-check' : '.return-print-check';
-    const selectedIds = Array.from(document.querySelectorAll(`${checkboxClass}:checked`)).map(cb => cb.value);
-
-    if (selectedIds.length === 0) {
-        showToast("Сначала выберите записи галочкой!", "error");
-        return;
-    }
-
-    const frame = document.getElementById('printFrame');
-    const url = type === 'order' ? '/admin/orders/print-batch' : '/admin/returns/print-batch';
-
-    // Очищаем предыдущие обработчики, создавая клон фрейма (самый надежный метод)
-    const newFrame = frame.cloneNode(true);
-    frame.parentNode.replaceChild(newFrame, frame);
-
-    // Вешаем событие ОДИН раз
-    newFrame.addEventListener('load', function () {
-        if (newFrame.contentWindow.location.href === "about:blank") return;
-
-        setTimeout(() => {
-            newFrame.contentWindow.focus();
-            newFrame.contentWindow.print();
-        }, 300);
-    }, {once: true});
-
-    submitAsPost(url, selectedIds, 'printFrame');
-
-    localStorage.removeItem('selectedOrders');
-    selectedOrderIds = [];
-}
+// function printSelectedOperations(type) {
+//     const checkboxClass = type === 'order' ? '.order-print-check' : '.return-print-check';
+//     const selectedIds = Array.from(document.querySelectorAll(`${checkboxClass}:checked`)).map(cb => cb.value);
+//
+//     if (selectedIds.length === 0) {
+//         showToast("Сначала выберите записи галочкой!", "error");
+//         return;
+//     }
+//
+//     const frame = document.getElementById('printFrame');
+//     const url = type === 'order' ? '/admin/orders/print-batch' : '/admin/returns/print-batch';
+//
+//     // Очищаем предыдущие обработчики, создавая клон фрейма (самый надежный метод)
+//     const newFrame = frame.cloneNode(true);
+//     frame.parentNode.replaceChild(newFrame, frame);
+//
+//     // Вешаем событие ОДИН раз
+//     newFrame.addEventListener('load', function () {
+//         if (newFrame.contentWindow.location.href === "about:blank") return;
+//
+//         setTimeout(() => {
+//             newFrame.contentWindow.focus();
+//             newFrame.contentWindow.print();
+//         }, 300);
+//     }, {once: true});
+//
+//     submitAsPost(url, selectedIds, 'printFrame');
+//
+//     localStorage.removeItem('selectedOrders');
+//     selectedOrderIds = [];
+// }
 
 
 function submitAsPost(url, ids, targetName) {
@@ -215,63 +222,63 @@ function submitAsPost(url, ids, targetName) {
 }
 
 
-async function confirmReturn(id) {
-    const ret = (returnsData || []).find(r => r.id == id);
-    if (!ret) return showToast("Возврат не найден", "error");
-
-    // 1. Проверяем, есть ли несохраненные изменения в ценах или количестве
-    // Если мы в режиме редактирования (есть инпуты), сначала сохраняем
-    const isEditMode = !!document.querySelector('.item-price-input');
-
-    if (isEditMode) {
-        showToast("Сначала сохраните изменения перед подтверждением", "info");
-        return;
-    }
-
-    // 2. Используем модальное окно подтверждения
-    showConfirmModal(
-        "Провести возврат?",
-        `Сумма ${window.currentOrderTotal.toLocaleString()} ֏ будет вычтена из долга клиента. Склад будет обновлен автоматически (если применимо).`,
-        async () => {
-            try {
-                // Блокируем кнопку, чтобы избежать двойного клика
-                const confirmBtn = document.querySelector('#confirm-modal-ok');
-                if (confirmBtn) confirmBtn.disabled = true;
-
-                // 3. Отправка запроса на подтверждение
-                const response = await fetch(`/api/admin/returns/${id}/confirm`, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'}
-                });
-
-                const result = await response.json();
-
-                if (response.ok) {
-                    // Формируем детальное сообщение
-                    let successMsg = `Возврат #${id} проведен. `;
-                    if (result.stockUpdated) {
-                        successMsg += "Товар возвращен на склад.";
-                    }
-
-                    showToast(successMsg, "success");
-
-                    // 4. Обновляем статус в локальном массиве (для красоты до релоада)
-                    ret.status = 'CONFIRMED';
-
-                    setTimeout(() => {
-                        location.reload();
-                    }, 800);
-                } else {
-                    showToast("Ошибка при подтверждении", "error");
-                    if (confirmBtn) confirmBtn.disabled = false;
-                }
-            } catch (e) {
-                console.error("Confirm return error:", e);
-                showToast("Ошибка сети: проверьте соединение", "error");
-            }
-        }
-    );
-}
+// async function confirmReturn(id) {
+//     const ret = (returnsData || []).find(r => r.id == id);
+//     if (!ret) return showToast("Возврат не найден", "error");
+//
+//     // 1. Проверяем, есть ли несохраненные изменения в ценах или количестве
+//     // Если мы в режиме редактирования (есть инпуты), сначала сохраняем
+//     const isEditMode = !!document.querySelector('.item-price-input');
+//
+//     if (isEditMode) {
+//         showToast("Сначала сохраните изменения перед подтверждением", "info");
+//         return;
+//     }
+//
+//     // 2. Используем модальное окно подтверждения
+//     showConfirmModal(
+//         "Провести возврат?",
+//         `Сумма ${window.currentOrderTotal.toLocaleString()} ֏ будет вычтена из долга клиента. Склад будет обновлен автоматически (если применимо).`,
+//         async () => {
+//             try {
+//                 // Блокируем кнопку, чтобы избежать двойного клика
+//                 const confirmBtn = document.querySelector('#confirm-modal-ok');
+//                 if (confirmBtn) confirmBtn.disabled = true;
+//
+//                 // 3. Отправка запроса на подтверждение
+//                 const response = await fetch(`/api/admin/returns/${id}/confirm`, {
+//                     method: 'POST',
+//                     headers: {'Content-Type': 'application/json'}
+//                 });
+//
+//                 const result = await response.json();
+//
+//                 if (response.ok) {
+//                     // Формируем детальное сообщение
+//                     let successMsg = `Возврат #${id} проведен. `;
+//                     if (result.stockUpdated) {
+//                         successMsg += "Товар возвращен на склад.";
+//                     }
+//
+//                     showToast(successMsg, "success");
+//
+//                     // 4. Обновляем статус в локальном массиве (для красоты до релоада)
+//                     ret.status = 'CONFIRMED';
+//
+//                     setTimeout(() => {
+//                         location.reload();
+//                     }, 800);
+//                 } else {
+//                     showToast("Ошибка при подтверждении", "error");
+//                     if (confirmBtn) confirmBtn.disabled = false;
+//                 }
+//             } catch (e) {
+//                 console.error("Confirm return error:", e);
+//                 showToast("Ошибка сети: проверьте соединение", "error");
+//             }
+//         }
+//     );
+// }
 
 
 function updateReturnRowInTable(ret) {
@@ -676,46 +683,27 @@ async function openCreateOrderModal() {
 
 
 async function cancelOrder(id) {
-    // 1. Используем подтверждение
+    // Исправлено название функции на showConfirm
     showConfirmModal("Отменить заказ?", "Товар вернется на склад, суммы заказа будут обнулены.", async () => {
         try {
-            // Блокируем кнопку в модальном окне (если есть доступ к DOM), чтобы избежать дублей
-            const confirmBtn = document.querySelector('.modal-confirm-btn');
-            if (confirmBtn) confirmBtn.disabled = true;
-
-            // 2. Выполняем запрос
-            // Благодаря вашему новому fetch, если статус 400 (уже отменен) или 403 (нет прав),
-            // выполнение ПРЕРВЕТСЯ здесь и уйдет в catch.
             const response = await fetch(`/api/admin/orders/${id}/cancel`, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('input[name="_csrf"]')?.value
+                    'Content-Type': 'application/json'
                 }
             });
+            // Если fetch перехвачен твоим глобальным скриптом,
+            // ошибки 400 уже покажут Toast и сделают Promise.reject()
 
-            // 3. Обработка успешного ответа (только для 200 OK)
             const result = await response.json();
-
             showToast(result.message || "Заказ успешно отменен", "success");
-
-            // 4. Перезагрузка страницы
-            setTimeout(() => {
-                location.reload();
-            }, 800);
-
+            setTimeout(() => location.reload(), 800);
         } catch (e) {
-            // Блок остается пустым для уведомлений, так как глобальный fetch
-            // уже показал тост: "Этот заказ уже был отменен ранее" или "Доступ запрещен".
-            console.warn("Отмена заказа отклонена:", e.message);
-
-            // Если заказ уже отменен, обновляем страницу через паузу, чтобы данные стали актуальными
-            if (e.message && e.message.includes("уже был отменен")) {
-                setTimeout(() => location.reload(), 1500);
-            }
+            console.warn("Отмена отклонена:", e.message);
         }
     });
 }
+
 
 async function showOrderHistory(orderId) {
     const body = document.getElementById('order-items-body');
@@ -1082,28 +1070,28 @@ function getCurrentTimeFormat() {
 }
 
 
-function printInvoiceInline(url) {
-    // Теперь url передается целиком из кнопки
-    const iframe = document.createElement('iframe');
-    iframe.style.display = 'none';
-    iframe.src = url;
-    document.body.appendChild(iframe);
-
-    iframe.onload = function () {
-        try {
-            iframe.contentWindow.focus();
-            iframe.contentWindow.print();
-            setTimeout(() => {
-                if (document.body.contains(iframe)) {
-                    document.body.removeChild(iframe);
-                }
-            }, 1000);
-        } catch (e) {
-            console.warn("Печать через iframe не удалась, открываю окно...");
-            window.open(url, '_blank');
-        }
-    };
-}
+// function printInvoiceInline(url) {
+//     // Теперь url передается целиком из кнопки
+//     const iframe = document.createElement('iframe');
+//     iframe.style.display = 'none';
+//     iframe.src = url;
+//     document.body.appendChild(iframe);
+//
+//     iframe.onload = function () {
+//         try {
+//             iframe.contentWindow.focus();
+//             iframe.contentWindow.print();
+//             setTimeout(() => {
+//                 if (document.body.contains(iframe)) {
+//                     document.body.removeChild(iframe);
+//                 }
+//             }, 1000);
+//         } catch (e) {
+//             console.warn("Печать через iframe не удалась, открываю окно...");
+//             window.open(url, '_blank');
+//         }
+//     };
+// }
 
 
 function showTab(tabId) {
@@ -1162,7 +1150,7 @@ function updateDashboardStats() {
 
 
 async function deleteReturnOrder(id) {
-    showConfirm(
+    showConfirmModal(
         "Ջնջել վերադարձը?",
         "Դուք վստա՞հ եք, որ ցանկանում եք ջնջել այս վերադարձը:",
         async () => {
@@ -1290,21 +1278,21 @@ function openUserDetailsModal(id) {
     openModal(modalId);
 }
 
-async function deleteUser(id) {
-    showConfirmModal("Удалить сотрудника?", "Доступ в систему будет полностью заблокирован.", async () => {
-        try {
-            const response = await fetch(`/api/admin/users/${id}`, {method: 'DELETE'});
-            if (response.ok) {
-                showToast("Сотрудник удален", "success");
-                location.reload();
-            } else {
-                showToast("Ошибка при удалении", "error");
-            }
-        } catch (e) {
-            showToast("Ошибка сети", "error");
-        }
-    });
-}
+// async function deleteUser(id) {
+//     showConfirmModal("Удалить сотрудника?", "Доступ в систему будет полностью заблокирован.", async () => {
+//         try {
+//             const response = await fetch(`/api/admin/users/${id}`, {method: 'DELETE'});
+//             if (response.ok) {
+//                 showToast("Сотрудник удален", "success");
+//                 location.reload();
+//             } else {
+//                 showToast("Ошибка при удалении", "error");
+//             }
+//         } catch (e) {
+//             showToast("Ошибка сети", "error");
+//         }
+//     });
+// }
 
 
 async function submitEditUser(id) {
@@ -1342,30 +1330,30 @@ async function submitEditUser(id) {
 }
 
 
-function showConfirmModal(title, text, onConfirm) {
-    const modal = document.getElementById('confirm-modal');
-    document.getElementById('confirm-title').innerText = title;
-    document.getElementById('confirm-text').innerText = text;
+// function showConfirmModal(title, text, onConfirm) {
+//     const modal = document.getElementById('confirm-modal');
+//     document.getElementById('confirm-title').innerText = title;
+//     document.getElementById('confirm-text').innerText = text;
+//
+//     const yesBtn = document.getElementById('confirm-yes');
+//     const noBtn = document.getElementById('confirm-no');
+//
+//     // Очищаем предыдущие обработчики
+//     yesBtn.onclick = null;
+//     noBtn.onclick = null;
+//
+//     yesBtn.onclick = () => {
+//         modal.close();
+//         onConfirm();
+//     };
+//
+//     noBtn.onclick = () => modal.close();
+//
+//     modal.showModal();
+// }
 
-    const yesBtn = document.getElementById('confirm-yes');
-    const noBtn = document.getElementById('confirm-no');
 
-    // Очищаем предыдущие обработчики
-    yesBtn.onclick = null;
-    noBtn.onclick = null;
-
-    yesBtn.onclick = () => {
-        modal.close();
-        onConfirm();
-    };
-
-    noBtn.onclick = () => modal.close();
-
-    modal.showModal();
-}
-
-
-function showConfirm(title, message, onConfirm) {
+function showConfirmModal(title, message, onConfirm) {
     const modal = document.getElementById('customModal');
 
     // Устанавливаем тексты
@@ -1444,91 +1432,91 @@ async function submitCreateUser() {
 }
 
 
-async function resetPassword(userId) {
-    showConfirmModal("Сброс пароля", "Сбросить пароль пользователю на стандартный 'qwerty'?", async () => {
-        try {
-            const response = await fetch(`/api/admin/users/reset-password/${userId}`, {method: 'POST'});
-            if (response.ok) {
-                showToast("Пароль сброшен на 'qwerty'", "success");
-            } else {
-                showToast("Ошибка при сбросе пароля", "error");
-            }
-        } catch (e) {
-            showToast("Ошибка сети", "error");
-        }
-    });
-}
+// async function resetPassword(userId) {
+//     showConfirmModal("Сброс пароля", "Сбросить пароль пользователю на стандартный 'qwerty'?", async () => {
+//         try {
+//             const response = await fetch(`/api/admin/users/reset-password/${userId}`, {method: 'POST'});
+//             if (response.ok) {
+//                 showToast("Пароль сброшен на 'qwerty'", "success");
+//             } else {
+//                 showToast("Ошибка при сбросе пароля", "error");
+//             }
+//         } catch (e) {
+//             showToast("Ошибка сети", "error");
+//         }
+//     });
+// }
 
 
-window.printOrder = function (id) {
-    console.log("Запуск печати заказа:", id);
-    const url = `/admin/orders/print/${id}`;
-    printAction(url);
-}
+// window.printOrder = function (id) {
+//     console.log("Запуск печати заказа:", id);
+//     const url = `/admin/orders/print/${id}`;
+//     printAction(url);
+// }
+//
+// window.printAction = function (url) {
+//     const frame = document.getElementById('printFrame');
+//     if (!frame) return;
+//
+//     // 1. ОЧИСТКА
+//     frame.onload = null;
+//     frame.src = "about:blank";
+//
+//     // 2. ПРОВЕРКА ДОСТУПА ПЕРЕД ПЕЧАТЬЮ
+//     // Вместо прямой вставки в src, сначала проверяем, есть ли у пользователя права
+//     fetch(url, {method: 'GET'})
+//         .then(response => {
+//             // Если fetch вернул 200, значит доступ есть и страница готова
+//             showToast("⏳ Подготовка документа...", "info");
+//
+//             setTimeout(() => {
+//                 frame.src = url;
+//
+//                 frame.onload = function () {
+//                     if (frame.contentWindow.location.href.includes("about:blank")) return;
+//
+//                     // 3. РЕНДЕРИНГ И ПЕЧАТЬ
+//                     setTimeout(() => {
+//                         try {
+//                             frame.contentWindow.focus();
+//                             frame.contentWindow.print();
+//                             frame.onload = null; // Удаляем обработчик после успеха
+//                         } catch (e) {
+//                             console.error("Ошибка печати:", e);
+//                             // Фоллбек: если фрейм заблокирован, открываем в новом окне
+//                             // window.open(url, '_blank');
+//                         }
+//                     }, 500);
+//                 };
+//             }, 100);
+//         })
+//         .catch(error => {
+//             // Если прав нет (403), сработает ваш новый глобальный fetch
+//             // и покажет "Доступ запрещен". Здесь ничего делать не нужно.
+//             console.warn("Печать отменена: нет доступа или ошибка сети");
+//         });
+// };
 
-window.printAction = function (url) {
-    const frame = document.getElementById('printFrame');
-    if (!frame) return;
+// window.printOrder = (id) => window.printAction(`/admin/orders/print/${id}`);
+// window.printReturn = (id) => window.printAction(`/admin/returns/print/${id}`);
 
-    // 1. ОЧИСТКА
-    frame.onload = null;
-    frame.src = "about:blank";
-
-    // 2. ПРОВЕРКА ДОСТУПА ПЕРЕД ПЕЧАТЬЮ
-    // Вместо прямой вставки в src, сначала проверяем, есть ли у пользователя права
-    fetch(url, {method: 'GET'})
-        .then(response => {
-            // Если fetch вернул 200, значит доступ есть и страница готова
-            showToast("⏳ Подготовка документа...", "info");
-
-            setTimeout(() => {
-                frame.src = url;
-
-                frame.onload = function () {
-                    if (frame.contentWindow.location.href.includes("about:blank")) return;
-
-                    // 3. РЕНДЕРИНГ И ПЕЧАТЬ
-                    setTimeout(() => {
-                        try {
-                            frame.contentWindow.focus();
-                            frame.contentWindow.print();
-                            frame.onload = null; // Удаляем обработчик после успеха
-                        } catch (e) {
-                            console.error("Ошибка печати:", e);
-                            // Фоллбек: если фрейм заблокирован, открываем в новом окне
-                            // window.open(url, '_blank');
-                        }
-                    }, 500);
-                };
-            }, 100);
-        })
-        .catch(error => {
-            // Если прав нет (403), сработает ваш новый глобальный fetch
-            // и покажет "Доступ запрещен". Здесь ничего делать не нужно.
-            console.warn("Печать отменена: нет доступа или ошибка сети");
-        });
-};
-
-window.printOrder = (id) => window.printAction(`/admin/orders/print/${id}`);
-window.printReturn = (id) => window.printAction(`/admin/returns/print/${id}`);
+//
+// window.printOrderList = () => {
+//     const manager = document.querySelector('select[name="orderManagerId"]').value;
+//     const start = document.querySelector('input[name="orderStartDate"]').value;
+//     const end = document.querySelector('input[name="orderEndDate"]').value;
+//     printAction(`/admin/orders/print-all?orderManagerId=${manager}&orderStartDate=${start}&orderEndDate=${end}`);
+// };
 
 
-window.printOrderList = () => {
-    const manager = document.querySelector('select[name="orderManagerId"]').value;
-    const start = document.querySelector('input[name="orderStartDate"]').value;
-    const end = document.querySelector('input[name="orderEndDate"]').value;
-    printAction(`/admin/orders/print-all?orderManagerId=${manager}&orderStartDate=${start}&orderEndDate=${end}`);
-};
-
-
-function printRouteSheet() {
-    const mId = document.getElementById('route-manager-select').value;
-    const date = document.getElementById('route-date-select').value;
-    if (!date) return showToast("Выберите дату", "error");
-
-    const url = `/admin/logistic/route-list?managerId=${mId}&date=${date}`;
-    printAction(url);
-}
+// function printRouteSheet() {
+//     const mId = document.getElementById('route-manager-select').value;
+//     const date = document.getElementById('route-date-select').value;
+//     if (!date) return showToast("Выберите дату", "error");
+//
+//     const url = `/admin/logistic/route-list?managerId=${mId}&date=${date}`;
+//     printAction(url);
+// }
 
 let stompClient = null;
 
@@ -1577,19 +1565,19 @@ function connectWebSocket() {
     });
 }
 
-async function deleteProduct(id) {
-    showConfirmModal("Удалить товар?", "Он будет скрыт...", async () => {
-        try {
-            const response = await fetch(`/api/products/${id}`, {method: 'DELETE'});
-            // Если мы здесь, значит fetch прошел успешно (status 200)
-            showToast("Товар успешно удален (скрыт)!", "success");
-            location.reload();
-        } catch (e) {
-            // Ошибка уже показана глобальным перехватчиком
-            console.log("Удаление отменено из-за прав");
-        }
-    });
-}
+// async function deleteProduct(id) {
+//     showConfirmModal("Удалить товар?", "Он будет скрыт...", async () => {
+//         try {
+//             const response = await fetch(`/api/products/${id}`, {method: 'DELETE'});
+//             // Если мы здесь, значит fetch прошел успешно (status 200)
+//             showToast("Товар успешно удален (скрыт)!", "success");
+//             location.reload();
+//         } catch (e) {
+//             // Ошибка уже показана глобальным перехватчиком
+//             console.log("Удаление отменено из-за прав");
+//         }
+//     });
+// }
 
 
 async function openProductDetails(id) {
@@ -1819,17 +1807,17 @@ async function saveProductChanges(id) {
 }
 
 
-async function deleteClient(id) {
-    showConfirmModal("Удалить клиента?", "Он будет скрыт из списков, но останется в старых счетах и заказах.", async () => {
-        const response = await fetch(`/api/clients/${id}`, {method: 'DELETE'});
-        if (response.ok) {
-            showToast("Клиент успешно удален (скрыт)!", "success");
-            location.reload();
-        } else {
-            showToast("Ошибка удаления", "error");
-        }
-    });
-}
+// async function deleteClient(id) {
+//     showConfirmModal("Удалить клиента?", "Он будет скрыт из списков, но останется в старых счетах и заказах.", async () => {
+//         const response = await fetch(`/api/clients/${id}`, {method: 'DELETE'});
+//         if (response.ok) {
+//             showToast("Клиент успешно удален (скрыт)!", "success");
+//             location.reload();
+//         } else {
+//             showToast("Ошибка удаления", "error");
+//         }
+//     });
+// }
 
 
 function doInventory() {
@@ -2097,25 +2085,25 @@ function updateSelectedCount() {
 }
 
 
-window.printOrderList = function () {
-    const form = document.querySelector('#tab-orders .filter-bar form');
-    const mId = form.querySelector('select[name="orderManagerId"]').value;
-    const s = form.querySelector('input[name="orderStartDate"]').value;
-    const e = form.querySelector('input[name="orderEndDate"]').value;
-
-    const url = `/admin/orders/print-all?orderManagerId=${mId}&orderStartDate=${s}&orderEndDate=${e}`;
-    printAction(url);
-}
-
-window.printReturnList = function () {
-    const form = document.querySelector('#tab-returns .filter-bar form');
-    const mId = form.querySelector('select[name="returnManagerId"]').value;
-    const s = form.querySelector('input[name="returnStartDate"]').value;
-    const e = form.querySelector('input[name="returnEndDate"]').value;
-
-    const url = `/admin/returns/print-all?returnManagerId=${mId}&returnStartDate=${s}&returnEndDate=${e}`;
-    printAction(url);
-}
+// window.printOrderList = function () {
+//     const form = document.querySelector('#tab-orders .filter-bar form');
+//     const mId = form.querySelector('select[name="orderManagerId"]').value;
+//     const s = form.querySelector('input[name="orderStartDate"]').value;
+//     const e = form.querySelector('input[name="orderEndDate"]').value;
+//
+//     const url = `/admin/orders/print-all?orderManagerId=${mId}&orderStartDate=${s}&orderEndDate=${e}`;
+//     printAction(url);
+// }
+//
+// window.printReturnList = function () {
+//     const form = document.querySelector('#tab-returns .filter-bar form');
+//     const mId = form.querySelector('select[name="returnManagerId"]').value;
+//     const s = form.querySelector('input[name="returnStartDate"]').value;
+//     const e = form.querySelector('input[name="returnEndDate"]').value;
+//
+//     const url = `/admin/returns/print-all?returnManagerId=${mId}&returnStartDate=${s}&returnEndDate=${e}`;
+//     printAction(url);
+// }
 
 
 document.addEventListener('input', function (e) {
@@ -2144,25 +2132,25 @@ function toggleAllCorrections(source) {
 }
 
 
-function sendSelectedCorrections() {
-    const selectedIds = Array.from(document.querySelectorAll('.correction-checkbox:checked')).map(cb => cb.value);
-    const emailInput = document.getElementById('report-email');
-    const email = emailInput ? emailInput.value : 'accountant@company.am';
-
-    if (selectedIds.length === 0) {
-        showToast("Выберите хотя бы одну корректировку", "info");
-        return;
-    }
-
-    showConfirmModal(
-        "Подтверждение отправки",
-        `Отправить реестр из ${selectedIds.length} корректировок на почту ${email}?`,
-        () => {
-            // Эта часть выполнится только после нажатия "Да" в модальном окне
-            executeSendingCorrections(selectedIds, email);
-        }
-    );
-}
+// function sendSelectedCorrections() {
+//     const selectedIds = Array.from(document.querySelectorAll('.correction-checkbox:checked')).map(cb => cb.value);
+//     const emailInput = document.getElementById('report-email');
+//     const email = emailInput ? emailInput.value : 'accountant@company.am';
+//
+//     if (selectedIds.length === 0) {
+//         showToast("Выберите хотя бы одну корректировку", "info");
+//         return;
+//     }
+//
+//     showConfirmModal(
+//         "Подтверждение отправки",
+//         `Отправить реестр из ${selectedIds.length} корректировок на почту ${email}?`,
+//         () => {
+//             // Эта часть выполнится только после нажатия "Да" в модальном окне
+//             executeSendingCorrections(selectedIds, email);
+//         }
+//     );
+// }
 
 function executeSendingCorrections(selectedIds, email) {
     showToast("⏳ Подготовка и отправка реестра...");
@@ -2316,31 +2304,31 @@ function applyReportFilters() {
     window.location.href = url.toString();
 }
 
-function printCompactOrders() {
-    const checkboxes = document.querySelectorAll('.order-print-check:checked');
-    if (checkboxes.length === 0) return showToast("Выберите хотя бы один заказ", "error");
-
-    // Формируем строку параметров: type=order&ids=1&ids=2...
-    const params = new URLSearchParams();
-    params.append('type', 'order');
-    checkboxes.forEach(cb => params.append('ids', cb.value));
-
-    const url = `/admin/logistic/print-compact?${params.toString()}`;
-    printAction(url);
-}
-
-function printCompactReturns() {
-    const checkboxes = document.querySelectorAll('.return-print-check:checked');
-    if (checkboxes.length === 0) return showToast("Выберите хотя бы один возврат", "error");
-
-    // Формируем строку параметров: type=return&ids=1&ids=2...
-    const params = new URLSearchParams();
-    params.append('type', 'return');
-    checkboxes.forEach(cb => params.append('ids', cb.value));
-
-    const url = `/admin/logistic/print-compact?${params.toString()}`;
-    printAction(url);
-}
+// function printCompactOrders() {
+//     const checkboxes = document.querySelectorAll('.order-print-check:checked');
+//     if (checkboxes.length === 0) return showToast("Выберите хотя бы один заказ", "error");
+//
+//     // Формируем строку параметров: type=order&ids=1&ids=2...
+//     const params = new URLSearchParams();
+//     params.append('type', 'order');
+//     checkboxes.forEach(cb => params.append('ids', cb.value));
+//
+//     const url = `/admin/logistic/print-compact?${params.toString()}`;
+//     printAction(url);
+// }
+//
+// function printCompactReturns() {
+//     const checkboxes = document.querySelectorAll('.return-print-check:checked');
+//     if (checkboxes.length === 0) return showToast("Выберите хотя бы один возврат", "error");
+//
+//     // Формируем строку параметров: type=return&ids=1&ids=2...
+//     const params = new URLSearchParams();
+//     params.append('type', 'return');
+//     checkboxes.forEach(cb => params.append('ids', cb.value));
+//
+//     const url = `/admin/logistic/print-compact?${params.toString()}`;
+//     printAction(url);
+// }
 
 
 const csrfToken = document.querySelector('input[name="_csrf"]')?.value;
@@ -2382,33 +2370,33 @@ async function secureFetch(url, options = {}) {
 }
 
 
-function printSelectedRows(tableId) {
-    const selected = Array.from(document.querySelectorAll(`#${tableId} .row-checkbox:checked`))
-        .map(cb => cb.value);
-    if (selected.length === 0) return alert("Выберите хотя бы одну запись");
-
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = '/admin/orders/print-batch';
-    form.target = '_blank';
-
-    const csrfToken = document.querySelector('meta[name="_csrf"]').content;
-    const csrfInput = document.createElement('input');
-    csrfInput.name = '_csrf';
-    csrfInput.value = csrfToken;
-    form.appendChild(csrfInput);
-
-    selected.forEach(id => {
-        const input = document.createElement('input');
-        input.name = 'ids';
-        input.value = id;
-        form.appendChild(input);
-    });
-
-    document.body.appendChild(form);
-    form.submit();
-    form.remove();
-}
+// function printSelectedRows(tableId) {
+//     const selected = Array.from(document.querySelectorAll(`#${tableId} .row-checkbox:checked`))
+//         .map(cb => cb.value);
+//     if (selected.length === 0) return alert("Выберите хотя бы одну запись");
+//
+//     const form = document.createElement('form');
+//     form.method = 'POST';
+//     form.action = '/admin/orders/print-batch';
+//     form.target = '_blank';
+//
+//     const csrfToken = document.querySelector('meta[name="_csrf"]').content;
+//     const csrfInput = document.createElement('input');
+//     csrfInput.name = '_csrf';
+//     csrfInput.value = csrfToken;
+//     form.appendChild(csrfInput);
+//
+//     selected.forEach(id => {
+//         const input = document.createElement('input');
+//         input.name = 'ids';
+//         input.value = id;
+//         form.appendChild(input);
+//     });
+//
+//     document.body.appendChild(form);
+//     form.submit();
+//     form.remove();
+// }
 
 
 async function submitWriteOff() {
@@ -3691,31 +3679,33 @@ function openPaymentModal(invoiceId) {
 }
 
 
-function printDailySummary() {
-    const tab = document.getElementById('tab-orders');
-    const selectedIds = Array.from(tab.querySelectorAll('.order-print-check:checked')).map(cb => cb.value);
-
-    if (selectedIds.length === 0) {
-        showToast("Выберите заказы для сводки!", "error");
-        return;
-    }
-
-    const frame = document.getElementById('printFrame');
-    const url = '/admin/orders/print-daily-summary';
-
-    const newFrame = frame.cloneNode(true);
-    frame.parentNode.replaceChild(newFrame, frame);
-
-    newFrame.addEventListener('load', function () {
-        if (newFrame.contentWindow.location.href === "about:blank") return;
-        setTimeout(() => {
-            newFrame.contentWindow.focus();
-            newFrame.contentWindow.print();
-        }, 300);
-    }, {once: true});
-
-    submitAsPost(url, selectedIds, 'printFrame');
-}
+// function printDailySummary() {
+//     const tab = document.getElementById('tab-orders');
+//     const selectedIds = Array.from(tab.querySelectorAll('.order-print-check:checked')).map(cb => cb.value);
+//
+//     if (selectedIds.length === 0) {
+//         showToast("Выберите заказы для сводки!", "error");
+//         return;
+//     }
+//
+//     const frame = document.getElementById('printFrame');
+//     const url = '/admin/orders/print-daily-summary';
+//
+//     const newFrame = frame.cloneNode(true);
+//     frame.parentNode.replaceChild(newFrame, frame);
+//
+//     newFrame.addEventListener('load', function () {
+//         if (newFrame.contentWindow.location.href === "about:blank") return;
+//         setTimeout(() => {
+//             newFrame.contentWindow.focus();
+//             newFrame.contentWindow.print();
+//         }, 300);
+//     }, {once: true});
+//
+//     submitAsPost(url, selectedIds, 'printFrame');
+//
+//     clearOrderSelection();
+// }
 
 
 function convertDateToISO(dateVal) {
@@ -4008,58 +3998,58 @@ function openCreatePromoModal() {
 }
 
 
-async function checkPromosBeforeSave(items) {
-    const res = await fetch('/api/promos/check-active', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(Object.keys(items))
-    });
-    const activePromos = await res.json();
-
-    if (activePromos.length > 0) {
-        // Формируем красивые карточки с РАБОЧИМИ ползунками
-        // Внутри функции checkPromosBeforeSave или там, где рисуете список:
-        const promoListHtml = activePromos.map(p => `
-    <label class="promo-card" style="display: flex; align-items: center; justify-content: space-between; width: 100%; box-sizing: border-box;">
-        <div style="flex-grow: 1; text-align: left; pointer-events: none;">
-            <div style="font-weight: 700; color: #1e293b; font-size: 13px;">${p.title || p.name}</div>
-            <div style="font-size: 11px; color: #64748b;">Для менеджера: ${p.managerId}</div>
-        </div>
-        
-        <!-- Чекбокс ДОЛЖЕН быть перед .custom-switch -->
-        <input type="checkbox" 
-               class="promo-checkbox" 
-               data-promo-id="${p.id}" 
-               checked 
-               style="display: none;"> <!-- Скрываем, но он работает через label -->
-        
-        <!-- Визуальный ползунок -->
-        <div class="custom-switch"></div>
-    </label>
-`).join('');
-
-
-        showConfirmModal("Нашли акции!", `
-            <div style="text-align:center;">
-                ${promoListHtml}
-                <p style="font-size:11px; color:#ef4444; margin-top:15px;">* При активации спец. цены заменят скидку магазина на эти товары.</p>
-            </div>
-        `, () => {
-            // Собираем ТОЛЬКО те акции, где ползунок остался включенным
-            const selectedPromos = [];
-            document.querySelectorAll('.promo-apply-checkbox').forEach(cb => {
-                if (cb.checked) {
-                    const id = cb.getAttribute('data-promo-id');
-                    const found = activePromos.find(ap => ap.id == id);
-                    if (found) selectedPromos.push(found);
-                }
-            });
-            saveOrderWithPromos(selectedPromos);
-        });
-    } else {
-        performFinalOrderSave();
-    }
-}
+// async function checkPromosBeforeSave(items) {
+//     const res = await fetch('/api/promos/check-active', {
+//         method: 'POST',
+//         headers: {'Content-Type': 'application/json'},
+//         body: JSON.stringify(Object.keys(items))
+//     });
+//     const activePromos = await res.json();
+//
+//     if (activePromos.length > 0) {
+//         // Формируем красивые карточки с РАБОЧИМИ ползунками
+//         // Внутри функции checkPromosBeforeSave или там, где рисуете список:
+//         const promoListHtml = activePromos.map(p => `
+//     <label class="promo-card" style="display: flex; align-items: center; justify-content: space-between; width: 100%; box-sizing: border-box;">
+//         <div style="flex-grow: 1; text-align: left; pointer-events: none;">
+//             <div style="font-weight: 700; color: #1e293b; font-size: 13px;">${p.title || p.name}</div>
+//             <div style="font-size: 11px; color: #64748b;">Для менеджера: ${p.managerId}</div>
+//         </div>
+//
+//         <!-- Чекбокс ДОЛЖЕН быть перед .custom-switch -->
+//         <input type="checkbox"
+//                class="promo-checkbox"
+//                data-promo-id="${p.id}"
+//                checked
+//                style="display: none;"> <!-- Скрываем, но он работает через label -->
+//
+//         <!-- Визуальный ползунок -->
+//         <div class="custom-switch"></div>
+//     </label>
+// `).join('');
+//
+//
+//         showConfirmModal("Нашли акции!", `
+//             <div style="text-align:center;">
+//                 ${promoListHtml}
+//                 <p style="font-size:11px; color:#ef4444; margin-top:15px;">* При активации спец. цены заменят скидку магазина на эти товары.</p>
+//             </div>
+//         `, () => {
+//             // Собираем ТОЛЬКО те акции, где ползунок остался включенным
+//             const selectedPromos = [];
+//             document.querySelectorAll('.promo-apply-checkbox').forEach(cb => {
+//                 if (cb.checked) {
+//                     const id = cb.getAttribute('data-promo-id');
+//                     const found = activePromos.find(ap => ap.id == id);
+//                     if (found) selectedPromos.push(found);
+//                 }
+//             });
+//             saveOrderWithPromos(selectedPromos);
+//         });
+//     } else {
+//         performFinalOrderSave();
+//     }
+// }
 
 document.addEventListener('DOMContentLoaded', () => {
     const activeTab = new URLSearchParams(window.location.search).get('activeTab');
@@ -4153,39 +4143,39 @@ function getStatusClass(status) {
     }
 }
 
-async function deletePromoAction(id) {
-    showConfirmModal("Удаление акции", "Вы уверены, что хотите полностью удалить эту акцию? Данные будут стерты.", async () => {
-        try {
-            // Выполняем запрос. Глобальный fetch сам покажет ошибку, если статус не 2xx.
-            await fetch(`/api/admin/promos/${id}`, {
-                method: 'DELETE',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('input[name="_csrf"]')?.value
-                }
-            });
-
-            // Этот блок сработает ТОЛЬКО при успешном удалении (status 200)
-            showToast("Акция успешно удалена", "success");
-
-            // Закрываем модалку, если функция существует
-            if (typeof closeModal === 'function') closeModal('modal-order-view');
-
-            setTimeout(() => {
-                if (typeof loadPromosByPeriod === 'function') {
-                    loadPromosByPeriod();
-                } else {
-                    location.reload();
-                }
-            }, 500);
-
-        } catch (e) {
-            // Блок пустой: уведомление об ошибке уже вывел глобальный fetch.
-            // Мы просто пресекаем появление "Критическая ошибка связи".
-            console.warn("Удаление акции отклонено или не удалось:", e.message);
-        }
-    });
-}
+// async function deletePromoAction(id) {
+//     showConfirmModal("Удаление акции", "Вы уверены, что хотите полностью удалить эту акцию? Данные будут стерты.", async () => {
+//         try {
+//             // Выполняем запрос. Глобальный fetch сам покажет ошибку, если статус не 2xx.
+//             await fetch(`/api/admin/promos/${id}`, {
+//                 method: 'DELETE',
+//                 headers: {
+//                     'Content-Type': 'application/json',
+//                     'X-CSRF-TOKEN': document.querySelector('input[name="_csrf"]')?.value
+//                 }
+//             });
+//
+//             // Этот блок сработает ТОЛЬКО при успешном удалении (status 200)
+//             showToast("Акция успешно удалена", "success");
+//
+//             // Закрываем модалку, если функция существует
+//             if (typeof closeModal === 'function') closeModal('modal-order-view');
+//
+//             setTimeout(() => {
+//                 if (typeof loadPromosByPeriod === 'function') {
+//                     loadPromosByPeriod();
+//                 } else {
+//                     location.reload();
+//                 }
+//             }, 500);
+//
+//         } catch (e) {
+//             // Блок пустой: уведомление об ошибке уже вывел глобальный fetch.
+//             // Мы просто пресекаем появление "Критическая ошибка связи".
+//             console.warn("Удаление акции отклонено или не удалось:", e.message);
+//         }
+//     });
+// }
 
 
 async function openPromoDetails(id) {
@@ -4237,15 +4227,15 @@ async function openPromoDetails(id) {
     openModal('modal-order-view');
 }
 
-async function confirmPromoAction(id) {
-    showConfirmModal("Подтвердить акцию?", "После подтверждения редактирование будет невозможно!", async () => {
-        const res = await fetch(`/api/admin/promos/${id}/confirm`, {method: 'POST'});
-        if (res.ok) {
-            showToast("Акция подтверждена!", "success");
-            location.reload();
-        }
-    });
-}
+// async function confirmPromoAction(id) {
+//     showConfirmModal("Подтвердить акцию?", "После подтверждения редактирование будет невозможно!", async () => {
+//         const res = await fetch(`/api/admin/promos/${id}/confirm`, {method: 'POST'});
+//         if (res.ok) {
+//             showToast("Акция подтверждена!", "success");
+//             location.reload();
+//         }
+//     });
+// }
 
 function downloadInventoryExcel() {
     showToast("⏳ Подготовка данных склада...", "info");
@@ -4805,25 +4795,223 @@ function recalculateAllPricesByPercent() {
     window.currentOrderTotal = totalOrderSum;
 }
 
+// function handleLogout() {
+//     showConfirmModal('Подтвердите выход', 'Вы уверены, что хотите покинуть систему?', () => {
+//         // Очищаем локальное состояние в браузере
+//         localStorage.clear();
+//         sessionStorage.clear();
+//
+//         // Отправляем форму
+//         document.getElementById('logout-form').submit();
+//     });
+// }
+//
+// function handleCreateInvoice(orderId) {
+//     showConfirmModal("Подтверждение", "Выставить счет и списать товар?", () => {
+//         // 1. Создаем форму "на лету"
+//         const form = document.createElement('form');
+//         form.method = 'POST';
+//         form.action = `/admin/invoices/create-from-order/${orderId}`;
+//
+//         // 2. Добавляем CSRF токен (берем из любой формы на странице)
+//         const csrfInput = document.querySelector('input[name="_csrf"]');
+//         if (csrfInput) {
+//             const input = document.createElement('input');
+//             input.type = 'hidden';
+//             input.name = '_csrf';
+//             input.value = csrfInput.value;
+//             form.appendChild(input);
+//         }
+//
+//         // 3. Отправляем. Страница перезагрузится.
+//         document.body.appendChild(form);
+//         form.submit();
+//
+//         // После этого Контроллер в Java сделает редирект,
+//         // и вы увидите красную плашку "Недостаточно товара: Манго"
+//     });
+// }
+
+
+
+
+// 1. Подтверждение возврата
+async function confirmReturn(id) {
+    const ret = (returnsData || []).find(r => r.id == id);
+    if (!ret) return showToast("Возврат не найден", "error");
+
+    const isEditMode = !!document.querySelector('.item-price-input');
+    if (isEditMode) {
+        showToast("Сначала сохраните изменения перед подтверждением", "info");
+        return;
+    }
+
+    // ЗАМЕНЕНО: showConfirm
+    showConfirmModal(
+        "Провести возврат?",
+        `Сумма ${window.currentOrderTotal.toLocaleString()} ֏ будет вычтена из долга клиента. Склад будет обновлен автоматически.`,
+        async () => {
+            try {
+                const response = await fetch(`/api/admin/returns/${id}/confirm`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'}
+                });
+
+                const result = await response.json();
+                if (response.ok) {
+                    showToast("Возврат проведен успешно", "success");
+                    setTimeout(() => location.reload(), 800);
+                }
+            } catch (e) {
+                console.error("Confirm error:", e);
+            }
+        }
+    );
+}
+
+// 2. Удаление сотрудника
+async function deleteUser(id) {
+    showConfirmModal("Удалить сотрудника?", "Доступ в систему будет полностью заблокирован.", async () => {
+        try {
+            const response = await fetch(`/api/admin/users/${id}`, {method: 'DELETE'});
+            if (response.ok) {
+                showToast("Сотрудник удален", "success");
+                location.reload();
+            }
+        } catch (e) { console.error(e); }
+    });
+}
+
+// 3. Сброс пароля
+async function resetPassword(userId) {
+    showConfirmModal("Сброс пароля", "Сбросить пароль пользователю на стандартный 'qwerty'?", async () => {
+        try {
+            const response = await fetch(`/api/admin/users/reset-password/${userId}`, {method: 'POST'});
+            if (response.ok) showToast("Пароль сброшен", "success");
+        } catch (e) { console.error(e); }
+    });
+}
+
+// 4. Удаление товара
+async function deleteProduct(id) {
+    showConfirmModal("Удалить товар?", "Он будет скрыт из активного списка.", async () => {
+        try {
+            await fetch(`/api/products/${id}`, {method: 'DELETE'});
+            showToast("Товар удален", "success");
+            location.reload();
+        } catch (e) { console.warn("Удаление прервано"); }
+    });
+}
+
+// 5. Удаление клиента
+async function deleteClient(id) {
+    showConfirmModal("Удалить клиента?", "Он будет скрыт из списков, но останется в истории.", async () => {
+        try {
+            const response = await fetch(`/api/clients/${id}`, {method: 'DELETE'});
+            if (response.ok) {
+                showToast("Клиент удален", "success");
+                location.reload();
+            }
+        } catch (e) { console.error(e); }
+    });
+}
+
+// 6. Отправка корректировок
+function sendSelectedCorrections() {
+    const selectedIds = Array.from(document.querySelectorAll('.correction-checkbox:checked')).map(cb => cb.value);
+    const emailInput = document.getElementById('report-email');
+    const email = emailInput ? emailInput.value : 'accountant@company.am';
+
+    if (selectedIds.length === 0) {
+        return showToast("Выберите хотя бы одну корректировку", "info");
+    }
+
+    showConfirmModal(
+        "Подтверждение отправки",
+        `Отправить реестр (${selectedIds.length} шт.) на почту ${email}?`,
+        () => executeSendingCorrections(selectedIds, email)
+    );
+}
+
+// 7. Проверка акций (Важно: исправлен селектор чекбоксов)
+async function checkPromosBeforeSave(items) {
+    const res = await fetch('/api/promos/check-active', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(Object.keys(items))
+    });
+    const activePromos = await res.json();
+
+    if (activePromos.length > 0) {
+        const promoListHtml = activePromos.map(p => `
+            <label class="promo-card" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; cursor: pointer;">
+                <div style="text-align: left;">
+                    <div style="font-weight: 700; font-size: 13px;">${p.title || p.name}</div>
+                    <div style="font-size: 11px; color: #64748b;">Менеджер: ${p.managerId}</div>
+                </div>
+                <input type="checkbox" class="promo-apply-checkbox" data-promo-id="${p.id}" checked>
+            </label>
+        `).join('');
+
+        showConfirmModal("Нашли акции!", `
+            <div style="max-height: 200px; overflow-y: auto;">
+                ${promoListHtml}
+                <p style="font-size:10px; color:#ef4444; margin-top:10px;">* Активация изменит цены товаров</p>
+            </div>
+        `, () => {
+            const selectedPromos = [];
+            // Исправлено: ищем именно те чекбоксы, которые мы создали в строке 114
+            document.querySelectorAll('.promo-apply-checkbox').forEach(cb => {
+                if (cb.checked) {
+                    const id = cb.getAttribute('data-promo-id');
+                    const found = activePromos.find(ap => ap.id == id);
+                    if (found) selectedPromos.push(found);
+                }
+            });
+            saveOrderWithPromos(selectedPromos);
+        });
+    } else {
+        performFinalOrderSave();
+    }
+}
+
+// 8. Удаление акции
+async function deletePromoAction(id) {
+    showConfirmModal("Удаление акции", "Данные будут полностью стерты. Продолжить?", async () => {
+        try {
+            await fetch(`/api/admin/promos/${id}`, { method: 'DELETE' });
+            showToast("Акция удалена", "success");
+            setTimeout(() => location.reload(), 500);
+        } catch (e) { console.warn("Отмена удаления"); }
+    });
+}
+
+// 9. Подтверждение акции
+async function confirmPromoAction(id) {
+    showConfirmModal("Подтвердить акцию?", "Редактирование станет недоступно!", async () => {
+        const res = await fetch(`/api/admin/promos/${id}/confirm`, {method: 'POST'});
+        if (res.ok) {
+            showToast("Акция подтверждена!", "success");
+            location.reload();
+        }
+    });
+}
+
+// 10. Выход из системы
 function handleLogout() {
     showConfirmModal('Подтвердите выход', 'Вы уверены, что хотите покинуть систему?', () => {
-        // Очищаем локальное состояние в браузере
         localStorage.clear();
         sessionStorage.clear();
-
-        // Отправляем форму
         document.getElementById('logout-form').submit();
     });
 }
 
+// 11. Выставление счета (Инвойс)
 function handleCreateInvoice(orderId) {
     showConfirmModal("Подтверждение", "Выставить счет и списать товар?", () => {
-        // 1. Создаем форму "на лету"
         const form = document.createElement('form');
         form.method = 'POST';
         form.action = `/admin/invoices/create-from-order/${orderId}`;
-
-        // 2. Добавляем CSRF токен (берем из любой формы на странице)
         const csrfInput = document.querySelector('input[name="_csrf"]');
         if (csrfInput) {
             const input = document.createElement('input');
@@ -4832,16 +5020,10 @@ function handleCreateInvoice(orderId) {
             input.value = csrfInput.value;
             form.appendChild(input);
         }
-
-        // 3. Отправляем. Страница перезагрузится.
         document.body.appendChild(form);
         form.submit();
-
-        // После этого Контроллер в Java сделает редирект,
-        // и вы увидите красную плашку "Недостаточно товара: Манго"
     });
 }
-
 
 // 1. Обработка клика по вкладкам
 document.querySelectorAll('.tab-link, [data-tab]').forEach(tab => {
@@ -4860,39 +5042,6 @@ document.querySelectorAll('.tab-link, [data-tab]').forEach(tab => {
     });
 });
 
-
-// 2. Слушатель изменений
-document.addEventListener('change', function (e) {
-    // Работаем с чекбоксами заказов
-    if (e.target.classList.contains('order-print-check')) {
-        const id = e.target.value;
-
-        if (e.target.checked) {
-            if (!selectedOrderIds.includes(id)) selectedOrderIds.push(id);
-        } else {
-            selectedOrderIds = selectedOrderIds.filter(itemId => itemId !== id);
-        }
-
-        localStorage.setItem('selectedOrderIds', JSON.stringify(selectedOrderIds));
-        updateSelectedCounter();
-    }
-
-    // Логика "Выбрать все"
-    if (e.target.id === 'select-all-orders' || e.target.onclick?.toString().includes('toggleSelectAll')) {
-        const checkboxes = document.querySelectorAll('.order-print-check');
-        checkboxes.forEach(cb => {
-            const id = cb.value;
-            if (e.target.checked) {
-                if (!selectedOrderIds.includes(id)) selectedOrderIds.push(id);
-            } else {
-                selectedOrderIds = selectedOrderIds.filter(itemId => itemId !== id);
-            }
-        });
-        localStorage.setItem('selectedOrderIds', JSON.stringify(selectedOrderIds));
-        updateSelectedCounter();
-    }
-});
-
 // 3. Функция обновления счетчика (твоя старая логика, но теперь глобальная)
 function updateSelectedCounter() {
     const counter = document.getElementById('selected-count');
@@ -4902,16 +5051,365 @@ function updateSelectedCounter() {
     }
 }
 
-// 4. ВОССТАНОВЛЕНИЕ ГАЛОЧЕК (вызывать при загрузке страницы)
 function restoreCheckboxes() {
     const checkboxes = document.querySelectorAll('.order-print-check');
+    let foundOnPage = 0;
+
     checkboxes.forEach(cb => {
         if (selectedOrderIds.includes(cb.value)) {
             cb.checked = true;
+            foundOnPage++;
         }
     });
+
+    // Если все чекбоксы на данной странице выбраны, ставим галочку и в "Выбрать все"
+    const selectAllBtn = document.getElementById('select-all-orders');
+    if (selectAllBtn && checkboxes.length > 0) {
+        selectAllBtn.checked = (foundOnPage === checkboxes.length);
+    }
+
     updateSelectedCounter();
 }
+
+
+function clearOrderSelection() {
+    // 1. Очищаем массив в оперативной памяти (JS)
+    selectedOrderIds = [];
+
+    // 2. Полностью удаляем запись из памяти браузера
+    localStorage.removeItem('selectedOrderIds');
+
+    // 3. Снимаем все галочки на текущей странице (чтобы визуально все пропало)
+    document.querySelectorAll('.order-print-check').forEach(cb => {
+        cb.checked = false;
+    });
+
+    // 4. Снимаем галочку "Выбрать все" (глобальную)
+    const selectAll = document.getElementById('select-all-orders');
+    if (selectAll) selectAll.checked = false;
+
+    // 5. Обновляем счетчик выбранных (если он у тебя есть)
+    if (typeof updateSelectedCounter === "function") {
+        updateSelectedCounter();
+    }
+
+    // 6. Уведомление
+    if (typeof showToast === "function") {
+        showToast("Выбор очищен", "info");
+    } else {
+        console.log("Выбор очищен");
+    }
+}
+
+
+// Очистка (вызывай после успешной печати или удаления)
+function clearAllSelections() {
+    selectedOrderIds = [];
+    selectedReturnIds = [];
+    saveAllToStorage();
+    syncCheckboxesOnPage();
+}
+
+function toggleGlobalSelect(masterCheckbox, childClass) {
+    const isOrder = (childClass === 'order-print-check');
+    const allIdsStr = masterCheckbox.getAttribute('data-all-ids') || "";
+    // Превращаем строку "[1, 2, 3]" в нормальный массив
+    const allIds = allIdsStr.replace(/[\[\]\s]/g, '').split(',').filter(id => id);
+
+    if (masterCheckbox.checked) {
+        allIds.forEach(id => {
+            if (isOrder) {
+                if (!selectedOrderIds.includes(id)) selectedOrderIds.push(id);
+            } else {
+                if (!selectedReturnIds.includes(id)) selectedReturnIds.push(id);
+            }
+        });
+    } else {
+        // Если снимаем галку, убираем эти ID из памяти
+        allIds.forEach(id => {
+            if (isOrder) {
+                selectedOrderIds = selectedOrderIds.filter(item => item !== id);
+            } else {
+                selectedReturnIds = selectedReturnIds.filter(item => item !== id);
+            }
+        });
+    }
+    saveAllToStorage();
+    syncCheckboxesOnPage();
+}
+
+function syncCheckboxesOnPage() {
+    // Синхроним заказы
+    document.querySelectorAll('.order-print-check').forEach(cb => {
+        cb.checked = selectedOrderIds.includes(cb.value.toString());
+    });
+    // Синхроним возвраты
+    document.querySelectorAll('.return-print-check').forEach(cb => {
+        cb.checked = selectedReturnIds.includes(cb.value.toString());
+    });
+}
+
+// Авто-вызов при каждой загрузке страницы
+document.addEventListener('DOMContentLoaded', syncCheckboxesOnPage);
+
+// Слушатель для одиночных кликов по чекбоксам
+document.addEventListener('change', function(e) {
+    if (e.target.classList.contains('order-print-check')) {
+        const id = e.target.value.toString();
+        if (e.target.checked) {
+            if (!selectedOrderIds.includes(id)) selectedOrderIds.push(id);
+        } else {
+            selectedOrderIds = selectedOrderIds.filter(i => i !== id);
+        }
+        saveAllToStorage();
+    }
+
+    if (e.target.classList.contains('return-print-check')) {
+        const id = e.target.value.toString();
+        if (e.target.checked) {
+            if (!selectedReturnIds.includes(id)) selectedReturnIds.push(id);
+        } else {
+            selectedReturnIds = selectedReturnIds.filter(i => i !== id);
+        }
+        saveAllToStorage();
+    }
+});
+
+
+
+
+// Вспомогательная функция очистки для возвратов
+function clearReturnSelection() {
+    selectedReturnIds = [];
+    localStorage.removeItem('selectedReturnIds');
+    document.querySelectorAll('.return-print-check').forEach(cb => cb.checked = false);
+    const selectAll = document.getElementById('select-all-returns');
+    if (selectAll) selectAll.checked = false;
+    if (typeof updateSelectedCounter === "function") updateSelectedCounter();
+    if (typeof showToast === "function") showToast("Выбор возвратов очищен", "info");
+}
+
+
+// Вспомогательная функция очистки для возвратов
+function clearReturnSelection() {
+    selectedReturnIds = [];
+    localStorage.removeItem('selectedReturnIds');
+    document.querySelectorAll('.return-print-check').forEach(cb => cb.checked = false);
+    const selectAll = document.getElementById('select-all-returns');
+    if (selectAll) selectAll.checked = false;
+    if (typeof updateSelectedCounter === "function") updateSelectedCounter();
+    if (typeof showToast === "function") showToast("Выбор возвратов очищен", "info");
+}
+
+function printDailySummary() {
+    // ИСПРАВЛЕНО: Берем данные из глобального массива
+    if (selectedOrderIds.length === 0) {
+        showToast("Выберите заказы для сводки!", "error");
+        return;
+    }
+
+    const frame = document.getElementById('printFrame');
+    const url = '/admin/orders/print-daily-summary';
+
+    const newFrame = frame.cloneNode(true);
+    frame.parentNode.replaceChild(newFrame, frame);
+
+    newFrame.addEventListener('load', function () {
+        if (newFrame.contentWindow.location.href === "about:blank") return;
+        setTimeout(() => {
+            newFrame.contentWindow.focus();
+            newFrame.contentWindow.print();
+        }, 300);
+    }, {once: true});
+
+    // ИСПРАВЛЕНО: передаем накопленные ID
+    submitAsPost(url, selectedOrderIds, 'printFrame');
+
+    clearOrderSelection();
+}
+
+function printSelectedOperations(type) {
+    // ИСПРАВЛЕНО: Берем данные из соответствующего глобального массива
+    const selectedIds = type === 'order' ? selectedOrderIds : selectedReturnIds;
+
+    if (selectedIds.length === 0) {
+        showToast("Сначала выберите записи галочкой!", "error");
+        return;
+    }
+
+    const frame = document.getElementById('printFrame');
+    const url = type === 'order' ? '/admin/orders/print-batch' : '/admin/returns/print-batch';
+
+    const newFrame = frame.cloneNode(true);
+    frame.parentNode.replaceChild(newFrame, frame);
+
+    newFrame.addEventListener('load', function () {
+        if (newFrame.contentWindow.location.href === "about:blank") return;
+
+        setTimeout(() => {
+            newFrame.contentWindow.focus();
+            newFrame.contentWindow.print();
+        }, 300);
+    }, {once: true});
+
+    submitAsPost(url, selectedIds, 'printFrame');
+
+    // ИСПРАВЛЕНО: очищаем именно тот тип, который напечатали
+    if (type === 'order') {
+        clearOrderSelection();
+    } else {
+        clearReturnSelection();
+    }
+}
+
+function printInvoiceInline(url) {
+    const iframe = document.createElement('iframe');
+    iframe.style.display = 'none';
+    iframe.src = url;
+    document.body.appendChild(iframe);
+
+    iframe.onload = function () {
+        try {
+            iframe.contentWindow.focus();
+            iframe.contentWindow.print();
+            setTimeout(() => {
+                if (document.body.contains(iframe)) {
+                    document.body.removeChild(iframe);
+                }
+            }, 1000);
+        } catch (e) {
+            console.warn("Печать через iframe не удалась, открываю окно...");
+            window.open(url, '_blank');
+        }
+    };
+}
+
+window.printOrder = function (id) {
+    console.log("Запуск печати заказа:", id);
+    const url = `/admin/orders/print/${id}`;
+    printAction(url);
+}
+
+window.printAction = function (url) {
+    const frame = document.getElementById('printFrame');
+    if (!frame) return;
+
+    frame.onload = null;
+    frame.src = "about:blank";
+
+    fetch(url, {method: 'GET'})
+        .then(response => {
+            showToast("⏳ Подготовка документа...", "info");
+
+            setTimeout(() => {
+                frame.src = url;
+
+                frame.onload = function () {
+                    if (frame.contentWindow.location.href.includes("about:blank")) return;
+
+                    setTimeout(() => {
+                        try {
+                            frame.contentWindow.focus();
+                            frame.contentWindow.print();
+                            frame.onload = null;
+                        } catch (e) {
+                            console.error("Ошибка печати:", e);
+                        }
+                    }, 500);
+                };
+            }, 100);
+        })
+        .catch(error => {
+            console.warn("Печать отменена: нет доступа или ошибка сети");
+        });
+};
+
+window.printOrder = (id) => window.printAction(`/admin/orders/print/${id}`);
+window.printReturn = (id) => window.printAction(`/admin/returns/print/${id}`);
+
+window.printOrderList = function () {
+    const form = document.querySelector('#tab-orders .filter-bar form');
+    const mId = form.querySelector('select[name="orderManagerId"]').value;
+    const s = form.querySelector('input[name="orderStartDate"]').value;
+    const e = form.querySelector('input[name="orderEndDate"]').value;
+
+    const url = `/admin/orders/print-all?orderManagerId=${mId}&orderStartDate=${s}&orderEndDate=${e}`;
+    printAction(url);
+}
+
+window.printReturnList = function () {
+    const form = document.querySelector('#tab-returns .filter-bar form');
+    const mId = form.querySelector('select[name="returnManagerId"]').value;
+    const s = form.querySelector('input[name="returnStartDate"]').value;
+    const e = form.querySelector('input[name="returnEndDate"]').value;
+
+    const url = `/admin/returns/print-all?returnManagerId=${mId}&returnStartDate=${s}&returnEndDate=${e}`;
+    printAction(url);
+}
+
+function printRouteSheet() {
+    const mId = document.getElementById('route-manager-select').value;
+    const date = document.getElementById('route-date-select').value;
+    if (!date) return showToast("Выберите дату", "error");
+
+    const url = `/admin/logistic/route-list?managerId=${mId}&date=${date}`;
+    printAction(url);
+}
+
+function printCompactOrders() {
+    // ИСПРАВЛЕНО: Берем из глобального списка
+    if (selectedOrderIds.length === 0) return showToast("Выберите хотя бы один заказ", "error");
+
+    const params = new URLSearchParams();
+    params.append('type', 'order');
+    selectedOrderIds.forEach(id => params.append('ids', id));
+
+    const url = `/admin/logistic/print-compact?${params.toString()}`;
+    printAction(url);
+}
+
+function printCompactReturns() {
+    // ИСПРАВЛЕНО: Берем из глобального списка
+    if (selectedReturnIds.length === 0) return showToast("Выберите хотя бы один возврат", "error");
+
+    const params = new URLSearchParams();
+    params.append('type', 'return');
+    selectedReturnIds.forEach(id => params.append('ids', id));
+
+    const url = `/admin/logistic/print-compact?${params.toString()}`;
+    printAction(url);
+}
+
+function printSelectedRows(tableId) {
+    const selected = tableId.includes('order') ? selectedOrderIds : selectedReturnIds;
+    if (selected.length === 0) return alert("Выберите хотя бы одну запись");
+
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = tableId.includes('order') ? '/admin/orders/print-batch' : '/admin/returns/print-batch';
+    form.target = '_blank';
+
+    const csrfToken = document.querySelector('meta[name="_csrf"]').content;
+    const csrfInput = document.createElement('input');
+    csrfInput.name = '_csrf';
+    csrfInput.value = csrfToken;
+    form.appendChild(csrfInput);
+
+    selected.forEach(id => {
+        const input = document.createElement('input');
+        input.name = 'ids';
+        input.value = id;
+        form.appendChild(input);
+    });
+
+    document.body.appendChild(form);
+    form.submit();
+    form.remove();
+}
+
+
+// Запускаем при загрузке
+document.addEventListener('DOMContentLoaded', restoreCheckboxes);
 
 // Запускаем восстановление сразу после загрузки DOM
 document.addEventListener('DOMContentLoaded', restoreCheckboxes);
