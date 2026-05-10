@@ -5112,11 +5112,16 @@ function clearAllSelections() {
 
 function toggleGlobalSelect(masterCheckbox, childClass) {
     const isOrder = (childClass === 'order-print-check');
-    const allIdsStr = masterCheckbox.getAttribute('data-all-ids') || "";
-    // Превращаем строку "[1, 2, 3]" в нормальный массив
-    const allIds = allIdsStr.replace(/[\[\]\s]/g, '').split(',').filter(id => id);
+    const allIdsStr = masterCheckbox.getAttribute('data-all-ids') || "[]";
+
+    // Безопасный способ превратить "[1, 2, 3]" в массив чисел
+    const allIds = allIdsStr.replace(/[\[\]]/g, '').split(',')
+        .map(s => s.trim())
+        .filter(s => s !== "")
+        .map(Number);
 
     if (masterCheckbox.checked) {
+        // Добавляем все ID, которых еще нет в списке
         allIds.forEach(id => {
             if (isOrder) {
                 if (!selectedOrderIds.includes(id)) selectedOrderIds.push(id);
@@ -5125,7 +5130,7 @@ function toggleGlobalSelect(masterCheckbox, childClass) {
             }
         });
     } else {
-        // Если снимаем галку, убираем эти ID из памяти
+        // Если снимаем галку "Выбрать все", удаляем ТОЛЬКО те ID, которые относятся к текущему фильтру
         allIds.forEach(id => {
             if (isOrder) {
                 selectedOrderIds = selectedOrderIds.filter(item => item !== id);
@@ -5134,6 +5139,7 @@ function toggleGlobalSelect(masterCheckbox, childClass) {
             }
         });
     }
+
     saveAllToStorage();
     syncCheckboxesOnPage();
 }
@@ -5175,19 +5181,6 @@ document.addEventListener('change', function(e) {
     }
 });
 
-
-
-
-// Вспомогательная функция очистки для возвратов
-function clearReturnSelection() {
-    selectedReturnIds = [];
-    localStorage.removeItem('selectedReturnIds');
-    document.querySelectorAll('.return-print-check').forEach(cb => cb.checked = false);
-    const selectAll = document.getElementById('select-all-returns');
-    if (selectAll) selectAll.checked = false;
-    if (typeof updateSelectedCounter === "function") updateSelectedCounter();
-    if (typeof showToast === "function") showToast("Выбор возвратов очищен", "info");
-}
 
 
 // Вспомогательная функция очистки для возвратов
