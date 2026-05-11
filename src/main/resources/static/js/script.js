@@ -4712,22 +4712,21 @@ function showConfirmModal(title, text, type, onConfirm) {
     const modal = document.getElementById('customModal');
     const titleEl = document.getElementById('modalTitle');
     const messageEl = document.getElementById('modalMessage');
-    const oldConfirmBtn = document.getElementById('modalConfirmBtn');
+    const confirmBtn = document.getElementById('modalConfirmBtn');
     const iconContainer = document.getElementById('modalIconContainer');
     const iconInner = document.getElementById('modalIconInner');
 
-    if (!modal || !oldConfirmBtn) return;
+    if (!modal || !confirmBtn) return;
 
-    // 1. ПЕРЕСОЗДАЕМ КНОПКУ (Чистим память)
-    const confirmBtn = oldConfirmBtn.cloneNode(true);
-    oldConfirmBtn.parentNode.replaceChild(confirmBtn, oldConfirmBtn);
+    // 1. ОЧИЩАЕМ КНОПКУ (Важно!)
+    confirmBtn.onclick = null;
 
-    // 2. КОНТЕНТ
+    // 2. ЗАПОЛНЯЕМ ТЕКСТ
     titleEl.innerText = title;
     messageEl.innerText = text;
 
-    // Стилизация (ваша логика)
-    iconContainer.className = "mx-auto flex items-center justify-center h-20 w-20 rounded-full mb-6";
+    // 3. СТИЛИ (Твоя логика)
+    iconContainer.className = "mx-auto flex items-center justify-center h-20 w-20 rounded-full mb-6 transition-all";
     if (type === 'invoice') {
         iconContainer.classList.add('bg-green-50', 'text-green-600');
         iconInner.className = "fa-solid fa-file-invoice-dollar text-3xl";
@@ -4742,35 +4741,28 @@ function showConfirmModal(title, text, type, onConfirm) {
         confirmBtn.style.backgroundColor = '#0f172a';
     }
 
-    // 3. ПОКАЗЫВАЕМ
+    // 4. ПОКАЗЫВАЕМ
     modal.classList.remove('hidden');
     modal.style.display = 'flex';
 
-    // 4. ГАРАНТИРОВАННОЕ СРАБАТЫВАНИЕ (pointerdown + setTimeout)
-    // Используем pointerdown, так как он игнорирует задержки фокуса
-    confirmBtn.addEventListener('pointerdown', function handler(e) {
-        e.preventDefault();
-        e.stopPropagation(); // Не даем клику уйти к другим скриптам
+    // 5. ГЛАВНЫЙ ФИКС: Привязываем действие напрямую
+    confirmBtn.onclick = function(e) {
+        // Останавливаем всё лишнее
+        if (e) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+        }
 
-        console.log("Мгновенное подтверждение!");
+        console.log("ПОДТВЕРЖДЕНО С ПЕРВОГО РАЗА");
 
-        closeCustomModal();
-
+        // Сначала выполняем действие, потом закрываем
         if (typeof onConfirm === 'function') {
             onConfirm();
         }
 
-        // Удаляем обработчик, чтобы не сработало дважды
-        confirmBtn.removeEventListener('pointerdown', handler);
-    });
-}function closeCustomModal() {
-    const modal = document.getElementById('customModal');
-    if (modal) {
-        modal.style.display = 'none';
-        modal.classList.add('hidden');
-    }
+        closeCustomModal();
+    };
 }
-
 function closeModal(id) {
     const modal = document.getElementById(id);
     if (!modal) return;
