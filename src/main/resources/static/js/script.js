@@ -4380,31 +4380,6 @@ function syncCheckboxesOnPage() {
     }
 }
 
-document.addEventListener('change', function(e) {
-    if (e.target.classList.contains('order-print-check')) {
-        const id = Number(e.target.value); // Сохраняем как число
-        if (e.target.checked) {
-            if (!selectedOrderIds.includes(id)) selectedOrderIds.push(id);
-        } else {
-            selectedOrderIds = selectedOrderIds.filter(i => i !== id);
-        }
-        saveAllToStorage();
-        syncCheckboxesOnPage();
-    }
-
-    if (e.target.classList.contains('return-print-check')) {
-        const id = Number(e.target.value);
-        if (e.target.checked) {
-            if (!selectedReturnIds.includes(id)) selectedReturnIds.push(id);
-        } else {
-            selectedReturnIds = selectedReturnIds.filter(i => i !== id);
-        }
-        saveAllToStorage();
-        syncCheckboxesOnPage();
-    }
-});
-document.addEventListener('DOMContentLoaded', syncCheckboxesOnPage);
-
 function clearReturnSelection() {
     selectedReturnIds = [];
     localStorage.removeItem('selectedReturnIds');
@@ -4737,23 +4712,22 @@ function showConfirmModal(title, text, type, onConfirm) {
     const modal = document.getElementById('customModal');
     const titleEl = document.getElementById('modalTitle');
     const messageEl = document.getElementById('modalMessage');
-    const oldConfirmBtn = document.getElementById('modalConfirmBtn'); // Старая кнопка
+    const oldConfirmBtn = document.getElementById('modalConfirmBtn');
     const iconContainer = document.getElementById('modalIconContainer');
     const iconInner = document.getElementById('modalIconInner');
 
     if (!modal || !oldConfirmBtn) return;
 
-    // --- ФИКС ПЕРВОГО НАЖАТИЯ: Клонируем кнопку, чтобы убрать старые события ---
+    // 1. ОЧИСТКА: Клонируем кнопку, чтобы полностью удалить старые слушатели
     const confirmBtn = oldConfirmBtn.cloneNode(true);
+    confirmBtn.type = "button"; // На всякий случай фиксируем тип
     oldConfirmBtn.parentNode.replaceChild(confirmBtn, oldConfirmBtn);
-    // -------------------------------------------------------------------------
 
+    // 2. КОНТЕНТ И СТИЛИ
     titleEl.innerText = title;
     messageEl.innerText = text;
 
-    // Настройка стилей (оставляем твою логику)
     iconContainer.className = "mx-auto flex items-center justify-center h-20 w-20 rounded-full mb-6 transition-all";
-    iconInner.className = "fa-solid text-3xl";
 
     if (type === 'invoice') {
         iconContainer.classList.add('bg-green-50', 'text-green-600');
@@ -4769,18 +4743,29 @@ function showConfirmModal(title, text, type, onConfirm) {
         confirmBtn.style.backgroundColor = '#0f172a';
     }
 
-    // Показываем (убираем hidden и ставим flex)
+    // 3. ОТОБРАЖЕНИЕ
     modal.classList.remove('hidden');
     modal.style.display = 'flex';
 
-    // Вешаем событие на НОВУЮ кнопку. Теперь сработает мгновенно!
-    confirmBtn.onclick = function() {
-        closeCustomModal();
-        if (typeof onConfirm === 'function') {
-            onConfirm();
-        }
-    };
+    // 4. НАЗНАЧЕНИЕ СОБЫТИЯ (с небольшой задержкой для стабильности)
+    setTimeout(() => {
+        confirmBtn.onclick = function(e) {
+            // Останавливаем любое всплытие, которое могло блокировать клик
+            if (e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+
+            console.log("Действие подтверждено!");
+            closeCustomModal();
+
+            if (typeof onConfirm === 'function') {
+                onConfirm();
+            }
+        };
+    }, 20); // 20мс достаточно, чтобы DOM «проснулся»
 }
+
 function closeCustomModal() {
     const modal = document.getElementById('customModal');
     if (modal) {
@@ -4800,7 +4785,32 @@ function closeModal(id) {
     window.currentOrderPromos = {}; // Очищаем акции
     console.log("Данные сессии очищены");
 }
-document.addEventListener('DOMContentLoaded', restoreCheckboxes);
+
+document.addEventListener('change', function(e) {
+    if (e.target.classList.contains('order-print-check')) {
+        const id = Number(e.target.value); // Сохраняем как число
+        if (e.target.checked) {
+            if (!selectedOrderIds.includes(id)) selectedOrderIds.push(id);
+        } else {
+            selectedOrderIds = selectedOrderIds.filter(i => i !== id);
+        }
+        saveAllToStorage();
+        syncCheckboxesOnPage();
+    }
+
+    if (e.target.classList.contains('return-print-check')) {
+        const id = Number(e.target.value);
+        if (e.target.checked) {
+            if (!selectedReturnIds.includes(id)) selectedReturnIds.push(id);
+        } else {
+            selectedReturnIds = selectedReturnIds.filter(i => i !== id);
+        }
+        saveAllToStorage();
+        syncCheckboxesOnPage();
+    }
+});
+
+document.addEventListener('DOMContentLoaded', syncCheckboxesOnPage);
 
 document.addEventListener('DOMContentLoaded', restoreCheckboxes);
 
