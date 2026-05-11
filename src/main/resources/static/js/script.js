@@ -975,33 +975,6 @@ function updateDashboardStats() {
     }
 }
 
-async function deleteReturnOrder(id) {
-    // ВАЖНО: Добавляем 'delete' третьим аргументом, чтобы всё совпало
-    showConfirmModal(
-        "Удалить возврат?",
-        "Вы уверены, что хотите удалить этот возврат?",
-        "delete", // ТИП для иконки
-        async () => { // ФУНКЦИЯ теперь идет четвертой
-            try {
-                // Твой рабочий путь и метод POST
-                const response = await fetch(`/api/admin/returns/${id}/delete`, {
-                    method: 'POST'
-                });
-
-                if (response.ok) {
-                    showToast("Возврат удален", "success");
-                    closeCustomModal(); // Закрываем нашу модалку
-                    location.reload();
-                } else {
-                    const error = await response.json();
-                    showToast(error.error || "Ошибка удаления возврата", "error");
-                }
-            } catch (e) {
-                showToast("Ошибка сети", "error");
-            }
-        }
-    );
-}
 
 
 function triggerImport() {
@@ -4070,215 +4043,6 @@ function recalculateAllPricesByPercent() {
     window.currentOrderTotal = totalOrderSum;
 }
 
-async function confirmReturn(id) {
-    const ret = (returnsData || []).find(r => r.id == id);
-    if (!ret) return showToast("Возврат не найден", "error");
-
-    const isEditMode = !!document.querySelector('.item-price-input');
-    if (isEditMode) {
-        showToast("Сначала сохраните изменения перед подтверждением", "info");
-        return;
-    }
-
-    // ЗАМЕНЕНО: showConfirm
-    // БЫЛО: showConfirmModal("Провести возврат?", "Текст", async () => { ... });
-// СТАЛО:
-    showConfirmModal(
-        "Провести возврат?",
-        `Сумма ${window.currentOrderTotal.toLocaleString()} ֏ будет вычтена из долга клиента. Склад будет обновлен автоматически.`,
-        "invoice", // ТИП (аргумент №3)
-        async () => { // ДЕЙСТВИЕ (аргумент №4)
-            try {
-                const response = await fetch(`/api/admin/returns/${id}/confirm`, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'}
-                });
-                if (response.ok) {
-                    showToast("Возврат проведен успешно", "success");
-                    setTimeout(() => location.reload(), 800);
-                }
-            } catch (e) { console.error("Confirm error:", e); }
-        }
-    );
-}
-
-async function deleteUser(id) {
-    showConfirmModal(
-        "Удалить сотрудника?",
-        "Доступ в систему будет полностью заблокирован.",
-        "delete", // ТРЕТИЙ АРГУМЕНТ
-        async () => {
-            try {
-                const response = await fetch(`/api/admin/users/${id}`, { method: 'DELETE' });
-                if (response.ok) {
-                    showToast("Сотрудник удален", "success");
-                    closeCustomModal();
-                    location.reload();
-                }
-            } catch (e) { console.error(e); }
-        }
-    );
-}
-
-async function resetPassword(userId) {
-    showConfirmModal(
-        "Сброс пароля",
-        "Сбросить пароль пользователю на стандартный 'qwerty'?",
-        "info", // Добавь тип (синяя иконка)
-        async () => {
-            try {
-                const response = await fetch(`/api/admin/users/reset-password/${userId}`, {method: 'POST'});
-                if (response.ok) showToast("Пароль сброшен", "success");
-            } catch (e) { console.error(e); }
-        }
-    );
-}
-
-async function deleteProduct(id) {
-    showConfirmModal(
-        "Удалить товар?",
-        "Он будет скрыт из активного списка.",
-        "delete", // ТРЕТИЙ АРГУМЕНТ
-        async () => {
-            try {
-                await fetch(`/api/products/${id}`, { method: 'DELETE' });
-                showToast("Товар удален", "success");
-                closeCustomModal();
-                location.reload();
-            } catch (e) { console.warn("Удаление прервано"); }
-        }
-    );
-}
-
-async function deleteClient(id) {
-    showConfirmModal(
-        "Удалить клиента?",
-        "Он будет скрыт из списков, но останется в истории.",
-        "delete", // Тип для красной корзины
-        async () => {
-            try {
-                const response = await fetch(`/api/clients/${id}`, {method: 'DELETE'});
-                if (response.ok) {
-                    showToast("Клиент удален", "success");
-                    location.reload();
-                }
-            } catch (e) { console.error(e); }
-        }
-    );
-}
-
-function sendSelectedCorrections() {
-    const selectedIds = Array.from(document.querySelectorAll('.correction-checkbox:checked')).map(cb => cb.value);
-    const emailInput = document.getElementById('report-email');
-    const email = emailInput ? emailInput.value : 'accountant@company.am';
-
-    if (selectedIds.length === 0) {
-        return showToast("Выберите хотя бы одну корректировку", "info");
-    }
-
-    showConfirmModal(
-        "Подтверждение отправки",
-        `Отправить реестр (${selectedIds.length} шт.) на почту ${email}?`,
-        () => executeSendingCorrections(selectedIds, email)
-    );
-}
-
-async function checkPromosBeforeSave(items) {
-    const res = await fetch('/api/promos/check-active', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(Object.keys(items))
-    });
-    const activePromos = await res.json();
-
-    if (activePromos.length > 0) {
-        const promoListHtml = activePromos.map(p => `
-            <label class="promo-card" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; cursor: pointer;">
-                <div style="text-align: left;">
-                    <div style="font-weight: 700; font-size: 13px;">${p.title || p.name}</div>
-                    <div style="font-size: 11px; color: #64748b;">Менеджер: ${p.managerId}</div>
-                </div>
-                <input type="checkbox" class="promo-apply-checkbox" data-promo-id="${p.id}" checked>
-            </label>
-        `).join('');
-
-        showConfirmModal("Нашли акции!", `
-            <div style="max-height: 200px; overflow-y: auto;">
-                ${promoListHtml}
-                <p style="font-size:10px; color:#ef4444; margin-top:10px;">* Активация изменит цены товаров</p>
-            </div>
-        `, () => {
-            const selectedPromos = [];
-            // Исправлено: ищем именно те чекбоксы, которые мы создали в строке 114
-            document.querySelectorAll('.promo-apply-checkbox').forEach(cb => {
-                if (cb.checked) {
-                    const id = cb.getAttribute('data-promo-id');
-                    const found = activePromos.find(ap => ap.id == id);
-                    if (found) selectedPromos.push(found);
-                }
-            });
-            saveOrderWithPromos(selectedPromos);
-        });
-    } else {
-        performFinalOrderSave();
-    }
-}
-
-async function deletePromoAction(id) {
-    showConfirmModal(
-        "Удаление акции",
-        "Данные будут полностью стерты. Продолжить?",
-        "delete", // ТРЕТИЙ АРГУМЕНТ (ТИП)
-        async () => { // ЧЕТВЕРТЫЙ АРГУМЕНТ (ДЕЙСТВИЕ)
-            try {
-                await fetch(`/api/admin/promos/${id}`, {
-                    method: 'DELETE',
-                    headers: {
-                        'X-CSRF-TOKEN': document.querySelector('input[name="_csrf"]')?.value
-                    }
-                });
-                showToast("Акция удалена", "success");
-                closeCustomModal(); // Закрываем нашу модалку
-                setTimeout(() => location.reload(), 500);
-            } catch (e) { console.warn("Отмена удаления"); }
-        }
-    );
-}
-
-async function confirmPromoAction(id) {
-    showConfirmModal(
-        "Подтвердить акцию?",
-        "Редактирование станет недоступно!",
-        "invoice", // Или другой подходящий тип
-        async () => {
-            const res = await fetch(`/api/admin/promos/${id}/confirm`, {method: 'POST'});
-            if (res.ok) {
-                showToast("Акция подтверждена!", "success");
-                location.reload();
-            }
-        }
-    );
-}
-
-function handleLogout() {
-    // Вызываем модалку, а само действие выхода передаем как коллбэк
-    showConfirmModal(
-        'ВЫХОД',
-        'Вы уверены, что хотите завершить сессию?',
-        'logout',
-        async function() {
-            try {
-                // Если у тебя выход через API
-                const response = await fetch('/logout', { method: 'POST' });
-                window.location.href = '/login?logout';
-            } catch (e) {
-                // Если это обычная ссылка, можно просто:
-                window.location.href = '/logout';
-            }
-        }
-    );
-}
-
 document.querySelectorAll('.tab-link, [data-tab]').forEach(tab => {
     tab.addEventListener('click', function () {
         // Учитываем разные варианты атрибутов (href или data-tab)
@@ -4598,32 +4362,15 @@ function printSelectedRows(tableId) {
 
 function handleCreateInvoice(orderId) {
     showConfirmModal(
-        "Подтверждение",
-        "Выставить счет и списать товар?",
+        "ВЫСТАВИТЬ СЧЕТ?",
+        "СПИСАТЬ ТОВАР И СОЗДАТЬ ИНВОЙС?",
         "invoice",
         function() {
-            const form = document.createElement('form');
-            form.method = 'POST';
-            form.action = '/admin/invoices/create-from-order/' + orderId;
-
-            // Извлекаем токен из мета-тегов или скрытых инпутов страницы
-            const csrfToken = document.querySelector('input[name="_csrf"]')?.value
-                || document.querySelector('meta[name="_csrf"]')?.content;
-
-            if (csrfToken) {
-                const csrfInput = document.createElement('input');
-                csrfInput.type = 'hidden'; // Скрытое поле
-                csrfInput.name = '_csrf';
-                csrfInput.value = csrfToken;
-                form.appendChild(csrfInput);
-            }
-
-            document.body.appendChild(form);
-            form.submit(); // Теперь форма уйдет с токеном и сервер её примет
+            // ВАЖНО: вызываем функцию-исполнителя, а не другую модалку!
+            submitInvoiceAction(orderId);
         }
     );
 }
-
 async function cancelOrder(id) {
     // Вызываем твое новое красивое модальное окно
     // Параметры: Заголовок, Текст, Тип ('danger' для красного), и функция действия
@@ -4712,57 +4459,60 @@ function showConfirmModal(title, text, type, onConfirm) {
     const modal = document.getElementById('customModal');
     const titleEl = document.getElementById('modalTitle');
     const messageEl = document.getElementById('modalMessage');
-    const confirmBtn = document.getElementById('modalConfirmBtn');
     const iconContainer = document.getElementById('modalIconContainer');
     const iconInner = document.getElementById('modalIconInner');
+    const oldConfirmBtn = document.getElementById('modalConfirmBtn');
 
-    if (!modal || !confirmBtn) return;
+    if (!modal || !oldConfirmBtn) return;
 
-    // 1. ОЧИЩАЕМ КНОПКУ (Важно!)
-    confirmBtn.onclick = null;
+    // --- ФИКС ПЕРВОГО НАЖАТИЯ ---
+    // Клонируем кнопку, чтобы полностью стереть память о прошлых нажатиях
+    const confirmBtn = oldConfirmBtn.cloneNode(true);
+    oldConfirmBtn.parentNode.replaceChild(confirmBtn, oldConfirmBtn);
+    // ----------------------------
 
-    // 2. ЗАПОЛНЯЕМ ТЕКСТ
     titleEl.innerText = title;
     messageEl.innerText = text;
 
-    // 3. СТИЛИ (Твоя логика)
-    iconContainer.className = "mx-auto flex items-center justify-center h-20 w-20 rounded-full mb-6 transition-all";
-    if (type === 'invoice') {
-        iconContainer.classList.add('bg-green-50', 'text-green-600');
-        iconInner.className = "fa-solid fa-file-invoice-dollar text-3xl";
-        confirmBtn.style.backgroundColor = '#63AA2F';
-    } else if (type === 'delete' || type === 'danger') {
+    // Сброс и настройка стилей
+    iconContainer.className = "mx-auto flex items-center justify-center h-20 w-20 rounded-full mb-6 transition-all flex-shrink-0";
+    iconInner.className = "fa-solid text-3xl";
+
+    if (type === 'delete' || type === 'danger') {
         iconContainer.classList.add('bg-red-50', 'text-red-600');
         iconInner.className = "fa-solid fa-trash-can text-3xl";
         confirmBtn.style.backgroundColor = '#ef4444';
+    } else if (type === 'invoice') {
+        iconContainer.classList.add('bg-green-50', 'text-green-600');
+        iconInner.className = "fa-solid fa-file-invoice-dollar text-3xl";
+        confirmBtn.style.backgroundColor = '#63AA2F';
     } else {
         iconContainer.classList.add('bg-blue-50', 'text-blue-600');
-        iconInner.className = "fa-solid fa-circle-question text-3xl";
+        iconInner.className = "fa-solid fa-circle-info text-3xl";
         confirmBtn.style.backgroundColor = '#0f172a';
     }
 
-    // 4. ПОКАЗЫВАЕМ
-    modal.classList.remove('hidden');
+    // Показываем окно
     modal.style.display = 'flex';
+    modal.classList.remove('hidden');
 
-    // 5. ГЛАВНЫЙ ФИКС: Привязываем действие напрямую
-    confirmBtn.onclick = function(e) {
-        // Останавливаем всё лишнее
-        if (e) {
-            e.preventDefault();
-            e.stopImmediatePropagation();
-        }
-
-        console.log("ПОДТВЕРЖДЕНО С ПЕРВОГО РАЗА");
-
-        // Сначала выполняем действие, потом закрываем
+    // Назначаем действие НОВОЙ кнопке. Теперь она "чистая" и сработает сразу.
+    confirmBtn.onclick = function() {
+        closeCustomModal();
         if (typeof onConfirm === 'function') {
             onConfirm();
         }
-
-        closeCustomModal();
     };
 }
+
+function closeCustomModal() {
+    const modal = document.getElementById('customModal');
+    if (modal) {
+        modal.style.display = 'none';
+        modal.classList.add('hidden');
+    }
+}
+
 function closeModal(id) {
     const modal = document.getElementById(id);
     if (!modal) return;
@@ -4774,6 +4524,264 @@ function closeModal(id) {
     window.currentOrderPromos = {}; // Очищаем акции
     console.log("Данные сессии очищены");
 }
+
+async function deleteReturnOrder(id) {
+    // ВАЖНО: Добавляем 'delete' третьим аргументом, чтобы всё совпало
+    showConfirmModal(
+        "Удалить возврат?",
+        "Вы уверены, что хотите удалить этот возврат?",
+        "delete", // ТИП для иконки
+        async () => { // ФУНКЦИЯ теперь идет четвертой
+            try {
+                // Твой рабочий путь и метод POST
+                const response = await fetch(`/api/admin/returns/${id}/delete`, {
+                    method: 'POST'
+                });
+
+                if (response.ok) {
+                    showToast("Возврат удален", "success");
+                    closeCustomModal(); // Закрываем нашу модалку
+                    location.reload();
+                } else {
+                    const error = await response.json();
+                    showToast(error.error || "Ошибка удаления возврата", "error");
+                }
+            } catch (e) {
+                showToast("Ошибка сети", "error");
+            }
+        }
+    );
+}
+
+async function confirmReturn(id) {
+    const ret = (returnsData || []).find(r => r.id == id);
+    if (!ret) return showToast("Возврат не найден", "error");
+
+    const isEditMode = !!document.querySelector('.item-price-input');
+    if (isEditMode) {
+        showToast("Сначала сохраните изменения перед подтверждением", "info");
+        return;
+    }
+
+    // ЗАМЕНЕНО: showConfirm
+    // БЫЛО: showConfirmModal("Провести возврат?", "Текст", async () => { ... });
+// СТАЛО:
+    showConfirmModal(
+        "Провести возврат?",
+        `Сумма ${window.currentOrderTotal.toLocaleString()} ֏ будет вычтена из долга клиента. Склад будет обновлен автоматически.`,
+        "invoice", // ТИП (аргумент №3)
+        async () => { // ДЕЙСТВИЕ (аргумент №4)
+            try {
+                const response = await fetch(`/api/admin/returns/${id}/confirm`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'}
+                });
+                if (response.ok) {
+                    showToast("Возврат проведен успешно", "success");
+                    setTimeout(() => location.reload(), 800);
+                }
+            } catch (e) { console.error("Confirm error:", e); }
+        }
+    );
+}
+
+async function deleteUser(id) {
+    showConfirmModal(
+        "Удалить сотрудника?",
+        "Доступ в систему будет полностью заблокирован.",
+        "delete", // ТРЕТИЙ АРГУМЕНТ
+        async () => {
+            try {
+                const response = await fetch(`/api/admin/users/${id}`, { method: 'DELETE' });
+                if (response.ok) {
+                    showToast("Сотрудник удален", "success");
+                    closeCustomModal();
+                    location.reload();
+                }
+            } catch (e) { console.error(e); }
+        }
+    );
+}
+
+async function resetPassword(userId) {
+    showConfirmModal(
+        "Сброс пароля",
+        "Сбросить пароль пользователю на стандартный 'qwerty'?",
+        "info", // Добавь тип (синяя иконка)
+        async () => {
+            try {
+                const response = await fetch(`/api/admin/users/reset-password/${userId}`, {method: 'POST'});
+                if (response.ok) showToast("Пароль сброшен", "success");
+            } catch (e) { console.error(e); }
+        }
+    );
+}
+
+async function deleteProduct(id) {
+    showConfirmModal(
+        "Удалить товар?",
+        "Он будет скрыт из активного списка.",
+        "delete", // ТРЕТИЙ АРГУМЕНТ
+        async () => {
+            try {
+                await fetch(`/api/products/${id}`, { method: 'DELETE' });
+                showToast("Товар удален", "success");
+                closeCustomModal();
+                location.reload();
+            } catch (e) { console.warn("Удаление прервано"); }
+        }
+    );
+}
+
+async function deleteClient(id) {
+    showConfirmModal(
+        "Удалить клиента?",
+        "Он будет скрыт из списков, но останется в истории.",
+        "delete", // Тип для красной корзины
+        async () => {
+            try {
+                const response = await fetch(`/api/clients/${id}`, {method: 'DELETE'});
+                if (response.ok) {
+                    showToast("Клиент удален", "success");
+                    location.reload();
+                }
+            } catch (e) { console.error(e); }
+        }
+    );
+}
+
+function sendSelectedCorrections() {
+    const selectedIds = Array.from(document.querySelectorAll('.correction-checkbox:checked')).map(cb => cb.value);
+    const emailInput = document.getElementById('report-email');
+    const email = emailInput ? emailInput.value : 'accountant@company.am';
+
+    if (selectedIds.length === 0) {
+        return showToast("Выберите хотя бы одну корректировку", "info");
+    }
+
+    showConfirmModal(
+        "Подтверждение отправки",
+        `Отправить реестр (${selectedIds.length} шт.) на почту ${email}?`,
+        () => executeSendingCorrections(selectedIds, email)
+    );
+}
+
+async function checkPromosBeforeSave(items) {
+    const res = await fetch('/api/promos/check-active', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(Object.keys(items))
+    });
+    const activePromos = await res.json();
+
+    if (activePromos.length > 0) {
+        const promoListHtml = activePromos.map(p => `
+            <label class="promo-card" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; cursor: pointer;">
+                <div style="text-align: left;">
+                    <div style="font-weight: 700; font-size: 13px;">${p.title || p.name}</div>
+                    <div style="font-size: 11px; color: #64748b;">Менеджер: ${p.managerId}</div>
+                </div>
+                <input type="checkbox" class="promo-apply-checkbox" data-promo-id="${p.id}" checked>
+            </label>
+        `).join('');
+
+        showConfirmModal("Нашли акции!", `
+            <div style="max-height: 200px; overflow-y: auto;">
+                ${promoListHtml}
+                <p style="font-size:10px; color:#ef4444; margin-top:10px;">* Активация изменит цены товаров</p>
+            </div>
+        `, () => {
+            const selectedPromos = [];
+            // Исправлено: ищем именно те чекбоксы, которые мы создали в строке 114
+            document.querySelectorAll('.promo-apply-checkbox').forEach(cb => {
+                if (cb.checked) {
+                    const id = cb.getAttribute('data-promo-id');
+                    const found = activePromos.find(ap => ap.id == id);
+                    if (found) selectedPromos.push(found);
+                }
+            });
+            saveOrderWithPromos(selectedPromos);
+        });
+    } else {
+        performFinalOrderSave();
+    }
+}
+
+async function deletePromoAction(id) {
+    showConfirmModal(
+        "Удаление акции",
+        "Данные будут полностью стерты. Продолжить?",
+        "delete", // ТРЕТИЙ АРГУМЕНТ (ТИП)
+        async () => { // ЧЕТВЕРТЫЙ АРГУМЕНТ (ДЕЙСТВИЕ)
+            try {
+                await fetch(`/api/admin/promos/${id}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'X-CSRF-TOKEN': document.querySelector('input[name="_csrf"]')?.value
+                    }
+                });
+                showToast("Акция удалена", "success");
+                closeCustomModal(); // Закрываем нашу модалку
+                setTimeout(() => location.reload(), 500);
+            } catch (e) { console.warn("Отмена удаления"); }
+        }
+    );
+}
+
+async function confirmPromoAction(id) {
+    showConfirmModal(
+        "Подтвердить акцию?",
+        "Редактирование станет недоступно!",
+        "invoice", // Или другой подходящий тип
+        async () => {
+            const res = await fetch(`/api/admin/promos/${id}/confirm`, {method: 'POST'});
+            if (res.ok) {
+                showToast("Акция подтверждена!", "success");
+                location.reload();
+            }
+        }
+    );
+}
+
+function handleLogout() {
+    // Вызываем модалку, а само действие выхода передаем как коллбэк
+    showConfirmModal(
+        'ВЫХОД',
+        'Вы уверены, что хотите завершить сессию?',
+        'logout',
+        async function() {
+            try {
+                // Если у тебя выход через API
+                const response = await fetch('/logout', { method: 'POST' });
+                window.location.href = '/login?logout';
+            } catch (e) {
+                // Если это обычная ссылка, можно просто:
+                window.location.href = '/logout';
+            }
+        }
+    );
+}
+// Эта функция ТОЛЬКО отправляет данные
+function submitInvoiceAction(orderId) {
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '/admin/invoices/create-from-order/' + orderId;
+
+    const token = document.querySelector('input[name="_csrf"]')?.value ||
+        document.querySelector('meta[name="_csrf"]')?.content;
+
+    if (token) {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = '_csrf';
+        input.value = token;
+        form.appendChild(input);
+    }
+
+    document.body.appendChild(form);
+    form.submit(); // Сразу отправляем
+}
+
 
 document.addEventListener('change', function(e) {
     if (e.target.classList.contains('order-print-check')) {
