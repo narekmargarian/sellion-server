@@ -34,18 +34,6 @@ function openModal(id) {
     if (sc) sc.scrollTop = 0;
 }
 
-function closeModal(id) {
-    const modal = document.getElementById(id);
-    if (!modal) return;
-    modal.classList.remove('active');
-    document.body.style.overflow = '';
-
-    // ОЧИСТКА ГЛОБАЛЬНЫХ ДАННЫХ
-    tempItems = {};
-    window.currentOrderPromos = {}; // Очищаем акции
-    console.log("Данные сессии очищены");
-}
-
 function translatePayment(m) {
     if (!m) return '';
     const val = (typeof m === 'object') ? (m.name || m) : m;
@@ -85,7 +73,6 @@ function translateReturnStatus(status) {
     }
 }
 
-
 function updateRowInTable(order) {
     // Находим строку заказа
     const row = document.querySelector(`tr[onclick*="openOrderDetails(${order.id})"]`);
@@ -118,7 +105,6 @@ function updateRowInTable(order) {
     }
 }
 
-
 function getManagerOptionsHTML(selectedManager = "") {
     // 1. Собираем доступные данные
     const webList = (typeof fullManagersList !== 'undefined') ? fullManagersList : [];
@@ -139,7 +125,6 @@ function getManagerOptionsHTML(selectedManager = "") {
     ).join('');
 }
 
-
 function syncTempItems(items) {
     let synced = {};
     if (!items) return synced;
@@ -154,40 +139,6 @@ function syncTempItems(items) {
     });
     return synced;
 }
-
-
-// function printSelectedOperations(type) {
-//     const checkboxClass = type === 'order' ? '.order-print-check' : '.return-print-check';
-//     const selectedIds = Array.from(document.querySelectorAll(`${checkboxClass}:checked`)).map(cb => cb.value);
-//
-//     if (selectedIds.length === 0) {
-//         showToast("Сначала выберите записи галочкой!", "error");
-//         return;
-//     }
-//
-//     const frame = document.getElementById('printFrame');
-//     const url = type === 'order' ? '/admin/orders/print-batch' : '/admin/returns/print-batch';
-//
-//     // Очищаем предыдущие обработчики, создавая клон фрейма (самый надежный метод)
-//     const newFrame = frame.cloneNode(true);
-//     frame.parentNode.replaceChild(newFrame, frame);
-//
-//     // Вешаем событие ОДИН раз
-//     newFrame.addEventListener('load', function () {
-//         if (newFrame.contentWindow.location.href === "about:blank") return;
-//
-//         setTimeout(() => {
-//             newFrame.contentWindow.focus();
-//             newFrame.contentWindow.print();
-//         }, 300);
-//     }, {once: true});
-//
-//     submitAsPost(url, selectedIds, 'printFrame');
-//
-//     localStorage.removeItem('selectedOrders');
-//     selectedOrderIds = [];
-// }
-
 
 function submitAsPost(url, ids, targetName) {
     const form = document.createElement('form');
@@ -221,66 +172,6 @@ function submitAsPost(url, ids, targetName) {
     setTimeout(() => document.body.removeChild(form), 1000);
 }
 
-
-// async function confirmReturn(id) {
-//     const ret = (returnsData || []).find(r => r.id == id);
-//     if (!ret) return showToast("Возврат не найден", "error");
-//
-//     // 1. Проверяем, есть ли несохраненные изменения в ценах или количестве
-//     // Если мы в режиме редактирования (есть инпуты), сначала сохраняем
-//     const isEditMode = !!document.querySelector('.item-price-input');
-//
-//     if (isEditMode) {
-//         showToast("Сначала сохраните изменения перед подтверждением", "info");
-//         return;
-//     }
-//
-//     // 2. Используем модальное окно подтверждения
-//     showConfirmModal(
-//         "Провести возврат?",
-//         `Сумма ${window.currentOrderTotal.toLocaleString()} ֏ будет вычтена из долга клиента. Склад будет обновлен автоматически (если применимо).`,
-//         async () => {
-//             try {
-//                 // Блокируем кнопку, чтобы избежать двойного клика
-//                 const confirmBtn = document.querySelector('#confirm-modal-ok');
-//                 if (confirmBtn) confirmBtn.disabled = true;
-//
-//                 // 3. Отправка запроса на подтверждение
-//                 const response = await fetch(`/api/admin/returns/${id}/confirm`, {
-//                     method: 'POST',
-//                     headers: {'Content-Type': 'application/json'}
-//                 });
-//
-//                 const result = await response.json();
-//
-//                 if (response.ok) {
-//                     // Формируем детальное сообщение
-//                     let successMsg = `Возврат #${id} проведен. `;
-//                     if (result.stockUpdated) {
-//                         successMsg += "Товар возвращен на склад.";
-//                     }
-//
-//                     showToast(successMsg, "success");
-//
-//                     // 4. Обновляем статус в локальном массиве (для красоты до релоада)
-//                     ret.status = 'CONFIRMED';
-//
-//                     setTimeout(() => {
-//                         location.reload();
-//                     }, 800);
-//                 } else {
-//                     showToast("Ошибка при подтверждении", "error");
-//                     if (confirmBtn) confirmBtn.disabled = false;
-//                 }
-//             } catch (e) {
-//                 console.error("Confirm return error:", e);
-//                 showToast("Ошибка сети: проверьте соединение", "error");
-//             }
-//         }
-//     );
-// }
-
-
 function updateReturnRowInTable(ret) {
     const row = document.querySelector(`tr[onclick*="openReturnDetails(${ret.id})"]`);
     if (row) {
@@ -296,7 +187,6 @@ function updateReturnRowInTable(ret) {
         row.cells[5].innerHTML = `<span class="badge ${badgeClass}">${status}</span>`;
     }
 }
-
 
 async function openClientDetails(id) {
     const client = clientsData.find(c => c.id == id);
@@ -424,7 +314,6 @@ async function loadClientStatement(id) {
     }
 }
 
-
 window.printClientStatement = function (id) {
     const start = document.getElementById('statement-start').value;
     const end = document.getElementById('statement-end').value;
@@ -437,7 +326,6 @@ window.printClientStatement = function (id) {
     const url = `/admin/clients/print-statement/${id}?start=${start}&end=${end}`;
     printAction(url);
 };
-
 
 function enableClientEdit() {
     const client = clientsData.find(c => c.id === window.currentClientId);
@@ -489,7 +377,6 @@ function enableClientEdit() {
         <button class="btn-primary" style="background:#64748b" onclick="openClientDetails(${client.id})">Отмена</button>`;
 }
 
-
 async function submitPayment() {
     const data = {
         invoiceId: document.getElementById('pay-invoice-id').value,
@@ -510,7 +397,6 @@ async function submitPayment() {
         showToast("Ошибка при регистрации оплаты");
     }
 }
-
 
 async function submitCreateProduct() {
     const data = {
@@ -545,7 +431,6 @@ async function submitCreateProduct() {
     }
 }
 
-
 async function openCreateClientModal() {
     // 1. Сначала открываем окно
     openModal('modal-client');
@@ -578,7 +463,6 @@ async function openCreateClientModal() {
     }
 }
 
-
 function applyClientFilters() {
     const searchVal = document.getElementById('search-clients').value;
     const categoryVal = document.getElementById('filter-client-category').value;
@@ -591,7 +475,6 @@ function applyClientFilters() {
 
     window.location.href = url.toString();
 }
-
 
 async function loadManagerIds() {
     try {
@@ -612,7 +495,6 @@ async function loadManagerIds() {
         return [];
     }
 }
-
 
 async function openCreateOrderModal() {
     // await loadManagerIds();
@@ -680,30 +562,6 @@ async function openCreateOrderModal() {
 
     openModal('modal-order-view');
 }
-
-
-async function cancelOrder(id) {
-    // Исправлено название функции на showConfirm
-    showConfirmModal("Отменить заказ?", "Товар вернется на склад, суммы заказа будут обнулены.", async () => {
-        try {
-            const response = await fetch(`/api/admin/orders/${id}/cancel`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            });
-            // Если fetch перехвачен твоим глобальным скриптом,
-            // ошибки 400 уже покажут Toast и сделают Promise.reject()
-
-            const result = await response.json();
-            showToast(result.message || "Заказ успешно отменен", "success");
-            setTimeout(() => location.reload(), 800);
-        } catch (e) {
-            console.warn("Отмена отклонена:", e.message);
-        }
-    });
-}
-
 
 async function showOrderHistory(orderId) {
     const body = document.getElementById('order-items-body');
@@ -842,7 +700,6 @@ function openOrderDetails(id) {
     openModal('modal-order-view');
 }
 
-
 function enableOrderEdit(id) {
     const order = ordersData.find(o => o.id == id);
     if (!order) return showToast("Ошибка: Заказ не найден", "error");
@@ -910,7 +767,6 @@ function enableOrderEdit(id) {
         <button class="btn-primary" style="background:#64748b" onclick="openOrderDetails(${id})">Отмена</button>`;
 }
 
-
 function recalculateWithPercent() {
     const percent = parseFloat(document.getElementById('order-discount-percent').value) || 0;
     let total = 0;
@@ -932,7 +788,6 @@ function recalculateWithPercent() {
 
     document.getElementById('order-total-price').innerText = `Итого (с уч. ${percent}%): ${total.toLocaleString()} ֏`;
 }
-
 
 async function openCreateReturnModal() {
     // await loadManagerIds();
@@ -977,7 +832,6 @@ async function openCreateReturnModal() {
     `;
     openModal('modal-order-view');
 }
-
 
 function initSmartClientSearch(inputId, datalistId) {
     const input = document.getElementById(inputId);
@@ -1055,11 +909,9 @@ function initSmartClientSearch(inputId, datalistId) {
     });
 }
 
-
 function toggleSelectAll(className, source) {
     document.querySelectorAll(`.${className}`).forEach(cb => cb.checked = source.checked);
 }
-
 
 function getCurrentTimeFormat() {
     const now = new Date();
@@ -1068,31 +920,6 @@ function getCurrentTimeFormat() {
     const seconds = String(now.getSeconds()).padStart(2, '0');
     return `${hours}:${minutes}:${seconds}`;
 }
-
-
-// function printInvoiceInline(url) {
-//     // Теперь url передается целиком из кнопки
-//     const iframe = document.createElement('iframe');
-//     iframe.style.display = 'none';
-//     iframe.src = url;
-//     document.body.appendChild(iframe);
-//
-//     iframe.onload = function () {
-//         try {
-//             iframe.contentWindow.focus();
-//             iframe.contentWindow.print();
-//             setTimeout(() => {
-//                 if (document.body.contains(iframe)) {
-//                     document.body.removeChild(iframe);
-//                 }
-//             }, 1000);
-//         } catch (e) {
-//             console.warn("Печать через iframe не удалась, открываю окно...");
-//             window.open(url, '_blank');
-//         }
-//     };
-// }
-
 
 function showTab(tabId) {
     document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
@@ -1148,7 +975,6 @@ function updateDashboardStats() {
     }
 }
 
-
 async function deleteReturnOrder(id) {
     showConfirmModal(
         "Ջնջել վերադարձը?",
@@ -1163,7 +989,6 @@ async function deleteReturnOrder(id) {
         }
     );
 }
-
 
 function triggerImport() {
     const input = document.createElement('input');
@@ -1203,7 +1028,6 @@ function triggerImport() {
     input.click();
 }
 
-
 function showToast(text, type = 'info') {
     const container = document.getElementById('toast-container');
     if (!container) {
@@ -1227,7 +1051,6 @@ function showToast(text, type = 'info') {
         setTimeout(() => toast.remove(), 500);
     }, 4000);
 }
-
 
 function openUserDetailsModal(id) {
     // ВАЖНО: usersData должен быть доступен глобально (как clientsData)
@@ -1278,23 +1101,6 @@ function openUserDetailsModal(id) {
     openModal(modalId);
 }
 
-// async function deleteUser(id) {
-//     showConfirmModal("Удалить сотрудника?", "Доступ в систему будет полностью заблокирован.", async () => {
-//         try {
-//             const response = await fetch(`/api/admin/users/${id}`, {method: 'DELETE'});
-//             if (response.ok) {
-//                 showToast("Сотрудник удален", "success");
-//                 location.reload();
-//             } else {
-//                 showToast("Ошибка при удалении", "error");
-//             }
-//         } catch (e) {
-//             showToast("Ошибка сети", "error");
-//         }
-//     });
-// }
-
-
 async function submitEditUser(id) {
     const passwordValue = document.getElementById('edit-u-password').value;
 
@@ -1327,62 +1133,6 @@ async function submitEditUser(id) {
         console.error(e);
         showToast("Ошибка сети", "error");
     }
-}
-
-
-// function showConfirmModal(title, text, onConfirm) {
-//     const modal = document.getElementById('confirm-modal');
-//     document.getElementById('confirm-title').innerText = title;
-//     document.getElementById('confirm-text').innerText = text;
-//
-//     const yesBtn = document.getElementById('confirm-yes');
-//     const noBtn = document.getElementById('confirm-no');
-//
-//     // Очищаем предыдущие обработчики
-//     yesBtn.onclick = null;
-//     noBtn.onclick = null;
-//
-//     yesBtn.onclick = () => {
-//         modal.close();
-//         onConfirm();
-//     };
-//
-//     noBtn.onclick = () => modal.close();
-//
-//     modal.showModal();
-// }
-
-
-function showConfirmModal(title, message, onConfirm) {
-    const modal = document.getElementById('customModal');
-
-    // Устанавливаем тексты
-    document.getElementById('modalTitle').innerText = title || "Հաստատում";
-    document.getElementById('modalMessage').innerText = message || "";
-
-    // Показываем (flex включает центрирование)
-    modal.classList.remove('hidden');
-    modal.classList.add('flex');
-
-    const confirmBtn = document.getElementById('modalConfirmBtn');
-
-    // Очистка событий, чтобы не было дублей
-    const newConfirmBtn = confirmBtn.cloneNode(true);
-    confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
-
-    newConfirmBtn.onclick = () => {
-        onConfirm();
-        closeCustomModal();
-    };
-
-    // Закрытие при нажатии "Отмена"
-    document.getElementById('modalCancelBtn').onclick = closeCustomModal;
-}
-
-function closeCustomModal() {
-    const modal = document.getElementById('customModal');
-    modal.classList.add('hidden');
-    modal.classList.remove('flex');
 }
 
 function openCreateUserModal() {
@@ -1431,95 +1181,7 @@ async function submitCreateUser() {
     }
 }
 
-
-// async function resetPassword(userId) {
-//     showConfirmModal("Сброс пароля", "Сбросить пароль пользователю на стандартный 'qwerty'?", async () => {
-//         try {
-//             const response = await fetch(`/api/admin/users/reset-password/${userId}`, {method: 'POST'});
-//             if (response.ok) {
-//                 showToast("Пароль сброшен на 'qwerty'", "success");
-//             } else {
-//                 showToast("Ошибка при сбросе пароля", "error");
-//             }
-//         } catch (e) {
-//             showToast("Ошибка сети", "error");
-//         }
-//     });
-// }
-
-
-// window.printOrder = function (id) {
-//     console.log("Запуск печати заказа:", id);
-//     const url = `/admin/orders/print/${id}`;
-//     printAction(url);
-// }
-//
-// window.printAction = function (url) {
-//     const frame = document.getElementById('printFrame');
-//     if (!frame) return;
-//
-//     // 1. ОЧИСТКА
-//     frame.onload = null;
-//     frame.src = "about:blank";
-//
-//     // 2. ПРОВЕРКА ДОСТУПА ПЕРЕД ПЕЧАТЬЮ
-//     // Вместо прямой вставки в src, сначала проверяем, есть ли у пользователя права
-//     fetch(url, {method: 'GET'})
-//         .then(response => {
-//             // Если fetch вернул 200, значит доступ есть и страница готова
-//             showToast("⏳ Подготовка документа...", "info");
-//
-//             setTimeout(() => {
-//                 frame.src = url;
-//
-//                 frame.onload = function () {
-//                     if (frame.contentWindow.location.href.includes("about:blank")) return;
-//
-//                     // 3. РЕНДЕРИНГ И ПЕЧАТЬ
-//                     setTimeout(() => {
-//                         try {
-//                             frame.contentWindow.focus();
-//                             frame.contentWindow.print();
-//                             frame.onload = null; // Удаляем обработчик после успеха
-//                         } catch (e) {
-//                             console.error("Ошибка печати:", e);
-//                             // Фоллбек: если фрейм заблокирован, открываем в новом окне
-//                             // window.open(url, '_blank');
-//                         }
-//                     }, 500);
-//                 };
-//             }, 100);
-//         })
-//         .catch(error => {
-//             // Если прав нет (403), сработает ваш новый глобальный fetch
-//             // и покажет "Доступ запрещен". Здесь ничего делать не нужно.
-//             console.warn("Печать отменена: нет доступа или ошибка сети");
-//         });
-// };
-
-// window.printOrder = (id) => window.printAction(`/admin/orders/print/${id}`);
-// window.printReturn = (id) => window.printAction(`/admin/returns/print/${id}`);
-
-//
-// window.printOrderList = () => {
-//     const manager = document.querySelector('select[name="orderManagerId"]').value;
-//     const start = document.querySelector('input[name="orderStartDate"]').value;
-//     const end = document.querySelector('input[name="orderEndDate"]').value;
-//     printAction(`/admin/orders/print-all?orderManagerId=${manager}&orderStartDate=${start}&orderEndDate=${end}`);
-// };
-
-
-// function printRouteSheet() {
-//     const mId = document.getElementById('route-manager-select').value;
-//     const date = document.getElementById('route-date-select').value;
-//     if (!date) return showToast("Выберите дату", "error");
-//
-//     const url = `/admin/logistic/route-list?managerId=${mId}&date=${date}`;
-//     printAction(url);
-// }
-
 let stompClient = null;
-
 
 function connectWebSocket() {
     if (stompClient !== null && stompClient.connected) return;
@@ -1565,21 +1227,6 @@ function connectWebSocket() {
     });
 }
 
-// async function deleteProduct(id) {
-//     showConfirmModal("Удалить товар?", "Он будет скрыт...", async () => {
-//         try {
-//             const response = await fetch(`/api/products/${id}`, {method: 'DELETE'});
-//             // Если мы здесь, значит fetch прошел успешно (status 200)
-//             showToast("Товар успешно удален (скрыт)!", "success");
-//             location.reload();
-//         } catch (e) {
-//             // Ошибка уже показана глобальным перехватчиком
-//             console.log("Удаление отменено из-за прав");
-//         }
-//     });
-// }
-
-
 async function openProductDetails(id) {
     const p = productsData.find(prod => prod.id == id);
     if (!p) return;
@@ -1613,7 +1260,6 @@ async function openProductDetails(id) {
     `;
     openModal('modal-product-view');
 }
-
 
 function enableProductEdit() {
     const p = productsData.find(prod => prod.id == window.currentProductId);
@@ -1651,7 +1297,6 @@ function enableProductEdit() {
     `;
 }
 
-
 function toggleProductEdit(isEdit) {
     const view = document.getElementById('product-view-mode');
     const edit = document.getElementById('product-edit-mode');
@@ -1660,78 +1305,6 @@ function toggleProductEdit(isEdit) {
         edit.style.display = isEdit ? 'block' : 'none';
     }
 }
-
-
-// async function saveProductChanges(id) {
-//     // 1. Собираем данные (ID полей теперь соответствуют новой форме 4x2)
-//     const data = {
-//         category: document.getElementById('edit-product-category').value,
-//         price: parseFloat(document.getElementById('edit-product-price').value) || 0,
-//         hsnCode: document.getElementById('edit-product-hsn').value,
-//         expiryDate: document.getElementById('edit-product-expiry').value,
-//
-//         name: document.getElementById('edit-product-name').value,
-//         stockQuantity: parseInt(document.getElementById('edit-product-qty').value) || 0,
-//         barcode: document.getElementById('edit-product-barcode').value,
-//         itemsPerBox: parseInt(document.getElementById('edit-product-perbox').value) || 0,
-//         unit: document.getElementById('edit-product-unit').value
-//     };
-//
-//     try {
-//         // 2. Отправка на сервер через PUT
-//         await secureFetch(`/api/admin/products/${id}/edit`, {
-//             method: 'PUT',
-//             body: data
-//         });
-//
-//         // 3. Обновляем локальный массив данных Sellion 2026
-//         const idx = productsData.findIndex(p => p.id == id);
-//         if (idx !== -1) {
-//             productsData[idx] = {...productsData[idx], ...data};
-//
-//             // 4. Умное обновление строки в основной таблице склада
-//             const row = document.querySelector(`tr[onclick*="openProductDetails(${id})"]`);
-//             if (row) {
-//                 // Название (внутри div для стиля)
-//                 const nameDiv = row.cells[0].querySelector('div');
-//                 if (nameDiv) nameDiv.innerText = data.name;
-//
-//                 // Цена
-//                 row.cells[1].innerText = data.price.toLocaleString() + ' ֏';
-//
-//                 // Остаток (Badge-стиль)
-//                 const qtyBadge = row.cells[2].querySelector('span');
-//                 if (qtyBadge) {
-//                     qtyBadge.innerText = data.stockQuantity + ' шт.';
-//                     qtyBadge.className = data.stockQuantity > 10 ? 'badge bg-light text-dark' : 'badge bg-danger text-white';
-//                 }
-//
-//                 // Упаковка + Единица измерения
-//                 row.cells[3].innerText = `${data.itemsPerBox} ${data.unit}/уп`;
-//
-//                 // Штрих-код
-//                 row.cells[4].innerText = data.barcode || '---';
-//
-//                 // Срок годности
-//                 if (row.cells[5]) {
-//                     row.cells[5].innerText = data.expiryDate ? formatDate(data.expiryDate) : '---';
-//                     // Подсветка красным, если срок истекает
-//                     const isExpired = data.expiryDate && new Date(data.expiryDate) < new Date(new Date().getTime() + 30 * 24 * 60 * 60 * 1000);
-//                     row.cells[5].className = isExpired ? 'text-danger fw-bold' : '';
-//                 }
-//             }
-//         }
-//
-//         showToast("Товар успешно обновлен", "success");
-//
-//         // 5. Возвращаемся в режим просмотра деталей с новыми данными
-//         openProductDetails(id);
-//
-//     } catch (e) {
-//         console.error("Ошибка сохранения продукта:", e);
-//         showToast("Не удалось сохранить изменения", "error");
-//     }
-// }
 
 async function saveProductChanges(id) {
     // 1. Собираем данные
@@ -1806,20 +1379,6 @@ async function saveProductChanges(id) {
     }
 }
 
-
-// async function deleteClient(id) {
-//     showConfirmModal("Удалить клиента?", "Он будет скрыт из списков, но останется в старых счетах и заказах.", async () => {
-//         const response = await fetch(`/api/clients/${id}`, {method: 'DELETE'});
-//         if (response.ok) {
-//             showToast("Клиент успешно удален (скрыт)!", "success");
-//             location.reload();
-//         } else {
-//             showToast("Ошибка удаления", "error");
-//         }
-//     });
-// }
-
-
 function doInventory() {
     const id = window.currentProductId;
     const product = productsData.find(p => p.id == id);
@@ -1832,7 +1391,6 @@ function doInventory() {
 
     openModal('modal-inventory');
 }
-
 
 async function submitInventoryAdjustment() {
     const id = document.getElementById('inv-product-id').value;
@@ -1863,7 +1421,6 @@ async function submitInventoryAdjustment() {
         console.warn("Инвентаризация не удалась:", e.message);
     }
 }
-
 
 function downloadExcel(type) {
     const start = document.getElementById('report-start').value;
@@ -1926,7 +1483,6 @@ function downloadExcel(type) {
             showToast('Ошибка сети при скачивании отчета.', 'error');
         });
 }
-
 
 function sendToEmail() {
     // 1. Получаем элементы
@@ -1994,7 +1550,6 @@ function sendToEmail() {
         });
 }
 
-
 function showManagerInvoices(managerName) {
     showTab('tab-invoices');
 
@@ -2018,13 +1573,11 @@ function showManagerReport(managerName) {
     printAction(url);
 }
 
-
 function openSetTargetModal(managerId) {
     document.getElementById('target-manager-name').innerText = managerId;
     document.getElementById('target-amount-input').value = 0;
     openModal('modal-set-target');
 }
-
 
 async function saveTargetSales() {
     const managerId = document.getElementById('target-manager-name').innerText;
@@ -2060,7 +1613,6 @@ async function saveTargetSales() {
     }
 }
 
-
 function setMinDateToday(inputId) {
     const dateInput = document.getElementById(inputId);
     if (dateInput) {
@@ -2075,7 +1627,6 @@ function setMinDateToday(inputId) {
     }
 }
 
-
 function updateSelectedCount() {
     const checked = document.querySelectorAll('.correction-checkbox:checked').length;
     const counter = document.getElementById('selected-count');
@@ -2083,28 +1634,6 @@ function updateSelectedCount() {
         counter.innerText = checked;
     }
 }
-
-
-// window.printOrderList = function () {
-//     const form = document.querySelector('#tab-orders .filter-bar form');
-//     const mId = form.querySelector('select[name="orderManagerId"]').value;
-//     const s = form.querySelector('input[name="orderStartDate"]').value;
-//     const e = form.querySelector('input[name="orderEndDate"]').value;
-//
-//     const url = `/admin/orders/print-all?orderManagerId=${mId}&orderStartDate=${s}&orderEndDate=${e}`;
-//     printAction(url);
-// }
-//
-// window.printReturnList = function () {
-//     const form = document.querySelector('#tab-returns .filter-bar form');
-//     const mId = form.querySelector('select[name="returnManagerId"]').value;
-//     const s = form.querySelector('input[name="returnStartDate"]').value;
-//     const e = form.querySelector('input[name="returnEndDate"]').value;
-//
-//     const url = `/admin/returns/print-all?returnManagerId=${mId}&returnStartDate=${s}&returnEndDate=${e}`;
-//     printAction(url);
-// }
-
 
 document.addEventListener('input', function (e) {
     if (e.target.classList.contains('date-input-check')) {
@@ -2130,27 +1659,6 @@ function toggleAllCorrections(source) {
     const checked = document.querySelectorAll('.correction-checkbox:checked').length;
     document.getElementById('selected-count').innerText = checked;
 }
-
-
-// function sendSelectedCorrections() {
-//     const selectedIds = Array.from(document.querySelectorAll('.correction-checkbox:checked')).map(cb => cb.value);
-//     const emailInput = document.getElementById('report-email');
-//     const email = emailInput ? emailInput.value : 'accountant@company.am';
-//
-//     if (selectedIds.length === 0) {
-//         showToast("Выберите хотя бы одну корректировку", "info");
-//         return;
-//     }
-//
-//     showConfirmModal(
-//         "Подтверждение отправки",
-//         `Отправить реестр из ${selectedIds.length} корректировок на почту ${email}?`,
-//         () => {
-//             // Эта часть выполнится только после нажатия "Да" в модальном окне
-//             executeSendingCorrections(selectedIds, email);
-//         }
-//     );
-// }
 
 function executeSendingCorrections(selectedIds, email) {
     showToast("⏳ Подготовка и отправка реестра...");
@@ -2231,7 +1739,6 @@ function loadApiKeys() {
         });
 }
 
-
 function generateApiKeyForManager() {
     const managerId = prompt("Введите ID менеджера (например, 1011):");
     if (managerId) {
@@ -2247,7 +1754,6 @@ function generateApiKeyForManager() {
             });
     }
 }
-
 
 function deleteApiKey(managerId) {
     if (confirm(`Уверены, что хотите удалить ключ для ${managerId}?`)) {
@@ -2280,7 +1786,6 @@ function refreshReportCounters() {
         document.getElementById('btn-count-returns').innerText = processedReturns;
 }
 
-
 function applyReportFilters() {
     const start = document.getElementById('report-start').value;
     const end = document.getElementById('report-end').value;
@@ -2303,33 +1808,6 @@ function applyReportFilters() {
 
     window.location.href = url.toString();
 }
-
-// function printCompactOrders() {
-//     const checkboxes = document.querySelectorAll('.order-print-check:checked');
-//     if (checkboxes.length === 0) return showToast("Выберите хотя бы один заказ", "error");
-//
-//     // Формируем строку параметров: type=order&ids=1&ids=2...
-//     const params = new URLSearchParams();
-//     params.append('type', 'order');
-//     checkboxes.forEach(cb => params.append('ids', cb.value));
-//
-//     const url = `/admin/logistic/print-compact?${params.toString()}`;
-//     printAction(url);
-// }
-//
-// function printCompactReturns() {
-//     const checkboxes = document.querySelectorAll('.return-print-check:checked');
-//     if (checkboxes.length === 0) return showToast("Выберите хотя бы один возврат", "error");
-//
-//     // Формируем строку параметров: type=return&ids=1&ids=2...
-//     const params = new URLSearchParams();
-//     params.append('type', 'return');
-//     checkboxes.forEach(cb => params.append('ids', cb.value));
-//
-//     const url = `/admin/logistic/print-compact?${params.toString()}`;
-//     printAction(url);
-// }
-
 
 const csrfToken = document.querySelector('input[name="_csrf"]')?.value;
 
@@ -2368,36 +1846,6 @@ async function secureFetch(url, options = {}) {
 
     return response.json();
 }
-
-
-// function printSelectedRows(tableId) {
-//     const selected = Array.from(document.querySelectorAll(`#${tableId} .row-checkbox:checked`))
-//         .map(cb => cb.value);
-//     if (selected.length === 0) return alert("Выберите хотя бы одну запись");
-//
-//     const form = document.createElement('form');
-//     form.method = 'POST';
-//     form.action = '/admin/orders/print-batch';
-//     form.target = '_blank';
-//
-//     const csrfToken = document.querySelector('meta[name="_csrf"]').content;
-//     const csrfInput = document.createElement('input');
-//     csrfInput.name = '_csrf';
-//     csrfInput.value = csrfToken;
-//     form.appendChild(csrfInput);
-//
-//     selected.forEach(id => {
-//         const input = document.createElement('input');
-//         input.name = 'ids';
-//         input.value = id;
-//         form.appendChild(input);
-//     });
-//
-//     document.body.appendChild(form);
-//     form.submit();
-//     form.remove();
-// }
-
 
 async function submitWriteOff() {
     const comment = document.getElementById('write-off-comment').value;
@@ -2456,7 +1904,6 @@ function saveAllSettings() {
         });
 }
 
-
 function printManagerDebts() {
     const managerId = document.getElementById('filter-invoice-manager').value;
     const start = document.getElementById('inv-date-start').value;
@@ -2496,59 +1943,6 @@ function setDefaultInvoiceDates() {
 
 setDefaultInvoiceDates();
 
-
-// function formatDate(dateVal) {
-//     if (!dateVal || dateVal === '---' || dateVal === null) return '---';
-//
-//     try {
-//         // 1. Если пришел объект LocalDateTime из Java
-//         if (typeof dateVal === 'object' && dateVal.year) {
-//             const d = String(dateVal.dayOfMonth || dateVal.day || 1).padStart(2, '0');
-//             const m = String(dateVal.monthValue || dateVal.month || 1).padStart(2, '0');
-//             const y = dateVal.year;
-//             const h = String(dateVal.hour || 0).padStart(2, '0');
-//             const min = String(dateVal.minute || 0).padStart(2, '0');
-//             return `${d}.${m}.${y} ${h}:${min}`;
-//         }
-//
-//         // 2. Если пришла строка (ISO или обычная)
-//         if (typeof dateVal === 'string') {
-//             let clean = dateVal.replace(/[,/]/g, '.');
-//
-//             // ISO формат: 2026-01-20T01:17:00
-//             if (clean.includes('T') || (clean.includes('-') && clean.includes(':'))) {
-//                 const parts = clean.split(/[T ]/);
-//                 const dParts = parts[0].split('-');
-//                 if (dParts.length === 3) {
-//                     const date = `${dParts[2]}.${dParts[1]}.${dParts[0]}`;
-//                     const time = parts[1].substring(0, 5);
-//                     return `${date} ${time}`;
-//                 }
-//             }
-//
-//             // Только дата: 2026-01-20
-//             if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) {
-//                 const d = clean.split('-');
-//                 return `${d[2]}.${d[1]}.${d[0]}`;
-//             }
-//         }
-//
-//         // Резервный вариант через стандартный Date
-//         const date = new Date(dateVal);
-//         if (!isNaN(date.getTime())) {
-//             const d = String(date.getDate()).padStart(2, '0');
-//             const m = String(date.getMonth() + 1).padStart(2, '0');
-//             const y = date.getFullYear();
-//             return `${d}.${m}.${y}`;
-//         }
-//
-//     } catch (e) {
-//         console.warn("Ошибка форматирования даты:", dateVal);
-//     }
-//
-//     return dateVal;
-// }
-
 function formatDate(dateVal) {
     if (!dateVal || dateVal === '---' || dateVal === null || dateVal === '') return '---';
 
@@ -2587,12 +1981,8 @@ function formatDate(dateVal) {
     return s;
 }
 
-
-
-
 const fmt = formatDate;
 const formatOrderDate = formatDate;
-
 
 async function saveNewManualOperation(type, btnElement) { // Добавили btnElement
     const shopName = document.getElementById('new-op-shop')?.value.trim();
@@ -2694,7 +2084,6 @@ async function executeManualPost(endpoint, data, saveBtn) {
     }
 }
 
-
 function calculateCurrentTempTotal() {
     let total = 0;
     Object.entries(tempItems).forEach(([pId, pQty]) => {
@@ -2708,13 +2097,11 @@ function calculateCurrentTempTotal() {
     return total;
 }
 
-
 function removeItemFromEdit(pId) {
     delete tempItems[pId];
     renderItemsTable(tempItems, true);
     showToast("Товар удален из списка", "info"); // Добавляем уведомление
 }
-
 
 function updateQtyAndRecalculate(pId, shouldRedraw = false) {
     // 1. Получаем строку и элементы
@@ -2879,7 +2266,6 @@ function updateFinalTotalDisplay(shopPercent) {
 
     window.currentOrderTotal = total;
 }
-
 
 function openWriteOffModal() {
     tempItems = {};
@@ -3099,7 +2485,6 @@ function renderItemsTable(itemsMap, isEdit) {
     window.currentOrderTotal = totalSumForCalculation;
 }
 
-
 function addItemToEdit() {
     const select = document.getElementById('add-item-select');
     const qtyInput = document.getElementById('add-item-qty');
@@ -3158,7 +2543,6 @@ function addItemToEdit() {
         showToast("Ошибка: Товар не найден", "error");
     }
 }
-
 
 async function saveFullChanges(id) {
     const shopInput = document.getElementById('edit-shop');
@@ -3247,7 +2631,7 @@ async function saveFullChanges(id) {
         }
     });
 }
-// Универсальный метод отправки изменений
+
 async function executeEditRequest(data, btn) {
     try {
         const response = await fetch(`/api/admin/orders/${data.id}/edit`, {
@@ -3280,7 +2664,6 @@ async function executeEditRequest(data, btn) {
     }
 }
 
-
 async function performEditSubmit(id, shopName, deliveryDate, items, promoMap) {
     const data = {
         shopName: shopName,
@@ -3309,7 +2692,6 @@ async function performEditSubmit(id, shopName, deliveryDate, items, promoMap) {
         showToast("Ошибка сохранения", "error");
     }
 }
-
 
 async function saveReturnChanges(id) {
     const shopInput = document.getElementById('edit-ret-shop');
@@ -3399,7 +2781,6 @@ async function saveReturnChanges(id) {
     }
 }
 
-
 function enableReturnEdit(id) {
     // 1. Поиск возврата по ID
     const ret = returnsData.find(r => r.id == id);
@@ -3475,7 +2856,6 @@ function enableReturnEdit(id) {
         <button class="btn-primary" style="background:#64748b; padding: 10px 25px;" onclick="openReturnDetails(${id})">Отмена</button>
     `;
 }
-
 
 function openReturnDetails(id) {
     const ret = (returnsData || []).find(r => r.id == id);
@@ -3553,7 +2933,6 @@ function openReturnDetails(id) {
     openModal('modal-order-view');
 }
 
-
 function handleClientChangeInEdit(clientName) {
     // 1. Находим данные клиента в локальном справочнике
     const client = clientsData.find(c => c.name === clientName);
@@ -3577,7 +2956,6 @@ function handleClientChangeInEdit(clientName) {
         }
     }
 }
-
 
 async function saveClientChanges(id) {
     const data = {
@@ -3629,7 +3007,6 @@ async function saveClientChanges(id) {
     }
 }
 
-
 function applyClientCategoryFilter(category) {
     // Получаем текущие параметры URL
     const url = new URL(window.location.href);
@@ -3642,7 +3019,6 @@ function applyClientCategoryFilter(category) {
     // Переходим по новой ссылке
     window.location.href = url.toString();
 }
-
 
 function filterTable(inputId, tableBodyId) {
     const input = document.getElementById(inputId);
@@ -3664,7 +3040,6 @@ function filterTable(inputId, tableBodyId) {
     }
 }
 
-
 function openPaymentModal(invoiceId) {
     const invoiceRow = document.querySelector(`tr[onclick*="openPaymentModal(${invoiceId})"]`) ||
         document.querySelector(`tr:has(button[onclick*="openPaymentModal(${invoiceId})"])`);
@@ -3677,36 +3052,6 @@ function openPaymentModal(invoiceId) {
 
     openModal('modal-payment');
 }
-
-
-// function printDailySummary() {
-//     const tab = document.getElementById('tab-orders');
-//     const selectedIds = Array.from(tab.querySelectorAll('.order-print-check:checked')).map(cb => cb.value);
-//
-//     if (selectedIds.length === 0) {
-//         showToast("Выберите заказы для сводки!", "error");
-//         return;
-//     }
-//
-//     const frame = document.getElementById('printFrame');
-//     const url = '/admin/orders/print-daily-summary';
-//
-//     const newFrame = frame.cloneNode(true);
-//     frame.parentNode.replaceChild(newFrame, frame);
-//
-//     newFrame.addEventListener('load', function () {
-//         if (newFrame.contentWindow.location.href === "about:blank") return;
-//         setTimeout(() => {
-//             newFrame.contentWindow.focus();
-//             newFrame.contentWindow.print();
-//         }, 300);
-//     }, {once: true});
-//
-//     submitAsPost(url, selectedIds, 'printFrame');
-//
-//     clearOrderSelection();
-// }
-
 
 function convertDateToISO(dateVal) {
     if (!dateVal || dateVal === '---') return "";
@@ -3759,7 +3104,6 @@ function showStatus(text, isError = false) {
         if (statusDiv) statusDiv.remove();
     }, 1500);
 }
-
 
 function applySingleQty(pId) {
     const input = document.getElementById(`input-qty-${pId}`);
@@ -3825,7 +3169,6 @@ function getSmartDeliveryDates() {
     };
 }
 
-
 function applyInvoiceFilters() {
     const start = document.getElementById('inv-date-start').value;
     const end = document.getElementById('inv-date-end').value;
@@ -3843,7 +3186,6 @@ function applyInvoiceFilters() {
 
     window.location.href = window.location.pathname + '?' + params.toString();
 }
-
 
 function initDeliveryDateLogic() {
     const dateInput = document.getElementById('route-date-select');
@@ -3880,7 +3222,6 @@ function initDeliveryDateLogic() {
         }
     });
 }
-
 
 function openPromoModal(productId) {
     const p = productsData.find(prod => prod.id == productId);
@@ -3966,7 +3307,6 @@ function updatePromoTimers() {
     });
 }
 
-
 function openCreatePromoModal() {
     tempPromoItems = {};
     const today = new Date().toISOString().split('T')[0];
@@ -3996,60 +3336,6 @@ function openCreatePromoModal() {
     `;
     openModal('modal-order-view');
 }
-
-
-// async function checkPromosBeforeSave(items) {
-//     const res = await fetch('/api/promos/check-active', {
-//         method: 'POST',
-//         headers: {'Content-Type': 'application/json'},
-//         body: JSON.stringify(Object.keys(items))
-//     });
-//     const activePromos = await res.json();
-//
-//     if (activePromos.length > 0) {
-//         // Формируем красивые карточки с РАБОЧИМИ ползунками
-//         // Внутри функции checkPromosBeforeSave или там, где рисуете список:
-//         const promoListHtml = activePromos.map(p => `
-//     <label class="promo-card" style="display: flex; align-items: center; justify-content: space-between; width: 100%; box-sizing: border-box;">
-//         <div style="flex-grow: 1; text-align: left; pointer-events: none;">
-//             <div style="font-weight: 700; color: #1e293b; font-size: 13px;">${p.title || p.name}</div>
-//             <div style="font-size: 11px; color: #64748b;">Для менеджера: ${p.managerId}</div>
-//         </div>
-//
-//         <!-- Чекбокс ДОЛЖЕН быть перед .custom-switch -->
-//         <input type="checkbox"
-//                class="promo-checkbox"
-//                data-promo-id="${p.id}"
-//                checked
-//                style="display: none;"> <!-- Скрываем, но он работает через label -->
-//
-//         <!-- Визуальный ползунок -->
-//         <div class="custom-switch"></div>
-//     </label>
-// `).join('');
-//
-//
-//         showConfirmModal("Нашли акции!", `
-//             <div style="text-align:center;">
-//                 ${promoListHtml}
-//                 <p style="font-size:11px; color:#ef4444; margin-top:15px;">* При активации спец. цены заменят скидку магазина на эти товары.</p>
-//             </div>
-//         `, () => {
-//             // Собираем ТОЛЬКО те акции, где ползунок остался включенным
-//             const selectedPromos = [];
-//             document.querySelectorAll('.promo-apply-checkbox').forEach(cb => {
-//                 if (cb.checked) {
-//                     const id = cb.getAttribute('data-promo-id');
-//                     const found = activePromos.find(ap => ap.id == id);
-//                     if (found) selectedPromos.push(found);
-//                 }
-//             });
-//             saveOrderWithPromos(selectedPromos);
-//         });
-//     } else {
-//         performFinalOrderSave();
-//     }
-// }
 
 document.addEventListener('DOMContentLoaded', () => {
     const activeTab = new URLSearchParams(window.location.search).get('activeTab');
@@ -4143,41 +3429,6 @@ function getStatusClass(status) {
     }
 }
 
-// async function deletePromoAction(id) {
-//     showConfirmModal("Удаление акции", "Вы уверены, что хотите полностью удалить эту акцию? Данные будут стерты.", async () => {
-//         try {
-//             // Выполняем запрос. Глобальный fetch сам покажет ошибку, если статус не 2xx.
-//             await fetch(`/api/admin/promos/${id}`, {
-//                 method: 'DELETE',
-//                 headers: {
-//                     'Content-Type': 'application/json',
-//                     'X-CSRF-TOKEN': document.querySelector('input[name="_csrf"]')?.value
-//                 }
-//             });
-//
-//             // Этот блок сработает ТОЛЬКО при успешном удалении (status 200)
-//             showToast("Акция успешно удалена", "success");
-//
-//             // Закрываем модалку, если функция существует
-//             if (typeof closeModal === 'function') closeModal('modal-order-view');
-//
-//             setTimeout(() => {
-//                 if (typeof loadPromosByPeriod === 'function') {
-//                     loadPromosByPeriod();
-//                 } else {
-//                     location.reload();
-//                 }
-//             }, 500);
-//
-//         } catch (e) {
-//             // Блок пустой: уведомление об ошибке уже вывел глобальный fetch.
-//             // Мы просто пресекаем появление "Критическая ошибка связи".
-//             console.warn("Удаление акции отклонено или не удалось:", e.message);
-//         }
-//     });
-// }
-
-
 async function openPromoDetails(id) {
     // Получаем список акций для поиска нужной
     const response = await fetch(`/api/admin/promos/filter?start=2000-01-01&end=2100-01-01`);
@@ -4226,16 +3477,6 @@ async function openPromoDetails(id) {
 
     openModal('modal-order-view');
 }
-
-// async function confirmPromoAction(id) {
-//     showConfirmModal("Подтвердить акцию?", "После подтверждения редактирование будет невозможно!", async () => {
-//         const res = await fetch(`/api/admin/promos/${id}/confirm`, {method: 'POST'});
-//         if (res.ok) {
-//             showToast("Акция подтверждена!", "success");
-//             location.reload();
-//         }
-//     });
-// }
 
 function downloadInventoryExcel() {
     showToast("⏳ Подготовка данных склада...", "info");
@@ -4340,7 +3581,6 @@ async function checkAndApplyPromos(orderItems, onApplied) {
     }
 }
 
-
 function refreshPromoCounters() {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -4374,7 +3614,6 @@ function refreshPromoCounters() {
     const counterEl = document.getElementById('active-promos-count');
     if (counterEl) counterEl.innerText = activeCount;
 }
-
 
 async function submitPromo(isEdit = false, promoId = null) {
     const title = document.getElementById('promo-title').value.trim();
@@ -4449,7 +3688,6 @@ async function submitPromo(isEdit = false, promoId = null) {
         }
     }
 }
-
 
 function enablePromoEdit(id) {
     if (!currentPromoData) return;
@@ -4730,7 +3968,6 @@ function addItemRowToOrder() {
     body.appendChild(row);
 }
 
-
 function updateRowPrice(selectEl, rowId) {
     const selected = selectEl.options[selectEl.selectedIndex];
     const price = selected.dataset.price || 0;
@@ -4795,47 +4032,6 @@ function recalculateAllPricesByPercent() {
     window.currentOrderTotal = totalOrderSum;
 }
 
-// function handleLogout() {
-//     showConfirmModal('Подтвердите выход', 'Вы уверены, что хотите покинуть систему?', () => {
-//         // Очищаем локальное состояние в браузере
-//         localStorage.clear();
-//         sessionStorage.clear();
-//
-//         // Отправляем форму
-//         document.getElementById('logout-form').submit();
-//     });
-// }
-//
-// function handleCreateInvoice(orderId) {
-//     showConfirmModal("Подтверждение", "Выставить счет и списать товар?", () => {
-//         // 1. Создаем форму "на лету"
-//         const form = document.createElement('form');
-//         form.method = 'POST';
-//         form.action = `/admin/invoices/create-from-order/${orderId}`;
-//
-//         // 2. Добавляем CSRF токен (берем из любой формы на странице)
-//         const csrfInput = document.querySelector('input[name="_csrf"]');
-//         if (csrfInput) {
-//             const input = document.createElement('input');
-//             input.type = 'hidden';
-//             input.name = '_csrf';
-//             input.value = csrfInput.value;
-//             form.appendChild(input);
-//         }
-//
-//         // 3. Отправляем. Страница перезагрузится.
-//         document.body.appendChild(form);
-//         form.submit();
-//
-//         // После этого Контроллер в Java сделает редирект,
-//         // и вы увидите красную плашку "Недостаточно товара: Манго"
-//     });
-// }
-
-
-
-
-// 1. Подтверждение возврата
 async function confirmReturn(id) {
     const ret = (returnsData || []).find(r => r.id == id);
     if (!ret) return showToast("Возврат не найден", "error");
@@ -4869,7 +4065,6 @@ async function confirmReturn(id) {
     );
 }
 
-// 2. Удаление сотрудника
 async function deleteUser(id) {
     showConfirmModal("Удалить сотрудника?", "Доступ в систему будет полностью заблокирован.", async () => {
         try {
@@ -4882,7 +4077,6 @@ async function deleteUser(id) {
     });
 }
 
-// 3. Сброс пароля
 async function resetPassword(userId) {
     showConfirmModal("Сброс пароля", "Сбросить пароль пользователю на стандартный 'qwerty'?", async () => {
         try {
@@ -4892,7 +4086,6 @@ async function resetPassword(userId) {
     });
 }
 
-// 4. Удаление товара
 async function deleteProduct(id) {
     showConfirmModal("Удалить товар?", "Он будет скрыт из активного списка.", async () => {
         try {
@@ -4903,7 +4096,6 @@ async function deleteProduct(id) {
     });
 }
 
-// 5. Удаление клиента
 async function deleteClient(id) {
     showConfirmModal("Удалить клиента?", "Он будет скрыт из списков, но останется в истории.", async () => {
         try {
@@ -4916,7 +4108,6 @@ async function deleteClient(id) {
     });
 }
 
-// 6. Отправка корректировок
 function sendSelectedCorrections() {
     const selectedIds = Array.from(document.querySelectorAll('.correction-checkbox:checked')).map(cb => cb.value);
     const emailInput = document.getElementById('report-email');
@@ -4933,7 +4124,6 @@ function sendSelectedCorrections() {
     );
 }
 
-// 7. Проверка акций (Важно: исправлен селектор чекбоксов)
 async function checkPromosBeforeSave(items) {
     const res = await fetch('/api/promos/check-active', {
         method: 'POST',
@@ -4975,7 +4165,6 @@ async function checkPromosBeforeSave(items) {
     }
 }
 
-// 8. Удаление акции
 async function deletePromoAction(id) {
     showConfirmModal("Удаление акции", "Данные будут полностью стерты. Продолжить?", async () => {
         try {
@@ -4986,7 +4175,6 @@ async function deletePromoAction(id) {
     });
 }
 
-// 9. Подтверждение акции
 async function confirmPromoAction(id) {
     showConfirmModal("Подтвердить акцию?", "Редактирование станет недоступно!", async () => {
         const res = await fetch(`/api/admin/promos/${id}/confirm`, {method: 'POST'});
@@ -4997,7 +4185,6 @@ async function confirmPromoAction(id) {
     });
 }
 
-// 10. Выход из системы
 function handleLogout() {
     showConfirmModal('Подтвердите выход', 'Вы уверены, что хотите покинуть систему?', () => {
         localStorage.clear();
@@ -5006,26 +4193,6 @@ function handleLogout() {
     });
 }
 
-// 11. Выставление счета (Инвойс)
-function handleCreateInvoice(orderId) {
-    showConfirmModal("Подтверждение", "Выставить счет и списать товар?", () => {
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.action = `/admin/invoices/create-from-order/${orderId}`;
-        const csrfInput = document.querySelector('input[name="_csrf"]');
-        if (csrfInput) {
-            const input = document.createElement('input');
-            input.type = 'hidden';
-            input.name = '_csrf';
-            input.value = csrfInput.value;
-            form.appendChild(input);
-        }
-        document.body.appendChild(form);
-        form.submit();
-    });
-}
-
-// 1. Обработка клика по вкладкам
 document.querySelectorAll('.tab-link, [data-tab]').forEach(tab => {
     tab.addEventListener('click', function () {
         // Учитываем разные варианты атрибутов (href или data-tab)
@@ -5042,7 +4209,6 @@ document.querySelectorAll('.tab-link, [data-tab]').forEach(tab => {
     });
 });
 
-// 3. Функция обновления счетчика (твоя старая логика, но теперь глобальная)
 function updateSelectedCounter() {
     const counter = document.getElementById('selected-count');
     if (counter) {
@@ -5070,7 +4236,6 @@ function restoreCheckboxes() {
 
     updateSelectedCounter();
 }
-
 
 function clearOrderSelection() {
     // 1. Очищаем массив в оперативной памяти (JS)
@@ -5101,8 +4266,6 @@ function clearOrderSelection() {
     }
 }
 
-
-// Очистка (вызывай после успешной печати или удаления)
 function clearAllSelections() {
     selectedOrderIds = [];
     selectedReturnIds = [];
@@ -5110,87 +4273,52 @@ function clearAllSelections() {
     syncCheckboxesOnPage();
 }
 
-function toggleGlobalSelect(masterCheckbox, childClass) {
-    const isOrder = (childClass === 'order-print-check');
-    const allIdsStr = masterCheckbox.getAttribute('data-all-ids') || "";
-    // Превращаем строку "[1, 2, 3]" в нормальный массив
-    const allIds = allIdsStr.replace(/[\[\]\s]/g, '').split(',').filter(id => id);
-
-    if (masterCheckbox.checked) {
-        allIds.forEach(id => {
-            if (isOrder) {
-                if (!selectedOrderIds.includes(id)) selectedOrderIds.push(id);
-            } else {
-                if (!selectedReturnIds.includes(id)) selectedReturnIds.push(id);
-            }
-        });
-    } else {
-        // Если снимаем галку, убираем эти ID из памяти
-        allIds.forEach(id => {
-            if (isOrder) {
-                selectedOrderIds = selectedOrderIds.filter(item => item !== id);
-            } else {
-                selectedReturnIds = selectedReturnIds.filter(item => item !== id);
-            }
-        });
-    }
-    saveAllToStorage();
-    syncCheckboxesOnPage();
-}
-
 function syncCheckboxesOnPage() {
     // Синхроним заказы
     document.querySelectorAll('.order-print-check').forEach(cb => {
-        cb.checked = selectedOrderIds.includes(cb.value.toString());
+        // Приводим ID к числу для сравнения
+        cb.checked = selectedOrderIds.includes(Number(cb.value));
     });
     // Синхроним возвраты
     document.querySelectorAll('.return-print-check').forEach(cb => {
-        cb.checked = selectedReturnIds.includes(cb.value.toString());
+        cb.checked = selectedReturnIds.includes(Number(cb.value));
     });
+
+    // Обновляем главный чекбокс "Выбрать все"
+    const orderSelectAll = document.getElementById('select-all-orders');
+    if (orderSelectAll) {
+        const pageCheckboxes = document.querySelectorAll('.order-print-check');
+        if (pageCheckboxes.length > 0) {
+            orderSelectAll.checked = Array.from(pageCheckboxes).every(cb => cb.checked);
+        }
+    }
 }
 
-// Авто-вызов при каждой загрузке страницы
-document.addEventListener('DOMContentLoaded', syncCheckboxesOnPage);
-
-// Слушатель для одиночных кликов по чекбоксам
 document.addEventListener('change', function(e) {
     if (e.target.classList.contains('order-print-check')) {
-        const id = e.target.value.toString();
+        const id = Number(e.target.value); // Сохраняем как число
         if (e.target.checked) {
             if (!selectedOrderIds.includes(id)) selectedOrderIds.push(id);
         } else {
             selectedOrderIds = selectedOrderIds.filter(i => i !== id);
         }
         saveAllToStorage();
+        syncCheckboxesOnPage();
     }
 
     if (e.target.classList.contains('return-print-check')) {
-        const id = e.target.value.toString();
+        const id = Number(e.target.value);
         if (e.target.checked) {
             if (!selectedReturnIds.includes(id)) selectedReturnIds.push(id);
         } else {
             selectedReturnIds = selectedReturnIds.filter(i => i !== id);
         }
         saveAllToStorage();
+        syncCheckboxesOnPage();
     }
 });
+document.addEventListener('DOMContentLoaded', syncCheckboxesOnPage);
 
-
-
-
-// Вспомогательная функция очистки для возвратов
-function clearReturnSelection() {
-    selectedReturnIds = [];
-    localStorage.removeItem('selectedReturnIds');
-    document.querySelectorAll('.return-print-check').forEach(cb => cb.checked = false);
-    const selectAll = document.getElementById('select-all-returns');
-    if (selectAll) selectAll.checked = false;
-    if (typeof updateSelectedCounter === "function") updateSelectedCounter();
-    if (typeof showToast === "function") showToast("Выбор возвратов очищен", "info");
-}
-
-
-// Вспомогательная функция очистки для возвратов
 function clearReturnSelection() {
     selectedReturnIds = [];
     localStorage.removeItem('selectedReturnIds');
@@ -5407,14 +4535,187 @@ function printSelectedRows(tableId) {
     form.remove();
 }
 
+function handleCreateInvoice(orderId) {
+    showConfirmModal("Подтверждение", "Выставить счет и списать товар?", function() {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '/admin/invoices/create-from-order/' + orderId;
 
-// Запускаем при загрузке
+        const csrfInput = document.querySelector('input[name="_csrf"]');
+        if (csrfInput) {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = '_csrf';
+            input.value = csrfInput.value;
+            form.appendChild(input);
+        }
+        document.body.appendChild(form);
+        form.submit();
+    });
+}
+
+async function cancelOrder(id) {
+    // Вызываем твое новое красивое модальное окно
+    // Параметры: Заголовок, Текст, Тип ('danger' для красного), и функция действия
+    showConfirmModal("Отмена заказа", "Вы уверены? Товар вернется на склад, а суммы будут обнулены.", "danger", async () => {
+        try {
+            // Блокируем кнопку в модальном окне, чтобы не нажали дважды
+            const confirmBtn = document.getElementById('modalConfirmBtn');
+            if (confirmBtn) confirmBtn.disabled = true;
+
+            // Используем ПРАВИЛЬНЫЙ путь и метод из твоего старого кода
+            const response = await fetch(`/api/admin/orders/${id}/cancel`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('input[name="_csrf"]')?.value
+                }
+            });
+
+            // Если сервер вернул ошибку (например, 500 или 403)
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || "Ошибка сервера");
+            }
+
+            const result = await response.json();
+            showToast(result.message || "Заказ успешно отменен", "success");
+
+            // Перезагрузка страницы, чтобы обновить таблицу
+            setTimeout(() => {
+                location.reload();
+            }, 800);
+
+        } catch (e) {
+            // Если ошибка 500 или заказ уже отменен
+            console.error("Ошибка отмены:", e.message);
+            showToast(e.message || "Не удалось отменить заказ", "error");
+
+            // Разблокируем кнопку, если произошла ошибка, чтобы можно было попробовать снова или закрыть
+            const confirmBtn = document.getElementById('modalConfirmBtn');
+            if (confirmBtn) confirmBtn.disabled = false;
+
+            // Если заказ уже был отменен кем-то другим, обновим страницу через время
+            if (e.message && e.message.includes("уже был отменен")) {
+                setTimeout(() => location.reload(), 1500);
+            }
+        }
+    });
+}
+
+function toggleGlobalSelect(masterCheckbox, childClass) {
+    const isOrder = (childClass === 'order-print-check');
+
+    // 1. Визуально переключаем все чекбоксы на текущей странице
+    const pageCheckboxes = document.querySelectorAll('.' + childClass);
+    pageCheckboxes.forEach(cb => cb.checked = masterCheckbox.checked);
+
+    // 2. Достаем массив всех ID из атрибута
+    let allIdsRaw = masterCheckbox.getAttribute('data-all-ids') || "[]";
+    // Убираем скобки и лишние пробелы, превращаем в чистый массив строк
+    const allIds = allIdsRaw.replace(/[\[\]]/g, '').split(',')
+        .map(id => id.trim()).filter(id => id !== "");
+
+    if (masterCheckbox.checked) {
+        // Добавляем все ID в глобальный список (без дубликатов)
+        allIds.forEach(id => {
+            if (isOrder) {
+                if (!selectedOrderIds.includes(id)) selectedOrderIds.push(id);
+            } else {
+                if (!selectedReturnIds.includes(id)) selectedReturnIds.push(id);
+            }
+        });
+    } else {
+        // Если галочка снята — полностью очищаем список для этого типа
+        if (isOrder) {
+            selectedOrderIds = [];
+        } else {
+            selectedReturnIds = [];
+        }
+    }
+
+    saveAllToStorage();
+    console.log("Выбрано сейчас:", isOrder ? selectedOrderIds : selectedReturnIds);
+}
+
+function showConfirmModal(title, text, actionType, onConfirm) {
+    const modal = document.getElementById('customModal');
+    const titleEl = document.getElementById('modalTitle');
+    const messageEl = document.getElementById('modalMessage');
+    const yesBtn = document.getElementById('modalConfirmBtn');
+    const iconContainer = document.getElementById('modalIconContainer');
+    const iconInner = document.getElementById('modalIconInner');
+
+    if (!modal || !titleEl) return;
+
+    // Устанавливаем тексты
+    titleEl.innerText = title;
+    messageEl.innerText = text;
+
+    // Сброс классов
+    iconContainer.className = "mx-auto flex items-center justify-center h-20 w-20 rounded-full mb-6";
+    iconInner.className = "fa-solid text-3xl";
+
+    // ЛОГИКА ВЫБОРА ИКОНОК И ЦВЕТОВ
+    switch(actionType) {
+        case 'delete': // Для УДАЛЕНИЯ
+            iconContainer.classList.add('bg-red-50', 'text-red-600');
+            iconInner.classList.add('fa-trash-can');
+            yesBtn.style.backgroundColor = '#ef4444'; // Красный
+            break;
+
+        case 'logout': // Для ВЫХОДА
+            iconContainer.classList.add('bg-slate-100', 'text-slate-600');
+            iconInner.classList.add('fa-right-from-bracket'); // Иконка выхода
+            yesBtn.style.backgroundColor = '#0f172a'; // Темный
+            break;
+
+        case 'invoice': // Для СЧЕТА
+            iconContainer.classList.add('bg-green-50', 'text-green-600');
+            iconInner.classList.add('fa-file-invoice-dollar');
+            yesBtn.style.backgroundColor = '#63AA2F'; // Твой зеленый
+            break;
+
+        default: // По умолчанию
+            iconContainer.classList.add('bg-blue-50', 'text-blue-600');
+            iconInner.classList.add('fa-circle-question');
+            yesBtn.style.backgroundColor = '#0f172a';
+    }
+
+    // Показываем окно
+    modal.style.display = 'flex';
+    modal.classList.remove('hidden');
+
+    yesBtn.onclick = function() {
+        closeCustomModal();
+        onConfirm();
+    };
+}
+
+function closeCustomModal() {
+    const modal = document.getElementById('customModal');
+    if (modal) {
+        modal.style.display = 'none';
+        modal.classList.add('hidden');
+    }
+}
+
+function closeModal(id) {
+    const modal = document.getElementById(id);
+    if (!modal) return;
+    modal.classList.remove('active');
+    document.body.style.overflow = '';
+
+    // ОЧИСТКА ГЛОБАЛЬНЫХ ДАННЫХ
+    tempItems = {};
+    window.currentOrderPromos = {}; // Очищаем акции
+    console.log("Данные сессии очищены");
+}
+
 document.addEventListener('DOMContentLoaded', restoreCheckboxes);
 
-// Запускаем восстановление сразу после загрузки DOM
 document.addEventListener('DOMContentLoaded', restoreCheckboxes);
 
-// 2. Автозагрузка при старте страницы (если вкладка Акции открыта по умолчанию)
 window.addEventListener('DOMContentLoaded', () => {
     // 1. Проверяем вкладку через localStorage (так как вы сохраняете её там при клике)
     const currentTab = localStorage.getItem('sellion_tab');
@@ -5432,7 +4733,6 @@ window.addEventListener('DOMContentLoaded', () => {
         }, 500);
     }
 });
-
 
 document.addEventListener("DOMContentLoaded", async () => {
 
@@ -5623,3 +4923,667 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
 
 });
+
+
+// function handleLogout() {
+//     showConfirmModal('Подтвердите выход', 'Вы уверены, что хотите покинуть систему?', () => {
+//         // Очищаем локальное состояние в браузере
+//         localStorage.clear();
+//         sessionStorage.clear();
+//
+//         // Отправляем форму
+//         document.getElementById('logout-form').submit();
+//     });
+// }
+//
+// function handleCreateInvoice(orderId) {
+//     showConfirmModal("Подтверждение", "Выставить счет и списать товар?", () => {
+//         // 1. Создаем форму "на лету"
+//         const form = document.createElement('form');
+//         form.method = 'POST';
+//         form.action = `/admin/invoices/create-from-order/${orderId}`;
+//
+//         // 2. Добавляем CSRF токен (берем из любой формы на странице)
+//         const csrfInput = document.querySelector('input[name="_csrf"]');
+//         if (csrfInput) {
+//             const input = document.createElement('input');
+//             input.type = 'hidden';
+//             input.name = '_csrf';
+//             input.value = csrfInput.value;
+//             form.appendChild(input);
+//         }
+//
+//         // 3. Отправляем. Страница перезагрузится.
+//         document.body.appendChild(form);
+//         form.submit();
+//
+//         // После этого Контроллер в Java сделает редирект,
+//         // и вы увидите красную плашку "Недостаточно товара: Манго"
+//     });
+// }
+
+
+
+// function printSelectedOperations(type) {
+//     const checkboxClass = type === 'order' ? '.order-print-check' : '.return-print-check';
+//     const selectedIds = Array.from(document.querySelectorAll(`${checkboxClass}:checked`)).map(cb => cb.value);
+//
+//     if (selectedIds.length === 0) {
+//         showToast("Сначала выберите записи галочкой!", "error");
+//         return;
+//     }
+//
+//     const frame = document.getElementById('printFrame');
+//     const url = type === 'order' ? '/admin/orders/print-batch' : '/admin/returns/print-batch';
+//
+//     // Очищаем предыдущие обработчики, создавая клон фрейма (самый надежный метод)
+//     const newFrame = frame.cloneNode(true);
+//     frame.parentNode.replaceChild(newFrame, frame);
+//
+//     // Вешаем событие ОДИН раз
+//     newFrame.addEventListener('load', function () {
+//         if (newFrame.contentWindow.location.href === "about:blank") return;
+//
+//         setTimeout(() => {
+//             newFrame.contentWindow.focus();
+//             newFrame.contentWindow.print();
+//         }, 300);
+//     }, {once: true});
+//
+//     submitAsPost(url, selectedIds, 'printFrame');
+//
+//     localStorage.removeItem('selectedOrders');
+//     selectedOrderIds = [];
+// }
+
+
+// async function confirmReturn(id) {
+//     const ret = (returnsData || []).find(r => r.id == id);
+//     if (!ret) return showToast("Возврат не найден", "error");
+//
+//     // 1. Проверяем, есть ли несохраненные изменения в ценах или количестве
+//     // Если мы в режиме редактирования (есть инпуты), сначала сохраняем
+//     const isEditMode = !!document.querySelector('.item-price-input');
+//
+//     if (isEditMode) {
+//         showToast("Сначала сохраните изменения перед подтверждением", "info");
+//         return;
+//     }
+//
+//     // 2. Используем модальное окно подтверждения
+//     showConfirmModal(
+//         "Провести возврат?",
+//         `Сумма ${window.currentOrderTotal.toLocaleString()} ֏ будет вычтена из долга клиента. Склад будет обновлен автоматически (если применимо).`,
+//         async () => {
+//             try {
+//                 // Блокируем кнопку, чтобы избежать двойного клика
+//                 const confirmBtn = document.querySelector('#confirm-modal-ok');
+//                 if (confirmBtn) confirmBtn.disabled = true;
+//
+//                 // 3. Отправка запроса на подтверждение
+//                 const response = await fetch(`/api/admin/returns/${id}/confirm`, {
+//                     method: 'POST',
+//                     headers: {'Content-Type': 'application/json'}
+//                 });
+//
+//                 const result = await response.json();
+//
+//                 if (response.ok) {
+//                     // Формируем детальное сообщение
+//                     let successMsg = `Возврат #${id} проведен. `;
+//                     if (result.stockUpdated) {
+//                         successMsg += "Товар возвращен на склад.";
+//                     }
+//
+//                     showToast(successMsg, "success");
+//
+//                     // 4. Обновляем статус в локальном массиве (для красоты до релоада)
+//                     ret.status = 'CONFIRMED';
+//
+//                     setTimeout(() => {
+//                         location.reload();
+//                     }, 800);
+//                 } else {
+//                     showToast("Ошибка при подтверждении", "error");
+//                     if (confirmBtn) confirmBtn.disabled = false;
+//                 }
+//             } catch (e) {
+//                 console.error("Confirm return error:", e);
+//                 showToast("Ошибка сети: проверьте соединение", "error");
+//             }
+//         }
+//     );
+// }
+
+// function printInvoiceInline(url) {
+//     // Теперь url передается целиком из кнопки
+//     const iframe = document.createElement('iframe');
+//     iframe.style.display = 'none';
+//     iframe.src = url;
+//     document.body.appendChild(iframe);
+//
+//     iframe.onload = function () {
+//         try {
+//             iframe.contentWindow.focus();
+//             iframe.contentWindow.print();
+//             setTimeout(() => {
+//                 if (document.body.contains(iframe)) {
+//                     document.body.removeChild(iframe);
+//                 }
+//             }, 1000);
+//         } catch (e) {
+//             console.warn("Печать через iframe не удалась, открываю окно...");
+//             window.open(url, '_blank');
+//         }
+//     };
+// }
+
+
+// async function deleteUser(id) {
+//     showConfirmModal("Удалить сотрудника?", "Доступ в систему будет полностью заблокирован.", async () => {
+//         try {
+//             const response = await fetch(`/api/admin/users/${id}`, {method: 'DELETE'});
+//             if (response.ok) {
+//                 showToast("Сотрудник удален", "success");
+//                 location.reload();
+//             } else {
+//                 showToast("Ошибка при удалении", "error");
+//             }
+//         } catch (e) {
+//             showToast("Ошибка сети", "error");
+//         }
+//     });
+// }
+
+// function showConfirmModal(title, text, onConfirm) {
+//     const modal = document.getElementById('confirm-modal');
+//     document.getElementById('confirm-title').innerText = title;
+//     document.getElementById('confirm-text').innerText = text;
+//
+//     const yesBtn = document.getElementById('confirm-yes');
+//     const noBtn = document.getElementById('confirm-no');
+//
+//     // Очищаем предыдущие обработчики
+//     yesBtn.onclick = null;
+//     noBtn.onclick = null;
+//
+//     yesBtn.onclick = () => {
+//         modal.close();
+//         onConfirm();
+//     };
+//
+//     noBtn.onclick = () => modal.close();
+//
+//     modal.showModal();
+// }
+
+
+
+// async function resetPassword(userId) {
+//     showConfirmModal("Сброс пароля", "Сбросить пароль пользователю на стандартный 'qwerty'?", async () => {
+//         try {
+//             const response = await fetch(`/api/admin/users/reset-password/${userId}`, {method: 'POST'});
+//             if (response.ok) {
+//                 showToast("Пароль сброшен на 'qwerty'", "success");
+//             } else {
+//                 showToast("Ошибка при сбросе пароля", "error");
+//             }
+//         } catch (e) {
+//             showToast("Ошибка сети", "error");
+//         }
+//     });
+// }
+
+
+// window.printOrder = function (id) {
+//     console.log("Запуск печати заказа:", id);
+//     const url = `/admin/orders/print/${id}`;
+//     printAction(url);
+// }
+//
+// window.printAction = function (url) {
+//     const frame = document.getElementById('printFrame');
+//     if (!frame) return;
+//
+//     // 1. ОЧИСТКА
+//     frame.onload = null;
+//     frame.src = "about:blank";
+//
+//     // 2. ПРОВЕРКА ДОСТУПА ПЕРЕД ПЕЧАТЬЮ
+//     // Вместо прямой вставки в src, сначала проверяем, есть ли у пользователя права
+//     fetch(url, {method: 'GET'})
+//         .then(response => {
+//             // Если fetch вернул 200, значит доступ есть и страница готова
+//             showToast("⏳ Подготовка документа...", "info");
+//
+//             setTimeout(() => {
+//                 frame.src = url;
+//
+//                 frame.onload = function () {
+//                     if (frame.contentWindow.location.href.includes("about:blank")) return;
+//
+//                     // 3. РЕНДЕРИНГ И ПЕЧАТЬ
+//                     setTimeout(() => {
+//                         try {
+//                             frame.contentWindow.focus();
+//                             frame.contentWindow.print();
+//                             frame.onload = null; // Удаляем обработчик после успеха
+//                         } catch (e) {
+//                             console.error("Ошибка печати:", e);
+//                             // Фоллбек: если фрейм заблокирован, открываем в новом окне
+//                             // window.open(url, '_blank');
+//                         }
+//                     }, 500);
+//                 };
+//             }, 100);
+//         })
+//         .catch(error => {
+//             // Если прав нет (403), сработает ваш новый глобальный fetch
+//             // и покажет "Доступ запрещен". Здесь ничего делать не нужно.
+//             console.warn("Печать отменена: нет доступа или ошибка сети");
+//         });
+// };
+
+// window.printOrder = (id) => window.printAction(`/admin/orders/print/${id}`);
+// window.printReturn = (id) => window.printAction(`/admin/returns/print/${id}`);
+
+//
+// window.printOrderList = () => {
+//     const manager = document.querySelector('select[name="orderManagerId"]').value;
+//     const start = document.querySelector('input[name="orderStartDate"]').value;
+//     const end = document.querySelector('input[name="orderEndDate"]').value;
+//     printAction(`/admin/orders/print-all?orderManagerId=${manager}&orderStartDate=${start}&orderEndDate=${end}`);
+// };
+
+
+// function printRouteSheet() {
+//     const mId = document.getElementById('route-manager-select').value;
+//     const date = document.getElementById('route-date-select').value;
+//     if (!date) return showToast("Выберите дату", "error");
+//
+//     const url = `/admin/logistic/route-list?managerId=${mId}&date=${date}`;
+//     printAction(url);
+// }
+
+// async function deleteProduct(id) {
+//     showConfirmModal("Удалить товар?", "Он будет скрыт...", async () => {
+//         try {
+//             const response = await fetch(`/api/products/${id}`, {method: 'DELETE'});
+//             // Если мы здесь, значит fetch прошел успешно (status 200)
+//             showToast("Товар успешно удален (скрыт)!", "success");
+//             location.reload();
+//         } catch (e) {
+//             // Ошибка уже показана глобальным перехватчиком
+//             console.log("Удаление отменено из-за прав");
+//         }
+//     });
+// }
+
+
+// async function saveProductChanges(id) {
+//     // 1. Собираем данные (ID полей теперь соответствуют новой форме 4x2)
+//     const data = {
+//         category: document.getElementById('edit-product-category').value,
+//         price: parseFloat(document.getElementById('edit-product-price').value) || 0,
+//         hsnCode: document.getElementById('edit-product-hsn').value,
+//         expiryDate: document.getElementById('edit-product-expiry').value,
+//
+//         name: document.getElementById('edit-product-name').value,
+//         stockQuantity: parseInt(document.getElementById('edit-product-qty').value) || 0,
+//         barcode: document.getElementById('edit-product-barcode').value,
+//         itemsPerBox: parseInt(document.getElementById('edit-product-perbox').value) || 0,
+//         unit: document.getElementById('edit-product-unit').value
+//     };
+//
+//     try {
+//         // 2. Отправка на сервер через PUT
+//         await secureFetch(`/api/admin/products/${id}/edit`, {
+//             method: 'PUT',
+//             body: data
+//         });
+//
+//         // 3. Обновляем локальный массив данных Sellion 2026
+//         const idx = productsData.findIndex(p => p.id == id);
+//         if (idx !== -1) {
+//             productsData[idx] = {...productsData[idx], ...data};
+//
+//             // 4. Умное обновление строки в основной таблице склада
+//             const row = document.querySelector(`tr[onclick*="openProductDetails(${id})"]`);
+//             if (row) {
+//                 // Название (внутри div для стиля)
+//                 const nameDiv = row.cells[0].querySelector('div');
+//                 if (nameDiv) nameDiv.innerText = data.name;
+//
+//                 // Цена
+//                 row.cells[1].innerText = data.price.toLocaleString() + ' ֏';
+//
+//                 // Остаток (Badge-стиль)
+//                 const qtyBadge = row.cells[2].querySelector('span');
+//                 if (qtyBadge) {
+//                     qtyBadge.innerText = data.stockQuantity + ' шт.';
+//                     qtyBadge.className = data.stockQuantity > 10 ? 'badge bg-light text-dark' : 'badge bg-danger text-white';
+//                 }
+//
+//                 // Упаковка + Единица измерения
+//                 row.cells[3].innerText = `${data.itemsPerBox} ${data.unit}/уп`;
+//
+//                 // Штрих-код
+//                 row.cells[4].innerText = data.barcode || '---';
+//
+//                 // Срок годности
+//                 if (row.cells[5]) {
+//                     row.cells[5].innerText = data.expiryDate ? formatDate(data.expiryDate) : '---';
+//                     // Подсветка красным, если срок истекает
+//                     const isExpired = data.expiryDate && new Date(data.expiryDate) < new Date(new Date().getTime() + 30 * 24 * 60 * 60 * 1000);
+//                     row.cells[5].className = isExpired ? 'text-danger fw-bold' : '';
+//                 }
+//             }
+//         }
+//
+//         showToast("Товар успешно обновлен", "success");
+//
+//         // 5. Возвращаемся в режим просмотра деталей с новыми данными
+//         openProductDetails(id);
+//
+//     } catch (e) {
+//         console.error("Ошибка сохранения продукта:", e);
+//         showToast("Не удалось сохранить изменения", "error");
+//     }
+// }
+
+
+
+// function sendSelectedCorrections() {
+//     const selectedIds = Array.from(document.querySelectorAll('.correction-checkbox:checked')).map(cb => cb.value);
+//     const emailInput = document.getElementById('report-email');
+//     const email = emailInput ? emailInput.value : 'accountant@company.am';
+//
+//     if (selectedIds.length === 0) {
+//         showToast("Выберите хотя бы одну корректировку", "info");
+//         return;
+//     }
+//
+//     showConfirmModal(
+//         "Подтверждение отправки",
+//         `Отправить реестр из ${selectedIds.length} корректировок на почту ${email}?`,
+//         () => {
+//             // Эта часть выполнится только после нажатия "Да" в модальном окне
+//             executeSendingCorrections(selectedIds, email);
+//         }
+//     );
+// }
+
+
+
+// async function deleteClient(id) {
+//     showConfirmModal("Удалить клиента?", "Он будет скрыт из списков, но останется в старых счетах и заказах.", async () => {
+//         const response = await fetch(`/api/clients/${id}`, {method: 'DELETE'});
+//         if (response.ok) {
+//             showToast("Клиент успешно удален (скрыт)!", "success");
+//             location.reload();
+//         } else {
+//             showToast("Ошибка удаления", "error");
+//         }
+//     });
+// }
+
+// window.printOrderList = function () {
+//     const form = document.querySelector('#tab-orders .filter-bar form');
+//     const mId = form.querySelector('select[name="orderManagerId"]').value;
+//     const s = form.querySelector('input[name="orderStartDate"]').value;
+//     const e = form.querySelector('input[name="orderEndDate"]').value;
+//
+//     const url = `/admin/orders/print-all?orderManagerId=${mId}&orderStartDate=${s}&orderEndDate=${e}`;
+//     printAction(url);
+// }
+//
+// window.printReturnList = function () {
+//     const form = document.querySelector('#tab-returns .filter-bar form');
+//     const mId = form.querySelector('select[name="returnManagerId"]').value;
+//     const s = form.querySelector('input[name="returnStartDate"]').value;
+//     const e = form.querySelector('input[name="returnEndDate"]').value;
+//
+//     const url = `/admin/returns/print-all?returnManagerId=${mId}&returnStartDate=${s}&returnEndDate=${e}`;
+//     printAction(url);
+// }
+
+
+
+// function printCompactOrders() {
+//     const checkboxes = document.querySelectorAll('.order-print-check:checked');
+//     if (checkboxes.length === 0) return showToast("Выберите хотя бы один заказ", "error");
+//
+//     // Формируем строку параметров: type=order&ids=1&ids=2...
+//     const params = new URLSearchParams();
+//     params.append('type', 'order');
+//     checkboxes.forEach(cb => params.append('ids', cb.value));
+//
+//     const url = `/admin/logistic/print-compact?${params.toString()}`;
+//     printAction(url);
+// }
+//
+// function printCompactReturns() {
+//     const checkboxes = document.querySelectorAll('.return-print-check:checked');
+//     if (checkboxes.length === 0) return showToast("Выберите хотя бы один возврат", "error");
+//
+//     // Формируем строку параметров: type=return&ids=1&ids=2...
+//     const params = new URLSearchParams();
+//     params.append('type', 'return');
+//     checkboxes.forEach(cb => params.append('ids', cb.value));
+//
+//     const url = `/admin/logistic/print-compact?${params.toString()}`;
+//     printAction(url);
+// }
+
+
+// function printSelectedRows(tableId) {
+//     const selected = Array.from(document.querySelectorAll(`#${tableId} .row-checkbox:checked`))
+//         .map(cb => cb.value);
+//     if (selected.length === 0) return alert("Выберите хотя бы одну запись");
+//
+//     const form = document.createElement('form');
+//     form.method = 'POST';
+//     form.action = '/admin/orders/print-batch';
+//     form.target = '_blank';
+//
+//     const csrfToken = document.querySelector('meta[name="_csrf"]').content;
+//     const csrfInput = document.createElement('input');
+//     csrfInput.name = '_csrf';
+//     csrfInput.value = csrfToken;
+//     form.appendChild(csrfInput);
+//
+//     selected.forEach(id => {
+//         const input = document.createElement('input');
+//         input.name = 'ids';
+//         input.value = id;
+//         form.appendChild(input);
+//     });
+//
+//     document.body.appendChild(form);
+//     form.submit();
+//     form.remove();
+// }
+
+
+// function formatDate(dateVal) {
+//     if (!dateVal || dateVal === '---' || dateVal === null) return '---';
+//
+//     try {
+//         // 1. Если пришел объект LocalDateTime из Java
+//         if (typeof dateVal === 'object' && dateVal.year) {
+//             const d = String(dateVal.dayOfMonth || dateVal.day || 1).padStart(2, '0');
+//             const m = String(dateVal.monthValue || dateVal.month || 1).padStart(2, '0');
+//             const y = dateVal.year;
+//             const h = String(dateVal.hour || 0).padStart(2, '0');
+//             const min = String(dateVal.minute || 0).padStart(2, '0');
+//             return `${d}.${m}.${y} ${h}:${min}`;
+//         }
+//
+//         // 2. Если пришла строка (ISO или обычная)
+//         if (typeof dateVal === 'string') {
+//             let clean = dateVal.replace(/[,/]/g, '.');
+//
+//             // ISO формат: 2026-01-20T01:17:00
+//             if (clean.includes('T') || (clean.includes('-') && clean.includes(':'))) {
+//                 const parts = clean.split(/[T ]/);
+//                 const dParts = parts[0].split('-');
+//                 if (dParts.length === 3) {
+//                     const date = `${dParts[2]}.${dParts[1]}.${dParts[0]}`;
+//                     const time = parts[1].substring(0, 5);
+//                     return `${date} ${time}`;
+//                 }
+//             }
+//
+//             // Только дата: 2026-01-20
+//             if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) {
+//                 const d = clean.split('-');
+//                 return `${d[2]}.${d[1]}.${d[0]}`;
+//             }
+//         }
+//
+//         // Резервный вариант через стандартный Date
+//         const date = new Date(dateVal);
+//         if (!isNaN(date.getTime())) {
+//             const d = String(date.getDate()).padStart(2, '0');
+//             const m = String(date.getMonth() + 1).padStart(2, '0');
+//             const y = date.getFullYear();
+//             return `${d}.${m}.${y}`;
+//         }
+//
+//     } catch (e) {
+//         console.warn("Ошибка форматирования даты:", dateVal);
+//     }
+//
+//     return dateVal;
+// }
+
+
+// function printDailySummary() {
+//     const tab = document.getElementById('tab-orders');
+//     const selectedIds = Array.from(tab.querySelectorAll('.order-print-check:checked')).map(cb => cb.value);
+//
+//     if (selectedIds.length === 0) {
+//         showToast("Выберите заказы для сводки!", "error");
+//         return;
+//     }
+//
+//     const frame = document.getElementById('printFrame');
+//     const url = '/admin/orders/print-daily-summary';
+//
+//     const newFrame = frame.cloneNode(true);
+//     frame.parentNode.replaceChild(newFrame, frame);
+//
+//     newFrame.addEventListener('load', function () {
+//         if (newFrame.contentWindow.location.href === "about:blank") return;
+//         setTimeout(() => {
+//             newFrame.contentWindow.focus();
+//             newFrame.contentWindow.print();
+//         }, 300);
+//     }, {once: true});
+//
+//     submitAsPost(url, selectedIds, 'printFrame');
+//
+//     clearOrderSelection();
+// }
+
+// async function confirmPromoAction(id) {
+//     showConfirmModal("Подтвердить акцию?", "После подтверждения редактирование будет невозможно!", async () => {
+//         const res = await fetch(`/api/admin/promos/${id}/confirm`, {method: 'POST'});
+//         if (res.ok) {
+//             showToast("Акция подтверждена!", "success");
+//             location.reload();
+//         }
+//     });
+// }
+
+// async function checkPromosBeforeSave(items) {
+//     const res = await fetch('/api/promos/check-active', {
+//         method: 'POST',
+//         headers: {'Content-Type': 'application/json'},
+//         body: JSON.stringify(Object.keys(items))
+//     });
+//     const activePromos = await res.json();
+//
+//     if (activePromos.length > 0) {
+//         // Формируем красивые карточки с РАБОЧИМИ ползунками
+//         // Внутри функции checkPromosBeforeSave или там, где рисуете список:
+//         const promoListHtml = activePromos.map(p => `
+//     <label class="promo-card" style="display: flex; align-items: center; justify-content: space-between; width: 100%; box-sizing: border-box;">
+//         <div style="flex-grow: 1; text-align: left; pointer-events: none;">
+//             <div style="font-weight: 700; color: #1e293b; font-size: 13px;">${p.title || p.name}</div>
+//             <div style="font-size: 11px; color: #64748b;">Для менеджера: ${p.managerId}</div>
+//         </div>
+//
+//         <!-- Чекбокс ДОЛЖЕН быть перед .custom-switch -->
+//         <input type="checkbox"
+//                class="promo-checkbox"
+//                data-promo-id="${p.id}"
+//                checked
+//                style="display: none;"> <!-- Скрываем, но он работает через label -->
+//
+//         <!-- Визуальный ползунок -->
+//         <div class="custom-switch"></div>
+//     </label>
+// `).join('');
+//
+//
+//         showConfirmModal("Нашли акции!", `
+//             <div style="text-align:center;">
+//                 ${promoListHtml}
+//                 <p style="font-size:11px; color:#ef4444; margin-top:15px;">* При активации спец. цены заменят скидку магазина на эти товары.</p>
+//             </div>
+//         `, () => {
+//             // Собираем ТОЛЬКО те акции, где ползунок остался включенным
+//             const selectedPromos = [];
+//             document.querySelectorAll('.promo-apply-checkbox').forEach(cb => {
+//                 if (cb.checked) {
+//                     const id = cb.getAttribute('data-promo-id');
+//                     const found = activePromos.find(ap => ap.id == id);
+//                     if (found) selectedPromos.push(found);
+//                 }
+//             });
+//             saveOrderWithPromos(selectedPromos);
+//         });
+//     } else {
+//         performFinalOrderSave();
+//     }
+// }
+
+
+// async function deletePromoAction(id) {
+//     showConfirmModal("Удаление акции", "Вы уверены, что хотите полностью удалить эту акцию? Данные будут стерты.", async () => {
+//         try {
+//             // Выполняем запрос. Глобальный fetch сам покажет ошибку, если статус не 2xx.
+//             await fetch(`/api/admin/promos/${id}`, {
+//                 method: 'DELETE',
+//                 headers: {
+//                     'Content-Type': 'application/json',
+//                     'X-CSRF-TOKEN': document.querySelector('input[name="_csrf"]')?.value
+//                 }
+//             });
+//
+//             // Этот блок сработает ТОЛЬКО при успешном удалении (status 200)
+//             showToast("Акция успешно удалена", "success");
+//
+//             // Закрываем модалку, если функция существует
+//             if (typeof closeModal === 'function') closeModal('modal-order-view');
+//
+//             setTimeout(() => {
+//                 if (typeof loadPromosByPeriod === 'function') {
+//                     loadPromosByPeriod();
+//                 } else {
+//                     location.reload();
+//                 }
+//             }, 500);
+//
+//         } catch (e) {
+//             // Блок пустой: уведомление об ошибке уже вывел глобальный fetch.
+//             // Мы просто пресекаем появление "Критическая ошибка связи".
+//             console.warn("Удаление акции отклонено или не удалось:", e.message);
+//         }
+//     });
+// }
+
+
+
+
