@@ -976,15 +976,27 @@ function updateDashboardStats() {
 }
 
 async function deleteReturnOrder(id) {
+    // Вызываем наше окно подтверждения
     showConfirmModal(
-        "Ջնջել վերադարձը?",
-        "Դուք վստա՞հ եք, որ ցանկանում եք ջնջել այս վերադարձը:",
-        async () => {
-            // Логика удаления
-            const response = await fetch(`/api/returns/${id}`, { method: 'DELETE' });
-            if (response.ok) {
-                showToast("Ջնջված է", "success");
-                location.reload();
+        "Удаление возврата",          // 1. Заголовок
+        "Вы уверены, что хотите удалить этот возврат?", // 2. Текст
+        "delete",                     // 3. Тип (красная иконка корзины)
+        async function() {            // 4. ДЕЙСТВИЕ при нажатии подтвердить
+            try {
+                const response = await fetch(`/api/returns/${id}`, {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    closeCustomModal(); // Сначала прячем окно подтверждения
+                    closeModal('modal-order-view'); // Прячем окно заказа
+                    location.reload(); // Обновляем страницу
+                } else {
+                    alert("Ошибка при удалении возврата");
+                }
+            } catch (error) {
+                console.error("Ошибка запроса:", error);
+                alert("Нет связи с сервером");
             }
         }
     );
@@ -4710,24 +4722,14 @@ function closeCustomModal() {
 function closeModal(id) {
     const modal = document.getElementById(id);
     if (!modal) return;
-
-    // Твоя рабочая логика
     modal.classList.remove('active');
-
-    // ДОПОЛНЕНИЕ: Если ты используешь Tailwind, нужно убрать hidden при открытии
-    // и добавить при закрытии, чтобы кнопка не блокировала экран
-    modal.classList.add('hidden');
-    modal.style.display = 'none'; // Гарантируем, что окно исчезло из потока
-
     document.body.style.overflow = '';
 
-    // Твоя очистка данных
+    // ОЧИСТКА ГЛОБАЛЬНЫХ ДАННЫХ
     tempItems = {};
-    window.currentOrderPromos = {};
-
-    console.log("Данные сессии очищены, окно закрыто");
+    window.currentOrderPromos = {}; // Очищаем акции
+    console.log("Данные сессии очищены");
 }
-
 document.addEventListener('DOMContentLoaded', restoreCheckboxes);
 
 document.addEventListener('DOMContentLoaded', restoreCheckboxes);
