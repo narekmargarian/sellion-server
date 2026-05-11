@@ -4718,16 +4718,16 @@ function showConfirmModal(title, text, type, onConfirm) {
 
     if (!modal || !oldConfirmBtn) return;
 
-    // 1. ПОЛНОЕ ОБНУЛЕНИЕ КНОПКИ
+    // 1. ПЕРЕСОЗДАЕМ КНОПКУ (Чистим память)
     const confirmBtn = oldConfirmBtn.cloneNode(true);
     oldConfirmBtn.parentNode.replaceChild(confirmBtn, oldConfirmBtn);
 
-    // 2. ЗАПОЛНЕНИЕ
+    // 2. КОНТЕНТ
     titleEl.innerText = title;
     messageEl.innerText = text;
 
-    // Стилизация иконок
-    iconContainer.className = "mx-auto flex items-center justify-center h-20 w-20 rounded-full mb-6 transition-all";
+    // Стилизация (ваша логика)
+    iconContainer.className = "mx-auto flex items-center justify-center h-20 w-20 rounded-full mb-6";
     if (type === 'invoice') {
         iconContainer.classList.add('bg-green-50', 'text-green-600');
         iconInner.className = "fa-solid fa-file-invoice-dollar text-3xl";
@@ -4746,12 +4746,13 @@ function showConfirmModal(title, text, type, onConfirm) {
     modal.classList.remove('hidden');
     modal.style.display = 'flex';
 
-    // 4. СУПЕР-ФИКС: Используем mousedown вместо click
-    // mousedown срабатывает РАНЬШЕ, чем браузер поймет, что нужно переставить фокус
-    confirmBtn.onmousedown = function(e) {
+    // 4. ГАРАНТИРОВАННОЕ СРАБАТЫВАНИЕ (pointerdown + setTimeout)
+    // Используем pointerdown, так как он игнорирует задержки фокуса
+    confirmBtn.addEventListener('pointerdown', function handler(e) {
         e.preventDefault();
+        e.stopPropagation(); // Не даем клику уйти к другим скриптам
 
-        console.log("Клик засчитан мгновенно через mousedown!");
+        console.log("Мгновенное подтверждение!");
 
         closeCustomModal();
 
@@ -4759,11 +4760,10 @@ function showConfirmModal(title, text, type, onConfirm) {
             onConfirm();
         }
 
-        // Блокируем дальнейшие события, чтобы не было двойного срабатывания
-        confirmBtn.onmousedown = null;
-    };
-}
-function closeCustomModal() {
+        // Удаляем обработчик, чтобы не сработало дважды
+        confirmBtn.removeEventListener('pointerdown', handler);
+    });
+}function closeCustomModal() {
     const modal = document.getElementById('customModal');
     if (modal) {
         modal.style.display = 'none';
