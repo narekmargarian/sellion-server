@@ -4638,7 +4638,7 @@ function toggleGlobalSelect(masterCheckbox, childClass) {
     console.log("Выбрано сейчас:", isOrder ? selectedOrderIds : selectedReturnIds);
 }
 
-function showConfirmModal(title, text, actionType, onConfirm) {
+function showConfirmModal(title, text, type, onConfirm) {
     const modal = document.getElementById('customModal');
     const titleEl = document.getElementById('modalTitle');
     const messageEl = document.getElementById('modalMessage');
@@ -4648,47 +4648,45 @@ function showConfirmModal(title, text, actionType, onConfirm) {
 
     if (!modal || !titleEl) return;
 
-    // Устанавливаем тексты
     titleEl.innerText = title;
     messageEl.innerText = text;
 
-    // Сброс классов
-    iconContainer.className = "mx-auto flex items-center justify-center h-20 w-20 rounded-full mb-6";
+    // 1. Сброс классов иконки
+    iconContainer.className = "mx-auto flex items-center justify-center h-20 w-20 rounded-full mb-6 transition-all";
     iconInner.className = "fa-solid text-3xl";
 
-    // ЛОГИКА ВЫБОРА ИКОНОК И ЦВЕТОВ
-    switch(actionType) {
-        case 'delete': // Для УДАЛЕНИЯ
-            iconContainer.classList.add('bg-red-50', 'text-red-600');
-            iconInner.classList.add('fa-trash-can');
-            yesBtn.style.backgroundColor = '#ef4444'; // Красный
-            break;
+    // 2. Сброс цвета кнопки (чтобы стили не смешивались)
+    yesBtn.style.backgroundColor = "";
 
-        case 'logout': // Для ВЫХОДА
-            iconContainer.classList.add('bg-slate-100', 'text-slate-600');
-            iconInner.classList.add('fa-right-from-bracket'); // Иконка выхода
-            yesBtn.style.backgroundColor = '#0f172a'; // Темный
-            break;
-
-        case 'invoice': // Для СЧЕТА
-            iconContainer.classList.add('bg-green-50', 'text-green-600');
-            iconInner.classList.add('fa-file-invoice-dollar');
-            yesBtn.style.backgroundColor = '#63AA2F'; // Твой зеленый
-            break;
-
-        default: // По умолчанию
-            iconContainer.classList.add('bg-blue-50', 'text-blue-600');
-            iconInner.classList.add('fa-circle-question');
-            yesBtn.style.backgroundColor = '#0f172a';
+    // Настройка иконки и цвета под задачу
+    if (type === 'delete') {
+        iconContainer.classList.add('bg-red-50', 'text-red-600');
+        iconInner.classList.add('fa-trash-can');
+        yesBtn.style.backgroundColor = '#ef4444';
+    } else if (type === 'logout') {
+        iconContainer.classList.add('bg-slate-100', 'text-slate-600');
+        iconInner.classList.add('fa-right-from-bracket');
+        yesBtn.style.backgroundColor = '#0f172a';
+    } else if (type === 'invoice') {
+        iconContainer.classList.add('bg-green-50', 'text-green-600');
+        iconInner.classList.add('fa-file-invoice-dollar');
+        yesBtn.style.backgroundColor = '#63AA2F';
+    } else {
+        iconContainer.classList.add('bg-blue-50', 'text-blue-600');
+        iconInner.classList.add('fa-circle-question');
+        yesBtn.style.backgroundColor = '#0f172a';
     }
 
-    // Показываем окно
     modal.style.display = 'flex';
     modal.classList.remove('hidden');
 
-    yesBtn.onclick = function() {
+    // 3. Используем onclick напрямую — это очистит предыдущую функцию
+    yesBtn.onclick = function(e) {
+        e.preventDefault(); // На всякий случай
         closeCustomModal();
-        onConfirm();
+        if (typeof onConfirm === 'function') {
+            onConfirm();
+        }
     };
 }
 
