@@ -4718,17 +4718,16 @@ function showConfirmModal(title, text, type, onConfirm) {
 
     if (!modal || !oldConfirmBtn) return;
 
-    // 1. ОЧИСТКА: Клонируем кнопку, чтобы полностью удалить старые слушатели
+    // 1. ПОЛНОЕ ОБНУЛЕНИЕ КНОПКИ
     const confirmBtn = oldConfirmBtn.cloneNode(true);
-    confirmBtn.type = "button"; // На всякий случай фиксируем тип
     oldConfirmBtn.parentNode.replaceChild(confirmBtn, oldConfirmBtn);
 
-    // 2. КОНТЕНТ И СТИЛИ
+    // 2. ЗАПОЛНЕНИЕ
     titleEl.innerText = title;
     messageEl.innerText = text;
 
+    // Стилизация иконок
     iconContainer.className = "mx-auto flex items-center justify-center h-20 w-20 rounded-full mb-6 transition-all";
-
     if (type === 'invoice') {
         iconContainer.classList.add('bg-green-50', 'text-green-600');
         iconInner.className = "fa-solid fa-file-invoice-dollar text-3xl";
@@ -4743,29 +4742,27 @@ function showConfirmModal(title, text, type, onConfirm) {
         confirmBtn.style.backgroundColor = '#0f172a';
     }
 
-    // 3. ОТОБРАЖЕНИЕ
+    // 3. ПОКАЗЫВАЕМ
     modal.classList.remove('hidden');
     modal.style.display = 'flex';
 
-    // 4. НАЗНАЧЕНИЕ СОБЫТИЯ (с небольшой задержкой для стабильности)
-    setTimeout(() => {
-        confirmBtn.onclick = function(e) {
-            // Останавливаем любое всплытие, которое могло блокировать клик
-            if (e) {
-                e.preventDefault();
-                e.stopPropagation();
-            }
+    // 4. СУПЕР-ФИКС: Используем mousedown вместо click
+    // mousedown срабатывает РАНЬШЕ, чем браузер поймет, что нужно переставить фокус
+    confirmBtn.onmousedown = function(e) {
+        e.preventDefault();
 
-            console.log("Действие подтверждено!");
-            closeCustomModal();
+        console.log("Клик засчитан мгновенно через mousedown!");
 
-            if (typeof onConfirm === 'function') {
-                onConfirm();
-            }
-        };
-    }, 20); // 20мс достаточно, чтобы DOM «проснулся»
+        closeCustomModal();
+
+        if (typeof onConfirm === 'function') {
+            onConfirm();
+        }
+
+        // Блокируем дальнейшие события, чтобы не было двойного срабатывания
+        confirmBtn.onmousedown = null;
+    };
 }
-
 function closeCustomModal() {
     const modal = document.getElementById('customModal');
     if (modal) {
