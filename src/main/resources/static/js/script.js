@@ -4625,14 +4625,26 @@ function handleCreateInvoice(orderId) {
     showConfirmModal(
         "Подтверждение",
         "Выставить счет и списать товар?",
-        "invoice", // ТРЕТИЙ АРГУМЕНТ (ТИП)
-        function() { // ЧЕТВЕРТЫЙ АРГУМЕНТ (ДЕЙСТВИЕ)
+        "invoice",
+        function() {
             const form = document.createElement('form');
             form.method = 'POST';
             form.action = '/admin/invoices/create-from-order/' + orderId;
-            // ... остальной код формы
+
+            // Извлекаем токен из мета-тегов или скрытых инпутов страницы
+            const csrfToken = document.querySelector('input[name="_csrf"]')?.value
+                || document.querySelector('meta[name="_csrf"]')?.content;
+
+            if (csrfToken) {
+                const csrfInput = document.createElement('input');
+                csrfInput.type = 'hidden'; // Скрытое поле
+                csrfInput.name = '_csrf';
+                csrfInput.value = csrfToken;
+                form.appendChild(csrfInput);
+            }
+
             document.body.appendChild(form);
-            form.submit();
+            form.submit(); // Теперь форма уйдет с токеном и сервер её примет
         }
     );
 }
@@ -4725,52 +4737,50 @@ function showConfirmModal(title, text, type, onConfirm) {
     const modal = document.getElementById('customModal');
     const titleEl = document.getElementById('modalTitle');
     const messageEl = document.getElementById('modalMessage');
-    const yesBtn = document.getElementById('modalConfirmBtn');
+    const oldConfirmBtn = document.getElementById('modalConfirmBtn'); // Старая кнопка
     const iconContainer = document.getElementById('modalIconContainer');
     const iconInner = document.getElementById('modalIconInner');
 
-    if (!modal || !yesBtn) return;
+    if (!modal || !oldConfirmBtn) return;
 
-    // Заполняем данные
+    // --- ФИКС ПЕРВОГО НАЖАТИЯ: Клонируем кнопку, чтобы убрать старые события ---
+    const confirmBtn = oldConfirmBtn.cloneNode(true);
+    oldConfirmBtn.parentNode.replaceChild(confirmBtn, oldConfirmBtn);
+    // -------------------------------------------------------------------------
+
     titleEl.innerText = title;
     messageEl.innerText = text;
 
-    // Сброс и настройка стилей иконок
+    // Настройка стилей (оставляем твою логику)
     iconContainer.className = "mx-auto flex items-center justify-center h-20 w-20 rounded-full mb-6 transition-all";
     iconInner.className = "fa-solid text-3xl";
 
-    if (type === 'delete') {
-        iconContainer.classList.add('bg-red-50', 'text-red-600');
-        iconInner.classList.add('fa-trash-can');
-        yesBtn.style.backgroundColor = '#ef4444'; // Красный для удаления
-    } else if (type === 'logout') {
-        iconContainer.classList.add('bg-slate-100', 'text-slate-600');
-        iconInner.classList.add('fa-right-from-bracket');
-        yesBtn.style.backgroundColor = '#0f172a'; // Темный для выхода
-    } else if (type === 'invoice') {
+    if (type === 'invoice') {
         iconContainer.classList.add('bg-green-50', 'text-green-600');
-        iconInner.classList.add('fa-file-invoice-dollar');
-        yesBtn.style.backgroundColor = '#63AA2F'; // Зеленый для счета
+        iconInner.className = "fa-solid fa-file-invoice-dollar text-3xl";
+        confirmBtn.style.backgroundColor = '#63AA2F';
+    } else if (type === 'delete' || type === 'danger') {
+        iconContainer.classList.add('bg-red-50', 'text-red-600');
+        iconInner.className = "fa-solid fa-trash-can text-3xl";
+        confirmBtn.style.backgroundColor = '#ef4444';
     } else {
         iconContainer.classList.add('bg-blue-50', 'text-blue-600');
-        iconInner.classList.add('fa-circle-question');
-        yesBtn.style.backgroundColor = '#0f172a';
+        iconInner.className = "fa-solid fa-circle-question text-3xl";
+        confirmBtn.style.backgroundColor = '#0f172a';
     }
 
-    // ПОКАЗЫВАЕМ
-    modal.style.display = 'flex';
+    // Показываем (убираем hidden и ставим flex)
     modal.classList.remove('hidden');
+    modal.style.display = 'flex';
 
-    // ПРИВЯЗЫВАЕМ ДЕЙСТВИЕ
-    yesBtn.onclick = function() {
-        console.log("Кнопка подтверждения нажата"); // Для отладки в консоли
+    // Вешаем событие на НОВУЮ кнопку. Теперь сработает мгновенно!
+    confirmBtn.onclick = function() {
         closeCustomModal();
         if (typeof onConfirm === 'function') {
             onConfirm();
         }
     };
 }
-
 function closeCustomModal() {
     const modal = document.getElementById('customModal');
     if (modal) {
