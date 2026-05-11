@@ -4186,11 +4186,22 @@ async function confirmPromoAction(id) {
 }
 
 function handleLogout() {
-    showConfirmModal('Подтвердите выход', 'Вы уверены, что хотите покинуть систему?', () => {
-        localStorage.clear();
-        sessionStorage.clear();
-        document.getElementById('logout-form').submit();
-    });
+    // Вызываем модалку, а само действие выхода передаем как коллбэк
+    showConfirmModal(
+        'ВЫХОД',
+        'Вы уверены, что хотите завершить сессию?',
+        'logout',
+        async function() {
+            try {
+                // Если у тебя выход через API
+                const response = await fetch('/logout', { method: 'POST' });
+                window.location.href = '/login?logout';
+            } catch (e) {
+                // Если это обычная ссылка, можно просто:
+                window.location.href = '/logout';
+            }
+        }
+    );
 }
 
 document.querySelectorAll('.tab-link, [data-tab]').forEach(tab => {
@@ -4646,43 +4657,41 @@ function showConfirmModal(title, text, type, onConfirm) {
     const iconContainer = document.getElementById('modalIconContainer');
     const iconInner = document.getElementById('modalIconInner');
 
-    if (!modal || !titleEl) return;
+    if (!modal || !yesBtn) return;
 
+    // Заполняем данные
     titleEl.innerText = title;
     messageEl.innerText = text;
 
-    // 1. Сброс классов иконки
+    // Сброс и настройка стилей иконок
     iconContainer.className = "mx-auto flex items-center justify-center h-20 w-20 rounded-full mb-6 transition-all";
     iconInner.className = "fa-solid text-3xl";
 
-    // 2. Сброс цвета кнопки (чтобы стили не смешивались)
-    yesBtn.style.backgroundColor = "";
-
-    // Настройка иконки и цвета под задачу
     if (type === 'delete') {
         iconContainer.classList.add('bg-red-50', 'text-red-600');
         iconInner.classList.add('fa-trash-can');
-        yesBtn.style.backgroundColor = '#ef4444';
+        yesBtn.style.backgroundColor = '#ef4444'; // Красный для удаления
     } else if (type === 'logout') {
         iconContainer.classList.add('bg-slate-100', 'text-slate-600');
         iconInner.classList.add('fa-right-from-bracket');
-        yesBtn.style.backgroundColor = '#0f172a';
+        yesBtn.style.backgroundColor = '#0f172a'; // Темный для выхода
     } else if (type === 'invoice') {
         iconContainer.classList.add('bg-green-50', 'text-green-600');
         iconInner.classList.add('fa-file-invoice-dollar');
-        yesBtn.style.backgroundColor = '#63AA2F';
+        yesBtn.style.backgroundColor = '#63AA2F'; // Зеленый для счета
     } else {
         iconContainer.classList.add('bg-blue-50', 'text-blue-600');
         iconInner.classList.add('fa-circle-question');
         yesBtn.style.backgroundColor = '#0f172a';
     }
 
+    // ПОКАЗЫВАЕМ
     modal.style.display = 'flex';
     modal.classList.remove('hidden');
 
-    // 3. Используем onclick напрямую — это очистит предыдущую функцию
-    yesBtn.onclick = function(e) {
-        e.preventDefault(); // На всякий случай
+    // ПРИВЯЗЫВАЕМ ДЕЙСТВИЕ
+    yesBtn.onclick = function() {
+        console.log("Кнопка подтверждения нажата"); // Для отладки в консоли
         closeCustomModal();
         if (typeof onConfirm === 'function') {
             onConfirm();
@@ -4701,13 +4710,22 @@ function closeCustomModal() {
 function closeModal(id) {
     const modal = document.getElementById(id);
     if (!modal) return;
+
+    // Твоя рабочая логика
     modal.classList.remove('active');
+
+    // ДОПОЛНЕНИЕ: Если ты используешь Tailwind, нужно убрать hidden при открытии
+    // и добавить при закрытии, чтобы кнопка не блокировала экран
+    modal.classList.add('hidden');
+    modal.style.display = 'none'; // Гарантируем, что окно исчезло из потока
+
     document.body.style.overflow = '';
 
-    // ОЧИСТКА ГЛОБАЛЬНЫХ ДАННЫХ
+    // Твоя очистка данных
     tempItems = {};
-    window.currentOrderPromos = {}; // Очищаем акции
-    console.log("Данные сессии очищены");
+    window.currentOrderPromos = {};
+
+    console.log("Данные сессии очищены, окно закрыто");
 }
 
 document.addEventListener('DOMContentLoaded', restoreCheckboxes);

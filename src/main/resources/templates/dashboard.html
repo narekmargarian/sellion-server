@@ -70,7 +70,7 @@
         <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
 
         <button type="button"
-                onclick="handleLogout()"
+                onclick="showConfirmModal('ВЫХОД', 'Вы уверены, что хотите выйти из системы?', 'logout', () => { handleLogout(); })"
                 style="width:100%; background:#ef4444; color:white; border:none; padding:10px; border-radius:8px; cursor:pointer; font-weight:700;">
             ВЫХОД
         </button>
@@ -201,13 +201,13 @@
                                     <th:block th:if="${o.invoiceId == null}">
 
                                         <button type="button" class="btn-primary"
-                                                th:onclick="'showConfirmModal(\'Подтверждение\', \'Выставить счет и списать товар?\', \'success\', function() { handleCreateInvoice(' + ${o.id} + '); })'"
+                                                th:onclick="'showConfirmModal(\'Подтверждение\', \'Выставить счет и списать товар?\', \'invoice\', function() { handleCreateInvoice(' + ${o.id} + '); })'"
                                                 style="padding:5px 10px; font-size:11px; background:#10b981; border:none; border-radius:4px; cursor:pointer;">
                                             Счет
                                         </button>
 
                                         <button type="button" class="btn-primary"
-                                                th:onclick="'showConfirmModal(\'Удаление\', \'Удалить этот заказ?\', \'danger\', function() { cancelOrder(' + ${o.id} + '); })'"
+                                                th:onclick="'showConfirmModal(\'Удаление\', \'Удалить этот заказ?\', \'delete\', function() { cancelOrder(' + ${o.id} + '); })'"
                                                 style="padding:5px 10px; font-size:11px; background:#ef4444; border:none; border-radius:4px; cursor:pointer; margin-left:5px;">
                                             ❌
                                         </button>
@@ -1756,14 +1756,13 @@
                     </div>
 
                     <h3 id="modalTitle" class="text-xl font-black uppercase text-slate-900 mb-2 leading-tight"></h3>
-
                     <p id="modalMessage" class="text-xs font-bold text-gray-500 uppercase leading-relaxed mb-8"></p>
 
                     <div class="flex gap-3">
-                        <button id="modalCancelBtn" class="flex-1 px-6 py-4 rounded-2xl font-black uppercase text-[10px] text-slate-400 hover:bg-gray-50 transition-all">
+                        <button id="modalCancelBtn" onclick="closeCustomModal()" type="button" class="flex-1 px-6 py-4 rounded-2xl font-black uppercase text-[10px] text-slate-400 hover:bg-gray-50 transition-all">
                             Отмена
                         </button>
-                        <button id="modalConfirmBtn" class="flex-1 bg-slate-900 text-white px-6 py-4 rounded-2xl font-black uppercase text-[10px] hover:bg-[#63AA2F] transition-all shadow-lg active:scale-95">
+                        <button id="modalConfirmBtn" type="button" class="flex-1 text-white px-6 py-4 rounded-2xl font-black uppercase text-[10px] transition-all shadow-lg active:scale-95">
                             Подтвердить
                         </button>
                     </div>
