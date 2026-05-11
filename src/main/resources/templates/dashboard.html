@@ -200,18 +200,19 @@
                                 <th:block th:if="${o.shopName != 'СПИСАНИЕ'}">
                                     <th:block th:if="${o.invoiceId == null}">
 
-                                        <button type="button" class="btn-primary"
-                                                th:onclick="'showConfirmModal(\'Подтверждение\', \'Выставить счет и списать товар?\', \'invoice\', function() { handleCreateInvoice(' + ${o.id} + '); })'"
-                                                style="padding:5px 10px; font-size:11px; background:#10b981; border:none; border-radius:4px; cursor:pointer;">
-                                            Счет
-                                        </button>
+                                        <th:block th:if="${o.invoiceId == null}">
+                                            <button type="button" class="btn-primary"
+                                                    th:onclick="'showConfirmModal(\'Подтверждение\', \'Выставить счет и списать товар?\', \'invoice\', function() { handleCreateInvoice(' + ${o.id} + '); })'"
+                                                    style="padding:5px 10px; font-size:11px; background:#10b981; border:none; border-radius:4px; cursor:pointer;">
+                                                Счет
+                                            </button>
 
-                                        <button type="button" class="btn-primary"
-                                                th:onclick="'showConfirmModal(\'Удаление\', \'Удалить этот заказ?\', \'delete\', function() { cancelOrder(' + ${o.id} + '); })'"
-                                                style="padding:5px 10px; font-size:11px; background:#ef4444; border:none; border-radius:4px; cursor:pointer; margin-left:5px;">
-                                            ❌
-                                        </button>
-
+                                            <button type="button" class="btn-primary"
+                                                    th:onclick="'showConfirmModal(\'Удаление\', \'Удалить заказ?\', \'delete\', function() { cancelOrder(' + ${o.id} + '); })'"
+                                                    style="padding:5px 10px; font-size:11px; background:#ef4444; border:none; border-radius:4px; cursor:pointer; margin-left:5px;">
+                                                ❌
+                                            </button>
+                                        </th:block>
                                     </th:block>
 
                                     <span th:if="${o.invoiceId != null}" class="badge bg-light text-dark"

@@ -976,31 +976,33 @@ function updateDashboardStats() {
 }
 
 async function deleteReturnOrder(id) {
-    // Вызываем наше окно подтверждения
+    // ВАЖНО: Добавляем 'delete' третьим аргументом, чтобы всё совпало
     showConfirmModal(
-        "Удаление возврата",          // 1. Заголовок
-        "Вы уверены, что хотите удалить этот возврат?", // 2. Текст
-        "delete",                     // 3. Тип (красная иконка корзины)
-        async function() {            // 4. ДЕЙСТВИЕ при нажатии подтвердить
+        "Удалить возврат?",
+        "Вы уверены, что хотите удалить этот возврат?",
+        "delete", // ТИП для иконки
+        async () => { // ФУНКЦИЯ теперь идет четвертой
             try {
-                const response = await fetch(`/api/returns/${id}`, {
-                    method: 'DELETE'
+                // Твой рабочий путь и метод POST
+                const response = await fetch(`/api/admin/returns/${id}/delete`, {
+                    method: 'POST'
                 });
 
                 if (response.ok) {
-                    closeCustomModal(); // Сначала прячем окно подтверждения
-                    closeModal('modal-order-view'); // Прячем окно заказа
-                    location.reload(); // Обновляем страницу
+                    showToast("Возврат удален", "success");
+                    closeCustomModal(); // Закрываем нашу модалку
+                    location.reload();
                 } else {
-                    alert("Ошибка при удалении возврата");
+                    const error = await response.json();
+                    showToast(error.error || "Ошибка удаления возврата", "error");
                 }
-            } catch (error) {
-                console.error("Ошибка запроса:", error);
-                alert("Нет связи с сервером");
+            } catch (e) {
+                showToast("Ошибка сети", "error");
             }
         }
     );
 }
+
 
 function triggerImport() {
     const input = document.createElement('input');
@@ -2097,16 +2099,40 @@ async function executeManualPost(endpoint, data, saveBtn) {
 }
 
 function calculateCurrentTempTotal() {
-    let total = 0;
+    let baseTotal = 0;
+
+    // 1. Считаем базовую сумму без учета скидок
     Object.entries(tempItems).forEach(([pId, pQty]) => {
         const prod = (productsData || []).find(p => p.id == pId);
-        if (prod) total += (prod.price || 0) * pQty;
+        if (prod) {
+            baseTotal += (prod.price || 0) * pQty;
+        }
     });
+
+    // 2. Ищем поле с процентом (оно может называться по-разному в разных модалках)
+    const percentInput = document.getElementById('new-op-percent') ||
+        document.getElementById('order-discount-percent') ||
+        document.getElementById('edit-percent'); // на случай редактирования
+
+    const percent = percentInput ? parseFloat(percentInput.value) : 0;
+
+    // 3. Рассчитываем итоговую сумму с учетом процента
+    // Формула: Сумма + (Сумма * Процент / 100)
+    const finalTotal = baseTotal + (baseTotal * (percent / 100));
+
+    // 4. Обновляем UI
     const totalPriceElement = document.getElementById('order-total-price');
     if (totalPriceElement) {
-        totalPriceElement.innerText = "Итого: " + total.toLocaleString() + " ֏";
+        if (percent !== 0) {
+            // Красиво показываем, что применен процент
+            const sign = percent > 0 ? "+" : "";
+            totalPriceElement.innerHTML = `Итого (с уч. ${sign}${percent}%): <b>${finalTotal.toLocaleString()} ֏</b>`;
+        } else {
+            totalPriceElement.innerText = `Итого: ${finalTotal.toLocaleString()} ֏`;
+        }
     }
-    return total;
+
+    return finalTotal;
 }
 
 function removeItemFromEdit(pId) {
@@ -4055,69 +4081,90 @@ async function confirmReturn(id) {
     }
 
     // ЗАМЕНЕНО: showConfirm
+    // БЫЛО: showConfirmModal("Провести возврат?", "Текст", async () => { ... });
+// СТАЛО:
     showConfirmModal(
         "Провести возврат?",
         `Сумма ${window.currentOrderTotal.toLocaleString()} ֏ будет вычтена из долга клиента. Склад будет обновлен автоматически.`,
-        async () => {
+        "invoice", // ТИП (аргумент №3)
+        async () => { // ДЕЙСТВИЕ (аргумент №4)
             try {
                 const response = await fetch(`/api/admin/returns/${id}/confirm`, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'}
                 });
-
-                const result = await response.json();
                 if (response.ok) {
                     showToast("Возврат проведен успешно", "success");
                     setTimeout(() => location.reload(), 800);
                 }
-            } catch (e) {
-                console.error("Confirm error:", e);
-            }
+            } catch (e) { console.error("Confirm error:", e); }
         }
     );
 }
 
 async function deleteUser(id) {
-    showConfirmModal("Удалить сотрудника?", "Доступ в систему будет полностью заблокирован.", async () => {
-        try {
-            const response = await fetch(`/api/admin/users/${id}`, {method: 'DELETE'});
-            if (response.ok) {
-                showToast("Сотрудник удален", "success");
-                location.reload();
-            }
-        } catch (e) { console.error(e); }
-    });
+    showConfirmModal(
+        "Удалить сотрудника?",
+        "Доступ в систему будет полностью заблокирован.",
+        "delete", // ТРЕТИЙ АРГУМЕНТ
+        async () => {
+            try {
+                const response = await fetch(`/api/admin/users/${id}`, { method: 'DELETE' });
+                if (response.ok) {
+                    showToast("Сотрудник удален", "success");
+                    closeCustomModal();
+                    location.reload();
+                }
+            } catch (e) { console.error(e); }
+        }
+    );
 }
 
 async function resetPassword(userId) {
-    showConfirmModal("Сброс пароля", "Сбросить пароль пользователю на стандартный 'qwerty'?", async () => {
-        try {
-            const response = await fetch(`/api/admin/users/reset-password/${userId}`, {method: 'POST'});
-            if (response.ok) showToast("Пароль сброшен", "success");
-        } catch (e) { console.error(e); }
-    });
+    showConfirmModal(
+        "Сброс пароля",
+        "Сбросить пароль пользователю на стандартный 'qwerty'?",
+        "info", // Добавь тип (синяя иконка)
+        async () => {
+            try {
+                const response = await fetch(`/api/admin/users/reset-password/${userId}`, {method: 'POST'});
+                if (response.ok) showToast("Пароль сброшен", "success");
+            } catch (e) { console.error(e); }
+        }
+    );
 }
 
 async function deleteProduct(id) {
-    showConfirmModal("Удалить товар?", "Он будет скрыт из активного списка.", async () => {
-        try {
-            await fetch(`/api/products/${id}`, {method: 'DELETE'});
-            showToast("Товар удален", "success");
-            location.reload();
-        } catch (e) { console.warn("Удаление прервано"); }
-    });
+    showConfirmModal(
+        "Удалить товар?",
+        "Он будет скрыт из активного списка.",
+        "delete", // ТРЕТИЙ АРГУМЕНТ
+        async () => {
+            try {
+                await fetch(`/api/products/${id}`, { method: 'DELETE' });
+                showToast("Товар удален", "success");
+                closeCustomModal();
+                location.reload();
+            } catch (e) { console.warn("Удаление прервано"); }
+        }
+    );
 }
 
 async function deleteClient(id) {
-    showConfirmModal("Удалить клиента?", "Он будет скрыт из списков, но останется в истории.", async () => {
-        try {
-            const response = await fetch(`/api/clients/${id}`, {method: 'DELETE'});
-            if (response.ok) {
-                showToast("Клиент удален", "success");
-                location.reload();
-            }
-        } catch (e) { console.error(e); }
-    });
+    showConfirmModal(
+        "Удалить клиента?",
+        "Он будет скрыт из списков, но останется в истории.",
+        "delete", // Тип для красной корзины
+        async () => {
+            try {
+                const response = await fetch(`/api/clients/${id}`, {method: 'DELETE'});
+                if (response.ok) {
+                    showToast("Клиент удален", "success");
+                    location.reload();
+                }
+            } catch (e) { console.error(e); }
+        }
+    );
 }
 
 function sendSelectedCorrections() {
@@ -4178,23 +4225,39 @@ async function checkPromosBeforeSave(items) {
 }
 
 async function deletePromoAction(id) {
-    showConfirmModal("Удаление акции", "Данные будут полностью стерты. Продолжить?", async () => {
-        try {
-            await fetch(`/api/admin/promos/${id}`, { method: 'DELETE' });
-            showToast("Акция удалена", "success");
-            setTimeout(() => location.reload(), 500);
-        } catch (e) { console.warn("Отмена удаления"); }
-    });
+    showConfirmModal(
+        "Удаление акции",
+        "Данные будут полностью стерты. Продолжить?",
+        "delete", // ТРЕТИЙ АРГУМЕНТ (ТИП)
+        async () => { // ЧЕТВЕРТЫЙ АРГУМЕНТ (ДЕЙСТВИЕ)
+            try {
+                await fetch(`/api/admin/promos/${id}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'X-CSRF-TOKEN': document.querySelector('input[name="_csrf"]')?.value
+                    }
+                });
+                showToast("Акция удалена", "success");
+                closeCustomModal(); // Закрываем нашу модалку
+                setTimeout(() => location.reload(), 500);
+            } catch (e) { console.warn("Отмена удаления"); }
+        }
+    );
 }
 
 async function confirmPromoAction(id) {
-    showConfirmModal("Подтвердить акцию?", "Редактирование станет недоступно!", async () => {
-        const res = await fetch(`/api/admin/promos/${id}/confirm`, {method: 'POST'});
-        if (res.ok) {
-            showToast("Акция подтверждена!", "success");
-            location.reload();
+    showConfirmModal(
+        "Подтвердить акцию?",
+        "Редактирование станет недоступно!",
+        "invoice", // Или другой подходящий тип
+        async () => {
+            const res = await fetch(`/api/admin/promos/${id}/confirm`, {method: 'POST'});
+            if (res.ok) {
+                showToast("Акция подтверждена!", "success");
+                location.reload();
+            }
         }
-    });
+    );
 }
 
 function handleLogout() {
@@ -4559,22 +4622,19 @@ function printSelectedRows(tableId) {
 }
 
 function handleCreateInvoice(orderId) {
-    showConfirmModal("Подтверждение", "Выставить счет и списать товар?", function() {
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.action = '/admin/invoices/create-from-order/' + orderId;
-
-        const csrfInput = document.querySelector('input[name="_csrf"]');
-        if (csrfInput) {
-            const input = document.createElement('input');
-            input.type = 'hidden';
-            input.name = '_csrf';
-            input.value = csrfInput.value;
-            form.appendChild(input);
+    showConfirmModal(
+        "Подтверждение",
+        "Выставить счет и списать товар?",
+        "invoice", // ТРЕТИЙ АРГУМЕНТ (ТИП)
+        function() { // ЧЕТВЕРТЫЙ АРГУМЕНТ (ДЕЙСТВИЕ)
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '/admin/invoices/create-from-order/' + orderId;
+            // ... остальной код формы
+            document.body.appendChild(form);
+            form.submit();
         }
-        document.body.appendChild(form);
-        form.submit();
-    });
+    );
 }
 
 async function cancelOrder(id) {
@@ -4941,667 +5001,4 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
 
 });
-
-
-// function handleLogout() {
-//     showConfirmModal('Подтвердите выход', 'Вы уверены, что хотите покинуть систему?', () => {
-//         // Очищаем локальное состояние в браузере
-//         localStorage.clear();
-//         sessionStorage.clear();
-//
-//         // Отправляем форму
-//         document.getElementById('logout-form').submit();
-//     });
-// }
-//
-// function handleCreateInvoice(orderId) {
-//     showConfirmModal("Подтверждение", "Выставить счет и списать товар?", () => {
-//         // 1. Создаем форму "на лету"
-//         const form = document.createElement('form');
-//         form.method = 'POST';
-//         form.action = `/admin/invoices/create-from-order/${orderId}`;
-//
-//         // 2. Добавляем CSRF токен (берем из любой формы на странице)
-//         const csrfInput = document.querySelector('input[name="_csrf"]');
-//         if (csrfInput) {
-//             const input = document.createElement('input');
-//             input.type = 'hidden';
-//             input.name = '_csrf';
-//             input.value = csrfInput.value;
-//             form.appendChild(input);
-//         }
-//
-//         // 3. Отправляем. Страница перезагрузится.
-//         document.body.appendChild(form);
-//         form.submit();
-//
-//         // После этого Контроллер в Java сделает редирект,
-//         // и вы увидите красную плашку "Недостаточно товара: Манго"
-//     });
-// }
-
-
-
-// function printSelectedOperations(type) {
-//     const checkboxClass = type === 'order' ? '.order-print-check' : '.return-print-check';
-//     const selectedIds = Array.from(document.querySelectorAll(`${checkboxClass}:checked`)).map(cb => cb.value);
-//
-//     if (selectedIds.length === 0) {
-//         showToast("Сначала выберите записи галочкой!", "error");
-//         return;
-//     }
-//
-//     const frame = document.getElementById('printFrame');
-//     const url = type === 'order' ? '/admin/orders/print-batch' : '/admin/returns/print-batch';
-//
-//     // Очищаем предыдущие обработчики, создавая клон фрейма (самый надежный метод)
-//     const newFrame = frame.cloneNode(true);
-//     frame.parentNode.replaceChild(newFrame, frame);
-//
-//     // Вешаем событие ОДИН раз
-//     newFrame.addEventListener('load', function () {
-//         if (newFrame.contentWindow.location.href === "about:blank") return;
-//
-//         setTimeout(() => {
-//             newFrame.contentWindow.focus();
-//             newFrame.contentWindow.print();
-//         }, 300);
-//     }, {once: true});
-//
-//     submitAsPost(url, selectedIds, 'printFrame');
-//
-//     localStorage.removeItem('selectedOrders');
-//     selectedOrderIds = [];
-// }
-
-
-// async function confirmReturn(id) {
-//     const ret = (returnsData || []).find(r => r.id == id);
-//     if (!ret) return showToast("Возврат не найден", "error");
-//
-//     // 1. Проверяем, есть ли несохраненные изменения в ценах или количестве
-//     // Если мы в режиме редактирования (есть инпуты), сначала сохраняем
-//     const isEditMode = !!document.querySelector('.item-price-input');
-//
-//     if (isEditMode) {
-//         showToast("Сначала сохраните изменения перед подтверждением", "info");
-//         return;
-//     }
-//
-//     // 2. Используем модальное окно подтверждения
-//     showConfirmModal(
-//         "Провести возврат?",
-//         `Сумма ${window.currentOrderTotal.toLocaleString()} ֏ будет вычтена из долга клиента. Склад будет обновлен автоматически (если применимо).`,
-//         async () => {
-//             try {
-//                 // Блокируем кнопку, чтобы избежать двойного клика
-//                 const confirmBtn = document.querySelector('#confirm-modal-ok');
-//                 if (confirmBtn) confirmBtn.disabled = true;
-//
-//                 // 3. Отправка запроса на подтверждение
-//                 const response = await fetch(`/api/admin/returns/${id}/confirm`, {
-//                     method: 'POST',
-//                     headers: {'Content-Type': 'application/json'}
-//                 });
-//
-//                 const result = await response.json();
-//
-//                 if (response.ok) {
-//                     // Формируем детальное сообщение
-//                     let successMsg = `Возврат #${id} проведен. `;
-//                     if (result.stockUpdated) {
-//                         successMsg += "Товар возвращен на склад.";
-//                     }
-//
-//                     showToast(successMsg, "success");
-//
-//                     // 4. Обновляем статус в локальном массиве (для красоты до релоада)
-//                     ret.status = 'CONFIRMED';
-//
-//                     setTimeout(() => {
-//                         location.reload();
-//                     }, 800);
-//                 } else {
-//                     showToast("Ошибка при подтверждении", "error");
-//                     if (confirmBtn) confirmBtn.disabled = false;
-//                 }
-//             } catch (e) {
-//                 console.error("Confirm return error:", e);
-//                 showToast("Ошибка сети: проверьте соединение", "error");
-//             }
-//         }
-//     );
-// }
-
-// function printInvoiceInline(url) {
-//     // Теперь url передается целиком из кнопки
-//     const iframe = document.createElement('iframe');
-//     iframe.style.display = 'none';
-//     iframe.src = url;
-//     document.body.appendChild(iframe);
-//
-//     iframe.onload = function () {
-//         try {
-//             iframe.contentWindow.focus();
-//             iframe.contentWindow.print();
-//             setTimeout(() => {
-//                 if (document.body.contains(iframe)) {
-//                     document.body.removeChild(iframe);
-//                 }
-//             }, 1000);
-//         } catch (e) {
-//             console.warn("Печать через iframe не удалась, открываю окно...");
-//             window.open(url, '_blank');
-//         }
-//     };
-// }
-
-
-// async function deleteUser(id) {
-//     showConfirmModal("Удалить сотрудника?", "Доступ в систему будет полностью заблокирован.", async () => {
-//         try {
-//             const response = await fetch(`/api/admin/users/${id}`, {method: 'DELETE'});
-//             if (response.ok) {
-//                 showToast("Сотрудник удален", "success");
-//                 location.reload();
-//             } else {
-//                 showToast("Ошибка при удалении", "error");
-//             }
-//         } catch (e) {
-//             showToast("Ошибка сети", "error");
-//         }
-//     });
-// }
-
-// function showConfirmModal(title, text, onConfirm) {
-//     const modal = document.getElementById('confirm-modal');
-//     document.getElementById('confirm-title').innerText = title;
-//     document.getElementById('confirm-text').innerText = text;
-//
-//     const yesBtn = document.getElementById('confirm-yes');
-//     const noBtn = document.getElementById('confirm-no');
-//
-//     // Очищаем предыдущие обработчики
-//     yesBtn.onclick = null;
-//     noBtn.onclick = null;
-//
-//     yesBtn.onclick = () => {
-//         modal.close();
-//         onConfirm();
-//     };
-//
-//     noBtn.onclick = () => modal.close();
-//
-//     modal.showModal();
-// }
-
-
-
-// async function resetPassword(userId) {
-//     showConfirmModal("Сброс пароля", "Сбросить пароль пользователю на стандартный 'qwerty'?", async () => {
-//         try {
-//             const response = await fetch(`/api/admin/users/reset-password/${userId}`, {method: 'POST'});
-//             if (response.ok) {
-//                 showToast("Пароль сброшен на 'qwerty'", "success");
-//             } else {
-//                 showToast("Ошибка при сбросе пароля", "error");
-//             }
-//         } catch (e) {
-//             showToast("Ошибка сети", "error");
-//         }
-//     });
-// }
-
-
-// window.printOrder = function (id) {
-//     console.log("Запуск печати заказа:", id);
-//     const url = `/admin/orders/print/${id}`;
-//     printAction(url);
-// }
-//
-// window.printAction = function (url) {
-//     const frame = document.getElementById('printFrame');
-//     if (!frame) return;
-//
-//     // 1. ОЧИСТКА
-//     frame.onload = null;
-//     frame.src = "about:blank";
-//
-//     // 2. ПРОВЕРКА ДОСТУПА ПЕРЕД ПЕЧАТЬЮ
-//     // Вместо прямой вставки в src, сначала проверяем, есть ли у пользователя права
-//     fetch(url, {method: 'GET'})
-//         .then(response => {
-//             // Если fetch вернул 200, значит доступ есть и страница готова
-//             showToast("⏳ Подготовка документа...", "info");
-//
-//             setTimeout(() => {
-//                 frame.src = url;
-//
-//                 frame.onload = function () {
-//                     if (frame.contentWindow.location.href.includes("about:blank")) return;
-//
-//                     // 3. РЕНДЕРИНГ И ПЕЧАТЬ
-//                     setTimeout(() => {
-//                         try {
-//                             frame.contentWindow.focus();
-//                             frame.contentWindow.print();
-//                             frame.onload = null; // Удаляем обработчик после успеха
-//                         } catch (e) {
-//                             console.error("Ошибка печати:", e);
-//                             // Фоллбек: если фрейм заблокирован, открываем в новом окне
-//                             // window.open(url, '_blank');
-//                         }
-//                     }, 500);
-//                 };
-//             }, 100);
-//         })
-//         .catch(error => {
-//             // Если прав нет (403), сработает ваш новый глобальный fetch
-//             // и покажет "Доступ запрещен". Здесь ничего делать не нужно.
-//             console.warn("Печать отменена: нет доступа или ошибка сети");
-//         });
-// };
-
-// window.printOrder = (id) => window.printAction(`/admin/orders/print/${id}`);
-// window.printReturn = (id) => window.printAction(`/admin/returns/print/${id}`);
-
-//
-// window.printOrderList = () => {
-//     const manager = document.querySelector('select[name="orderManagerId"]').value;
-//     const start = document.querySelector('input[name="orderStartDate"]').value;
-//     const end = document.querySelector('input[name="orderEndDate"]').value;
-//     printAction(`/admin/orders/print-all?orderManagerId=${manager}&orderStartDate=${start}&orderEndDate=${end}`);
-// };
-
-
-// function printRouteSheet() {
-//     const mId = document.getElementById('route-manager-select').value;
-//     const date = document.getElementById('route-date-select').value;
-//     if (!date) return showToast("Выберите дату", "error");
-//
-//     const url = `/admin/logistic/route-list?managerId=${mId}&date=${date}`;
-//     printAction(url);
-// }
-
-// async function deleteProduct(id) {
-//     showConfirmModal("Удалить товар?", "Он будет скрыт...", async () => {
-//         try {
-//             const response = await fetch(`/api/products/${id}`, {method: 'DELETE'});
-//             // Если мы здесь, значит fetch прошел успешно (status 200)
-//             showToast("Товар успешно удален (скрыт)!", "success");
-//             location.reload();
-//         } catch (e) {
-//             // Ошибка уже показана глобальным перехватчиком
-//             console.log("Удаление отменено из-за прав");
-//         }
-//     });
-// }
-
-
-// async function saveProductChanges(id) {
-//     // 1. Собираем данные (ID полей теперь соответствуют новой форме 4x2)
-//     const data = {
-//         category: document.getElementById('edit-product-category').value,
-//         price: parseFloat(document.getElementById('edit-product-price').value) || 0,
-//         hsnCode: document.getElementById('edit-product-hsn').value,
-//         expiryDate: document.getElementById('edit-product-expiry').value,
-//
-//         name: document.getElementById('edit-product-name').value,
-//         stockQuantity: parseInt(document.getElementById('edit-product-qty').value) || 0,
-//         barcode: document.getElementById('edit-product-barcode').value,
-//         itemsPerBox: parseInt(document.getElementById('edit-product-perbox').value) || 0,
-//         unit: document.getElementById('edit-product-unit').value
-//     };
-//
-//     try {
-//         // 2. Отправка на сервер через PUT
-//         await secureFetch(`/api/admin/products/${id}/edit`, {
-//             method: 'PUT',
-//             body: data
-//         });
-//
-//         // 3. Обновляем локальный массив данных Sellion 2026
-//         const idx = productsData.findIndex(p => p.id == id);
-//         if (idx !== -1) {
-//             productsData[idx] = {...productsData[idx], ...data};
-//
-//             // 4. Умное обновление строки в основной таблице склада
-//             const row = document.querySelector(`tr[onclick*="openProductDetails(${id})"]`);
-//             if (row) {
-//                 // Название (внутри div для стиля)
-//                 const nameDiv = row.cells[0].querySelector('div');
-//                 if (nameDiv) nameDiv.innerText = data.name;
-//
-//                 // Цена
-//                 row.cells[1].innerText = data.price.toLocaleString() + ' ֏';
-//
-//                 // Остаток (Badge-стиль)
-//                 const qtyBadge = row.cells[2].querySelector('span');
-//                 if (qtyBadge) {
-//                     qtyBadge.innerText = data.stockQuantity + ' шт.';
-//                     qtyBadge.className = data.stockQuantity > 10 ? 'badge bg-light text-dark' : 'badge bg-danger text-white';
-//                 }
-//
-//                 // Упаковка + Единица измерения
-//                 row.cells[3].innerText = `${data.itemsPerBox} ${data.unit}/уп`;
-//
-//                 // Штрих-код
-//                 row.cells[4].innerText = data.barcode || '---';
-//
-//                 // Срок годности
-//                 if (row.cells[5]) {
-//                     row.cells[5].innerText = data.expiryDate ? formatDate(data.expiryDate) : '---';
-//                     // Подсветка красным, если срок истекает
-//                     const isExpired = data.expiryDate && new Date(data.expiryDate) < new Date(new Date().getTime() + 30 * 24 * 60 * 60 * 1000);
-//                     row.cells[5].className = isExpired ? 'text-danger fw-bold' : '';
-//                 }
-//             }
-//         }
-//
-//         showToast("Товар успешно обновлен", "success");
-//
-//         // 5. Возвращаемся в режим просмотра деталей с новыми данными
-//         openProductDetails(id);
-//
-//     } catch (e) {
-//         console.error("Ошибка сохранения продукта:", e);
-//         showToast("Не удалось сохранить изменения", "error");
-//     }
-// }
-
-
-
-// function sendSelectedCorrections() {
-//     const selectedIds = Array.from(document.querySelectorAll('.correction-checkbox:checked')).map(cb => cb.value);
-//     const emailInput = document.getElementById('report-email');
-//     const email = emailInput ? emailInput.value : 'accountant@company.am';
-//
-//     if (selectedIds.length === 0) {
-//         showToast("Выберите хотя бы одну корректировку", "info");
-//         return;
-//     }
-//
-//     showConfirmModal(
-//         "Подтверждение отправки",
-//         `Отправить реестр из ${selectedIds.length} корректировок на почту ${email}?`,
-//         () => {
-//             // Эта часть выполнится только после нажатия "Да" в модальном окне
-//             executeSendingCorrections(selectedIds, email);
-//         }
-//     );
-// }
-
-
-
-// async function deleteClient(id) {
-//     showConfirmModal("Удалить клиента?", "Он будет скрыт из списков, но останется в старых счетах и заказах.", async () => {
-//         const response = await fetch(`/api/clients/${id}`, {method: 'DELETE'});
-//         if (response.ok) {
-//             showToast("Клиент успешно удален (скрыт)!", "success");
-//             location.reload();
-//         } else {
-//             showToast("Ошибка удаления", "error");
-//         }
-//     });
-// }
-
-// window.printOrderList = function () {
-//     const form = document.querySelector('#tab-orders .filter-bar form');
-//     const mId = form.querySelector('select[name="orderManagerId"]').value;
-//     const s = form.querySelector('input[name="orderStartDate"]').value;
-//     const e = form.querySelector('input[name="orderEndDate"]').value;
-//
-//     const url = `/admin/orders/print-all?orderManagerId=${mId}&orderStartDate=${s}&orderEndDate=${e}`;
-//     printAction(url);
-// }
-//
-// window.printReturnList = function () {
-//     const form = document.querySelector('#tab-returns .filter-bar form');
-//     const mId = form.querySelector('select[name="returnManagerId"]').value;
-//     const s = form.querySelector('input[name="returnStartDate"]').value;
-//     const e = form.querySelector('input[name="returnEndDate"]').value;
-//
-//     const url = `/admin/returns/print-all?returnManagerId=${mId}&returnStartDate=${s}&returnEndDate=${e}`;
-//     printAction(url);
-// }
-
-
-
-// function printCompactOrders() {
-//     const checkboxes = document.querySelectorAll('.order-print-check:checked');
-//     if (checkboxes.length === 0) return showToast("Выберите хотя бы один заказ", "error");
-//
-//     // Формируем строку параметров: type=order&ids=1&ids=2...
-//     const params = new URLSearchParams();
-//     params.append('type', 'order');
-//     checkboxes.forEach(cb => params.append('ids', cb.value));
-//
-//     const url = `/admin/logistic/print-compact?${params.toString()}`;
-//     printAction(url);
-// }
-//
-// function printCompactReturns() {
-//     const checkboxes = document.querySelectorAll('.return-print-check:checked');
-//     if (checkboxes.length === 0) return showToast("Выберите хотя бы один возврат", "error");
-//
-//     // Формируем строку параметров: type=return&ids=1&ids=2...
-//     const params = new URLSearchParams();
-//     params.append('type', 'return');
-//     checkboxes.forEach(cb => params.append('ids', cb.value));
-//
-//     const url = `/admin/logistic/print-compact?${params.toString()}`;
-//     printAction(url);
-// }
-
-
-// function printSelectedRows(tableId) {
-//     const selected = Array.from(document.querySelectorAll(`#${tableId} .row-checkbox:checked`))
-//         .map(cb => cb.value);
-//     if (selected.length === 0) return alert("Выберите хотя бы одну запись");
-//
-//     const form = document.createElement('form');
-//     form.method = 'POST';
-//     form.action = '/admin/orders/print-batch';
-//     form.target = '_blank';
-//
-//     const csrfToken = document.querySelector('meta[name="_csrf"]').content;
-//     const csrfInput = document.createElement('input');
-//     csrfInput.name = '_csrf';
-//     csrfInput.value = csrfToken;
-//     form.appendChild(csrfInput);
-//
-//     selected.forEach(id => {
-//         const input = document.createElement('input');
-//         input.name = 'ids';
-//         input.value = id;
-//         form.appendChild(input);
-//     });
-//
-//     document.body.appendChild(form);
-//     form.submit();
-//     form.remove();
-// }
-
-
-// function formatDate(dateVal) {
-//     if (!dateVal || dateVal === '---' || dateVal === null) return '---';
-//
-//     try {
-//         // 1. Если пришел объект LocalDateTime из Java
-//         if (typeof dateVal === 'object' && dateVal.year) {
-//             const d = String(dateVal.dayOfMonth || dateVal.day || 1).padStart(2, '0');
-//             const m = String(dateVal.monthValue || dateVal.month || 1).padStart(2, '0');
-//             const y = dateVal.year;
-//             const h = String(dateVal.hour || 0).padStart(2, '0');
-//             const min = String(dateVal.minute || 0).padStart(2, '0');
-//             return `${d}.${m}.${y} ${h}:${min}`;
-//         }
-//
-//         // 2. Если пришла строка (ISO или обычная)
-//         if (typeof dateVal === 'string') {
-//             let clean = dateVal.replace(/[,/]/g, '.');
-//
-//             // ISO формат: 2026-01-20T01:17:00
-//             if (clean.includes('T') || (clean.includes('-') && clean.includes(':'))) {
-//                 const parts = clean.split(/[T ]/);
-//                 const dParts = parts[0].split('-');
-//                 if (dParts.length === 3) {
-//                     const date = `${dParts[2]}.${dParts[1]}.${dParts[0]}`;
-//                     const time = parts[1].substring(0, 5);
-//                     return `${date} ${time}`;
-//                 }
-//             }
-//
-//             // Только дата: 2026-01-20
-//             if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) {
-//                 const d = clean.split('-');
-//                 return `${d[2]}.${d[1]}.${d[0]}`;
-//             }
-//         }
-//
-//         // Резервный вариант через стандартный Date
-//         const date = new Date(dateVal);
-//         if (!isNaN(date.getTime())) {
-//             const d = String(date.getDate()).padStart(2, '0');
-//             const m = String(date.getMonth() + 1).padStart(2, '0');
-//             const y = date.getFullYear();
-//             return `${d}.${m}.${y}`;
-//         }
-//
-//     } catch (e) {
-//         console.warn("Ошибка форматирования даты:", dateVal);
-//     }
-//
-//     return dateVal;
-// }
-
-
-// function printDailySummary() {
-//     const tab = document.getElementById('tab-orders');
-//     const selectedIds = Array.from(tab.querySelectorAll('.order-print-check:checked')).map(cb => cb.value);
-//
-//     if (selectedIds.length === 0) {
-//         showToast("Выберите заказы для сводки!", "error");
-//         return;
-//     }
-//
-//     const frame = document.getElementById('printFrame');
-//     const url = '/admin/orders/print-daily-summary';
-//
-//     const newFrame = frame.cloneNode(true);
-//     frame.parentNode.replaceChild(newFrame, frame);
-//
-//     newFrame.addEventListener('load', function () {
-//         if (newFrame.contentWindow.location.href === "about:blank") return;
-//         setTimeout(() => {
-//             newFrame.contentWindow.focus();
-//             newFrame.contentWindow.print();
-//         }, 300);
-//     }, {once: true});
-//
-//     submitAsPost(url, selectedIds, 'printFrame');
-//
-//     clearOrderSelection();
-// }
-
-// async function confirmPromoAction(id) {
-//     showConfirmModal("Подтвердить акцию?", "После подтверждения редактирование будет невозможно!", async () => {
-//         const res = await fetch(`/api/admin/promos/${id}/confirm`, {method: 'POST'});
-//         if (res.ok) {
-//             showToast("Акция подтверждена!", "success");
-//             location.reload();
-//         }
-//     });
-// }
-
-// async function checkPromosBeforeSave(items) {
-//     const res = await fetch('/api/promos/check-active', {
-//         method: 'POST',
-//         headers: {'Content-Type': 'application/json'},
-//         body: JSON.stringify(Object.keys(items))
-//     });
-//     const activePromos = await res.json();
-//
-//     if (activePromos.length > 0) {
-//         // Формируем красивые карточки с РАБОЧИМИ ползунками
-//         // Внутри функции checkPromosBeforeSave или там, где рисуете список:
-//         const promoListHtml = activePromos.map(p => `
-//     <label class="promo-card" style="display: flex; align-items: center; justify-content: space-between; width: 100%; box-sizing: border-box;">
-//         <div style="flex-grow: 1; text-align: left; pointer-events: none;">
-//             <div style="font-weight: 700; color: #1e293b; font-size: 13px;">${p.title || p.name}</div>
-//             <div style="font-size: 11px; color: #64748b;">Для менеджера: ${p.managerId}</div>
-//         </div>
-//
-//         <!-- Чекбокс ДОЛЖЕН быть перед .custom-switch -->
-//         <input type="checkbox"
-//                class="promo-checkbox"
-//                data-promo-id="${p.id}"
-//                checked
-//                style="display: none;"> <!-- Скрываем, но он работает через label -->
-//
-//         <!-- Визуальный ползунок -->
-//         <div class="custom-switch"></div>
-//     </label>
-// `).join('');
-//
-//
-//         showConfirmModal("Нашли акции!", `
-//             <div style="text-align:center;">
-//                 ${promoListHtml}
-//                 <p style="font-size:11px; color:#ef4444; margin-top:15px;">* При активации спец. цены заменят скидку магазина на эти товары.</p>
-//             </div>
-//         `, () => {
-//             // Собираем ТОЛЬКО те акции, где ползунок остался включенным
-//             const selectedPromos = [];
-//             document.querySelectorAll('.promo-apply-checkbox').forEach(cb => {
-//                 if (cb.checked) {
-//                     const id = cb.getAttribute('data-promo-id');
-//                     const found = activePromos.find(ap => ap.id == id);
-//                     if (found) selectedPromos.push(found);
-//                 }
-//             });
-//             saveOrderWithPromos(selectedPromos);
-//         });
-//     } else {
-//         performFinalOrderSave();
-//     }
-// }
-
-
-// async function deletePromoAction(id) {
-//     showConfirmModal("Удаление акции", "Вы уверены, что хотите полностью удалить эту акцию? Данные будут стерты.", async () => {
-//         try {
-//             // Выполняем запрос. Глобальный fetch сам покажет ошибку, если статус не 2xx.
-//             await fetch(`/api/admin/promos/${id}`, {
-//                 method: 'DELETE',
-//                 headers: {
-//                     'Content-Type': 'application/json',
-//                     'X-CSRF-TOKEN': document.querySelector('input[name="_csrf"]')?.value
-//                 }
-//             });
-//
-//             // Этот блок сработает ТОЛЬКО при успешном удалении (status 200)
-//             showToast("Акция успешно удалена", "success");
-//
-//             // Закрываем модалку, если функция существует
-//             if (typeof closeModal === 'function') closeModal('modal-order-view');
-//
-//             setTimeout(() => {
-//                 if (typeof loadPromosByPeriod === 'function') {
-//                     loadPromosByPeriod();
-//                 } else {
-//                     location.reload();
-//                 }
-//             }, 500);
-//
-//         } catch (e) {
-//             // Блок пустой: уведомление об ошибке уже вывел глобальный fetch.
-//             // Мы просто пресекаем появление "Критическая ошибка связи".
-//             console.warn("Удаление акции отклонено или не удалось:", e.message);
-//         }
-//     });
-// }
-
-
-
 
