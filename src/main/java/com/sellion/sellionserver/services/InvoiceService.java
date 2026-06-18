@@ -7,10 +7,19 @@ import com.sellion.sellionserver.repository.InvoiceRepository;
 import com.sellion.sellionserver.repository.OrderRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.IOException;
+import java.io.OutputStream;
+import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -78,5 +87,58 @@ public class InvoiceService {
                 invoiceNumber, order.getShopName());
 
         return savedInvoice;
+    }
+
+
+
+
+    public void exportDebtsToExcel(String start, String end, OutputStream outputStream) throws IOException {
+        // 1. Получаем все записи
+        List<Invoice> allInvoices = invoiceRepository.findAll();
+
+        List<Invoice> filteredInvoices = allInvoices.stream()
+                .filter(inv -> {
+                    if (start == null || end == null || inv.getCreatedAt() == null) return true;
+
+                    // Преобразуем LocalDateTime в LocalDate
+                    LocalDate invDate = inv.getCreatedAt().toLocalDate();
+
+                    LocalDate startDate = LocalDate.parse(start);
+                    LocalDate endDate = LocalDate.parse(end);
+
+                    return !invDate.isBefore(startDate) && !invDate.isAfter(endDate);
+                })
+                .collect(Collectors.toList());
+
+        // 3. Создаем Excel книгу
+        try (Workbook workbook = new XSSFWorkbook()) {
+            Sheet sheet = workbook.createSheet("Список долгов");
+
+            // Заголовки
+            Row headerRow = sheet.createRow(0);
+            headerRow.createCell(0).setCellValue("ID Счета");
+            headerRow.createCell(1).setCellValue("Магазин");
+            headerRow.createCell(2).setCellValue("Сумма");
+            headerRow.createCell(3).setCellValue("Статус");
+
+            // Данные
+            int rowNum = 1;
+            for (Invoice inv : filteredInvoices) {
+                Row row = sheet.createRow(rowNum++);
+
+                // Заполняем с проверкой на null
+                row.createCell(0).setCellValue(inv.getId() != null ? inv.getId().toString() : "N/A");
+                row.createCell(1).setCellValue(inv.getShopName() != null ? inv.getShopName() : "");
+
+                // Обработка BigDecimal: преобразуем в double
+                BigDecimal amount = inv.getTotalAmount();
+                row.createCell(2).setCellValue(amount != null ? amount.doubleValue() : 0.0);
+
+                row.createCell(3).setCellValue(inv.getStatus() != null ? inv.getStatus() : "");
+            }
+
+            // 4. Записываем в поток
+            workbook.write(outputStream);
+        }// Workbook автоматически закроется здесь (try-with-resources)
     }
 }

@@ -3026,9 +3026,46 @@ function applyClientCategoryFilter(category) {
     url.searchParams.set('activeTab', 'tab-clients');
     url.searchParams.set('clientCategory', category);
     url.searchParams.set('clientPage', '0'); // Сбрасываем на первую страницу при смене фильтра
-
+    url.searchParams.set('pageSize', '200'); // <--- ВАЖНО: Добавьте эту строку
     // Переходим по новой ссылке
     window.location.href = url.toString();
+}
+
+async function downloadDebtListExcel() {
+    const params = new URLSearchParams(window.location.search);
+    const exportUrl = `/admin/invoices/export-debts?${params.toString()}`;
+
+    try {
+        const response = await fetch(exportUrl, {
+            method: 'GET',
+            headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="_csrf"]')?.content }
+        });
+
+        // Если сервер ответил ошибкой (не 200 OK)
+        if (!response.ok) {
+            // Читаем текст ошибки, который прислал сервер через sendError
+            const errorText = await response.text();
+            throw new Error(errorText || "Не удалось скачать файл");
+        }
+
+        // Если всё успешно — скачиваем файл
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'DebtList_Export.xlsx';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+
+        showToast("Файл успешно скачан", "success");
+
+    } catch (e) {
+        console.error("Ошибка скачивания:", e);
+        // Теперь здесь отобразится реальная ошибка от сервера
+        showToast("Ошибка скачивания:", "error");
+    }
 }
 
 function filterTable(inputId, tableBodyId) {
@@ -3180,23 +3217,68 @@ function getSmartDeliveryDates() {
     };
 }
 
+// Полностью исправленная функция фильтрации счетов
 function applyInvoiceFilters() {
-    const start = document.getElementById('inv-date-start').value;
-    const end = document.getElementById('inv-date-end').value;
-    const manager = document.getElementById('filter-invoice-manager').value;
-    const status = document.getElementById('filter-invoice-status').value;
+    const start = document.getElementById('inv-date-start') ? document.getElementById('inv-date-start').value : '';
+    const end = document.getElementById('inv-date-end') ? document.getElementById('inv-date-end').value : '';
+    const manager = document.getElementById('filter-invoice-manager') ? document.getElementById('filter-invoice-manager').value : '';
+    const status = document.getElementById('filter-invoice-status') ? document.getElementById('filter-invoice-status').value : '';
 
-    const params = new URLSearchParams();
+    // Захватываем поле поиска по имени клиента или номеру, если оно есть
+    const searchInput = document.querySelector('input[name="invoiceSearch"], #invoice-search, #filter-invoice-search, .search-invoice');
+    const searchTxt = searchInput ? searchInput.value : '';
+
+    // Берем текущие параметры из URL, чтобы не стереть глобальные настройки
+    const params = new URLSearchParams(window.location.search);
+
     params.set('activeTab', 'tab-invoices');
-    params.set('invoicePage', '0'); // Всегда сброс на 0 при новом фильтре
+    params.set('invoicePage', '0'); // Всегда сбрасываем на первую страницу при новом поиске!
+    params.set('pageSize', '200');
 
-    if (start) params.set('invoiceStart', start);
-    if (end) params.set('invoiceEnd', end);
-    if (manager) params.set('invoiceManager', manager);
-    if (status) params.set('invoiceStatus', status);
+    if (start) params.set('invoiceStart', start); else params.delete('invoiceStart');
+    if (end) params.set('invoiceEnd', end); else params.delete('invoiceEnd');
+    if (manager) params.set('invoiceManager', manager); else params.delete('invoiceManager');
+    if (status) params.set('invoiceStatus', status); else params.delete('invoiceStatus');
+
+    if (searchTxt) params.set('invoiceSearch', searchTxt);
+    else if (params.has('invoiceSearch')) params.delete('invoiceSearch');
 
     window.location.href = window.location.pathname + '?' + params.toString();
 }
+
+// Новая функция для выгрузки Листа долгов в Excel с учетом фильтров
+function exportDebtListExcel() {
+    // Берем все текущие примененные фильтры и даты из адресной строки
+    const params = new URLSearchParams(window.location.search);
+
+    // Формируем URL к вашему бэкенду для выгрузки долгов
+    const exportUrl = '/admin/invoices/export-debts?' + params.toString();
+
+    if (typeof showToast === 'function') {
+        showToast("⏳ Формирование Excel файла Листа долгов...", "info");
+    }
+
+    // Запускаем скачивание файла
+    window.location.href = exportUrl;
+}
+
+// function applyInvoiceFilters() {
+//     const start = document.getElementById('inv-date-start').value;
+//     const end = document.getElementById('inv-date-end').value;
+//     const manager = document.getElementById('filter-invoice-manager').value;
+//     const status = document.getElementById('filter-invoice-status').value;
+//
+//     const params = new URLSearchParams();
+//     params.set('activeTab', 'tab-invoices');
+//     params.set('invoicePage', '0'); // Всегда сброс на 0 при новом фильтре
+//
+//     if (start) params.set('invoiceStart', start);
+//     if (end) params.set('invoiceEnd', end);
+//     if (manager) params.set('invoiceManager', manager);
+//     if (status) params.set('invoiceStatus', status);
+//
+//     window.location.href = window.location.pathname + '?' + params.toString();
+// }
 
 function initDeliveryDateLogic() {
     const dateInput = document.getElementById('route-date-select');
@@ -4455,63 +4537,161 @@ function toggleGlobalSelect(masterCheckbox, childClass) {
     console.log("Выбрано сейчас:", isOrder ? selectedOrderIds : selectedReturnIds);
 }
 
-function showConfirmModal(title, text, type, onConfirm) {
+// function showConfirmModal(title, text, type, onConfirm) {
+//     const modal = document.getElementById('customModal');
+//     const titleEl = document.getElementById('modalTitle');
+//     const messageEl = document.getElementById('modalMessage');
+//     const iconContainer = document.getElementById('modalIconContainer');
+//     const iconInner = document.getElementById('modalIconInner');
+//     const oldConfirmBtn = document.getElementById('modalConfirmBtn');
+//
+//     if (!modal || !oldConfirmBtn) return;
+//
+//     // --- ФИКС ПЕРВОГО НАЖАТИЯ ---
+//     // Клонируем кнопку, чтобы полностью стереть память о прошлых нажатиях
+//     const confirmBtn = oldConfirmBtn.cloneNode(true);
+//     oldConfirmBtn.parentNode.replaceChild(confirmBtn, oldConfirmBtn);
+//     // ----------------------------
+//
+//     titleEl.innerText = title;
+//     messageEl.innerText = text;
+//
+//     // Сброс и настройка стилей
+//     iconContainer.className = "mx-auto flex items-center justify-center h-20 w-20 rounded-full mb-6 transition-all flex-shrink-0";
+//     iconInner.className = "fa-solid text-3xl";
+//
+//     if (type === 'delete' || type === 'danger') {
+//         iconContainer.classList.add('bg-red-50', 'text-red-600');
+//         iconInner.className = "fa-solid fa-trash-can text-3xl";
+//         confirmBtn.style.backgroundColor = '#ef4444';
+//     } else if (type === 'invoice') {
+//         iconContainer.classList.add('bg-green-50', 'text-green-600');
+//         iconInner.className = "fa-solid fa-file-invoice-dollar text-3xl";
+//         confirmBtn.style.backgroundColor = '#63AA2F';
+//     } else {
+//         iconContainer.classList.add('bg-blue-50', 'text-blue-600');
+//         iconInner.className = "fa-solid fa-circle-info text-3xl";
+//         confirmBtn.style.backgroundColor = '#0f172a';
+//     }
+//
+//     // Показываем окно
+//     modal.style.display = 'flex';
+//     modal.classList.remove('hidden');
+//
+//     // Назначаем действие НОВОЙ кнопке. Теперь она "чистая" и сработает сразу.
+//     confirmBtn.onclick = function() {
+//         closeCustomModal();
+//         if (typeof onConfirm === 'function') {
+//             onConfirm();
+//         }
+//     };
+// }
+
+
+
+function showConfirmModal(title, message, type, onConfirm) {
+    // ИСПРАВЛЕНИЕ: Если мы уже нажали "Подтвердить" в первом окне,
+    // и система пытается открыть второе окно - мы пропускаем вопрос и сразу выполняем действие!
+    if (window.isModalExecuting) {
+        if (typeof onConfirm === 'function') {
+            onConfirm();
+        }
+        return; // Прерываем открытие второго окна
+    }
+
     const modal = document.getElementById('customModal');
     const titleEl = document.getElementById('modalTitle');
     const messageEl = document.getElementById('modalMessage');
     const iconContainer = document.getElementById('modalIconContainer');
     const iconInner = document.getElementById('modalIconInner');
+
+    // Клонируем кнопку, чтобы удалить старые события
     const oldConfirmBtn = document.getElementById('modalConfirmBtn');
+    const newConfirmBtn = oldConfirmBtn.cloneNode(true);
+    oldConfirmBtn.parentNode.replaceChild(newConfirmBtn, oldConfirmBtn);
 
-    if (!modal || !oldConfirmBtn) return;
+    // Устанавливаем тексты
+    titleEl.innerHTML = title || 'Подтверждение';
+    messageEl.innerHTML = message || '';
 
-    // --- ФИКС ПЕРВОГО НАЖАТИЯ ---
-    // Клонируем кнопку, чтобы полностью стереть память о прошлых нажатиях
-    const confirmBtn = oldConfirmBtn.cloneNode(true);
-    oldConfirmBtn.parentNode.replaceChild(confirmBtn, oldConfirmBtn);
-    // ----------------------------
+    // Сбрасываем классы иконок
+    iconContainer.className = 'mx-auto flex items-center justify-center h-20 w-20 rounded-full mb-6 transition-all flex-shrink-0';
+    iconInner.className = 'fa-solid';
 
-    titleEl.innerText = title;
-    messageEl.innerText = text;
-
-    // Сброс и настройка стилей
-    iconContainer.className = "mx-auto flex items-center justify-center h-20 w-20 rounded-full mb-6 transition-all flex-shrink-0";
-    iconInner.className = "fa-solid text-3xl";
-
-    if (type === 'delete' || type === 'danger') {
-        iconContainer.classList.add('bg-red-50', 'text-red-600');
-        iconInner.className = "fa-solid fa-trash-can text-3xl";
-        confirmBtn.style.backgroundColor = '#ef4444';
+    // Настраиваем дизайн
+    if (type === 'delete') {
+        iconContainer.classList.add('bg-red-100', 'text-red-500');
+        iconInner.classList.add('fa-trash');
+        newConfirmBtn.className = 'flex-1 text-white px-6 py-4 rounded-2xl font-black uppercase text-[10px] transition-all shadow-lg active:scale-95 bg-red-500 hover:bg-red-600 shadow-red-500/30';
     } else if (type === 'invoice') {
-        iconContainer.classList.add('bg-green-50', 'text-green-600');
-        iconInner.className = "fa-solid fa-file-invoice-dollar text-3xl";
-        confirmBtn.style.backgroundColor = '#63AA2F';
+        iconContainer.classList.add('bg-blue-100', 'text-blue-500');
+        iconInner.classList.add('fa-file-invoice-dollar');
+        newConfirmBtn.className = 'flex-1 text-white px-6 py-4 rounded-2xl font-black uppercase text-[10px] transition-all shadow-lg active:scale-95 bg-blue-500 hover:bg-blue-600 shadow-blue-500/30';
+    } else if (type === 'info') {
+        iconContainer.classList.add('bg-sky-100', 'text-sky-500');
+        iconInner.classList.add('fa-circle-info');
+        newConfirmBtn.className = 'flex-1 text-white px-6 py-4 rounded-2xl font-black uppercase text-[10px] transition-all shadow-lg active:scale-95 bg-sky-500 hover:bg-sky-600 shadow-sky-500/30';
+    } else if (type === 'logout') {
+        iconContainer.classList.add('bg-slate-100', 'text-slate-600');
+        iconInner.classList.add('fa-right-from-bracket');
+        newConfirmBtn.className = 'flex-1 text-white px-6 py-4 rounded-2xl font-black uppercase text-[10px] transition-all shadow-lg active:scale-95 bg-slate-800 hover:bg-slate-900 shadow-slate-900/30';
     } else {
-        iconContainer.classList.add('bg-blue-50', 'text-blue-600');
-        iconInner.className = "fa-solid fa-circle-info text-3xl";
-        confirmBtn.style.backgroundColor = '#0f172a';
+        iconContainer.classList.add('bg-emerald-100', 'text-emerald-500');
+        iconInner.classList.add('fa-check');
+        newConfirmBtn.className = 'flex-1 text-white px-6 py-4 rounded-2xl font-black uppercase text-[10px] transition-all shadow-lg active:scale-95 bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/30';
     }
 
-    // Показываем окно
-    modal.style.display = 'flex';
-    modal.classList.remove('hidden');
+    // Обработчик клика
+    newConfirmBtn.addEventListener('click', async () => {
+        newConfirmBtn.disabled = true;
+        newConfirmBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Обработка...';
 
-    // Назначаем действие НОВОЙ кнопке. Теперь она "чистая" и сработает сразу.
-    confirmBtn.onclick = function() {
-        closeCustomModal();
-        if (typeof onConfirm === 'function') {
-            onConfirm();
+        // Включаем флаг, чтобы все вложенные вопросы игнорировались
+        window.isModalExecuting = true;
+
+        try {
+            if (typeof onConfirm === 'function') {
+                await onConfirm();
+            }
+        } catch (e) {
+            console.error("Ошибка при подтверждении:", e);
+        } finally {
+            closeCustomModal();
         }
-    };
+    });
+
+    // Открываем окно
+    modal.classList.remove('hidden');
+    modal.style.display = 'flex';
 }
+
+
+// Глобальный флаг, который сообщает системе, что мы уже в процессе подтверждения
+window.isModalExecuting = false;
 
 function closeCustomModal() {
     const modal = document.getElementById('customModal');
     if (modal) {
         modal.style.display = 'none';
         modal.classList.add('hidden');
+
+        const confirmBtn = document.getElementById('modalConfirmBtn');
+        if (confirmBtn) {
+            confirmBtn.disabled = false;
+            confirmBtn.innerHTML = 'Подтвердить';
+        }
     }
+    // При закрытии сбрасываем флаг
+    window.isModalExecuting = false;
 }
+
+// function closeCustomModal() {
+//     const modal = document.getElementById('customModal');
+//     if (modal) {
+//         modal.style.display = 'none';
+//         modal.classList.add('hidden');
+//     }
+// }
 
 function closeModal(id) {
     const modal = document.getElementById(id);
@@ -4855,28 +5035,14 @@ document.addEventListener("DOMContentLoaded", async () => {
                     errorMessage = serverMessage
                         .replace(/^\d+\s+[A-Z_]+\s+"?|"?$/g, '')
                         .trim();
-
-
                 } else {
                     switch (response.status) {
-                        case 400:
-                            errorMessage = "Некорректный запрос. Проверьте данные";
-                            break;
-                        case 403:
-                            errorMessage = "Доступ запрещен: Недостаточно прав";
-                            break;
-                        case 404:
-                            errorMessage = "Запрошенный ресурс не найден";
-                            break;
-                        case 408:
-                            errorMessage = "Время ожидания истекло";
-                            break;
-                        case 500:
-                            errorMessage = "Критическая ошибка сервера";
-                            break;
-                        case 503:
-                            errorMessage = "Сервис временно недоступен";
-                            break;
+                        case 400: errorMessage = "Некорректный запрос. Проверьте данные"; break;
+                        case 403: errorMessage = "Доступ запрещен: Недостаточно прав"; break;
+                        case 404: errorMessage = "Запрошенный ресурс не найден"; break;
+                        case 408: errorMessage = "Время ожидания истекло"; break;
+                        case 500: errorMessage = "Критическая ошибка сервера"; break;
+                        case 503: errorMessage = "Сервис временно недоступен"; break;
                     }
                 }
 
@@ -4884,7 +5050,6 @@ document.addEventListener("DOMContentLoaded", async () => {
                     showToast(errorMessage, "error");
                 }
 
-                // Отклоняем промис, чтобы код в основном скрипте остановился
                 return Promise.reject(new Error(errorMessage));
             }
             return response;
@@ -4903,7 +5068,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     };
 
-
     const setDefaultInvoiceDates = () => {
         const startInput = document.getElementById('inv-date-start');
         const endInput = document.getElementById('inv-date-end');
@@ -4916,7 +5080,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (startInput) startInput.value = firstDay;
         if (endInput) endInput.value = today;
     };
-
 
     const token = document.querySelector('input[name="_csrf"]')?.value;
     window.apiHeaders = {
@@ -4940,7 +5103,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     };
     initData();
-
 
     const isFirstLoadInSession = !sessionStorage.getItem('sellion_session_active');
     let lastTab = localStorage.getItem('sellion_tab') || 'tab-orders';
@@ -4978,6 +5140,68 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     runFormatting();
 
+    // --------------------------------------------------------------------------------
+    // ЗАЩИТА ФИЛЬТРОВ И ПАГИНАЦИИ (Никогда не теряем даты, поиск и лимит 200 записей)
+    // --------------------------------------------------------------------------------
+    const enforceFiltersAndPagination = () => {
+        const currentUrl = new URL(window.location.href);
+        const currentParams = currentUrl.searchParams;
+
+        // 1. Применяем лимит 200 ко всем формам
+        document.querySelectorAll('form').forEach(form => {
+            if (!form.querySelector('input[name="size"]')) {
+                const sizeInput = document.createElement('input');
+                sizeInput.type = 'hidden';
+                sizeInput.name = 'size';
+                sizeInput.value = '200';
+                form.appendChild(sizeInput);
+            }
+            if (!form.querySelector('input[name="pageSize"]')) {
+                const pageSizeInput = document.createElement('input');
+                pageSizeInput.type = 'hidden';
+                pageSizeInput.name = 'pageSize';
+                pageSizeInput.value = '200';
+                form.appendChild(pageSizeInput);
+            }
+        });
+
+        // 2. Вшиваем ВСЕ текущие фильтры из строки браузера в кнопки перелистывания страниц
+        document.querySelectorAll('a').forEach(a => {
+            if (a.href && (a.href.includes('page=') || a.href.includes('Page=') || a.href.includes('?'))) {
+                try {
+                    const linkUrl = new URL(a.href);
+                    if (linkUrl.origin === window.location.origin) {
+
+                        // Копируем фильтры (даты, поиск) в ссылку страницы
+                        currentParams.forEach((value, key) => {
+                            if (!key.toLowerCase().includes('page') && key !== 'size') {
+                                if (!linkUrl.searchParams.has(key)) {
+                                    linkUrl.searchParams.set(key, value);
+                                }
+                            }
+                        });
+
+                        // Ставим лимит 200
+                        linkUrl.searchParams.set('size', '200');
+                        linkUrl.searchParams.set('pageSize', '200');
+
+                        a.href = linkUrl.toString();
+                    }
+                } catch (e) {}
+            }
+        });
+
+        // 3. Автоматически ставим 200 при первом открытии
+        if (!currentParams.has('size') && !currentParams.has('pageSize')) {
+            currentParams.set('size', '200');
+            currentParams.set('pageSize', '200');
+            window.history.replaceState({}, '', currentUrl);
+        }
+    };
+
+    enforceFiltersAndPagination();
+    // --------------------------------------------------------------------------------
+
     document.body.addEventListener('click', function (e) {
         const navLink = e.target.closest('.nav-link');
         if (navLink) {
@@ -4996,7 +5220,6 @@ document.addEventListener("DOMContentLoaded", async () => {
                 setTimeout(runFormatting, 100);
             });
         }
-
 
         const categoryHeader = e.target.closest('.js-category-toggle');
         if (categoryHeader) {
@@ -5019,3 +5242,193 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 });
 
+// document.addEventListener("DOMContentLoaded", async () => {
+//
+//     const originalFetch = window.fetch;
+//     window.fetch = async (...args) => {
+//         try {
+//             const response = await originalFetch(...args);
+//
+//             if (!response.ok) {
+//                 let errorMessage = "Произошла ошибка системы";
+//
+//                 let serverMessage = null;
+//                 try {
+//                     const contentType = response.headers.get("content-type");
+//                     if (contentType && contentType.includes("application/json")) {
+//                         const data = await response.clone().json();
+//                         serverMessage = data.error || data.message;
+//                     }
+//                 } catch (e) {
+//                     console.warn("Не удалось распарсить JSON ошибки");
+//                 }
+//
+//                 if (serverMessage) {
+//                     // Чистим текст от "400 BAD_REQUEST", кавычек и системного мусора
+//                     errorMessage = serverMessage
+//                         .replace(/^\d+\s+[A-Z_]+\s+"?|"?$/g, '')
+//                         .trim();
+//
+//
+//                 } else {
+//                     switch (response.status) {
+//                         case 400:
+//                             errorMessage = "Некорректный запрос. Проверьте данные";
+//                             break;
+//                         case 403:
+//                             errorMessage = "Доступ запрещен: Недостаточно прав";
+//                             break;
+//                         case 404:
+//                             errorMessage = "Запрошенный ресурс не найден";
+//                             break;
+//                         case 408:
+//                             errorMessage = "Время ожидания истекло";
+//                             break;
+//                         case 500:
+//                             errorMessage = "Критическая ошибка сервера";
+//                             break;
+//                         case 503:
+//                             errorMessage = "Сервис временно недоступен";
+//                             break;
+//                     }
+//                 }
+//
+//                 if (typeof showToast === 'function') {
+//                     showToast(errorMessage, "error");
+//                 }
+//
+//                 // Отклоняем промис, чтобы код в основном скрипте остановился
+//                 return Promise.reject(new Error(errorMessage));
+//             }
+//             return response;
+//         } catch (error) {
+//             const isKnownError = error.message && (
+//                 error.message.includes("Доступ") ||
+//                 error.message.includes("удален") ||
+//                 error.message.includes("найден") ||
+//                 error.message.includes("ошибка сервера")
+//             );
+//
+//             if (!isKnownError) {
+//                 if (typeof showToast === 'function') showToast("Ошибка сети или сервера", "error");
+//             }
+//             return Promise.reject(error);
+//         }
+//     };
+//
+//
+//     const setDefaultInvoiceDates = () => {
+//         const startInput = document.getElementById('inv-date-start');
+//         const endInput = document.getElementById('inv-date-end');
+//         if (startInput && startInput.value) return;
+//
+//         const now = new Date();
+//         const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+//         const today = now.toISOString().split('T')[0];
+//
+//         if (startInput) startInput.value = firstDay;
+//         if (endInput) endInput.value = today;
+//     };
+//
+//
+//     const token = document.querySelector('input[name="_csrf"]')?.value;
+//     window.apiHeaders = {
+//         'Accept': 'application/json',
+//         'Content-Type': 'application/json'
+//     };
+//     if (token) window.apiHeaders['X-CSRF-TOKEN'] = token;
+//
+//     if (typeof connectWebSocket === 'function') connectWebSocket();
+//
+//     const initData = async () => {
+//         try {
+//             setDefaultInvoiceDates();
+//             const promises = [];
+//             if (typeof loadManagerIds === 'function') promises.push(loadManagerIds());
+//             if (typeof loadApiKeys === 'function') promises.push(loadApiKeys());
+//             await Promise.all(promises);
+//             if (typeof initDeliveryDateLogic === 'function') initDeliveryDateLogic();
+//         } catch (e) {
+//             console.error("Ошибка загрузки начальных данных:", e);
+//         }
+//     };
+//     initData();
+//
+//
+//     const isFirstLoadInSession = !sessionStorage.getItem('sellion_session_active');
+//     let lastTab = localStorage.getItem('sellion_tab') || 'tab-orders';
+//
+//     if (isFirstLoadInSession) {
+//         lastTab = 'tab-orders';
+//         localStorage.setItem('sellion_tab', 'tab-orders');
+//         sessionStorage.setItem('sellion_session_active', 'true');
+//     }
+//
+//     if (typeof showTab === 'function') showTab(lastTab);
+//
+//     const runFormatting = () => {
+//         document.querySelectorAll('.js-date-format').forEach(el => {
+//             const val = el.innerText.trim();
+//             if (val && val !== '---' && val !== '') {
+//                 if (typeof formatDate === 'function') el.innerText = formatDate(val);
+//             }
+//         });
+//
+//         document.querySelectorAll('.js-status-translate').forEach(el => {
+//             if (!el || el.children.length > 0) return;
+//             const rawStatus = el.innerText.trim();
+//             if (rawStatus && typeof translateReturnStatus === 'function') {
+//                 const statusInfo = translateReturnStatus(rawStatus);
+//                 if (statusInfo) {
+//                     el.innerHTML = `<span class="badge ${statusInfo.class || 'bg-secondary'}">${statusInfo.text}</span>`;
+//                 }
+//             }
+//         });
+//
+//         if (typeof refreshReportCounters === 'function') refreshReportCounters();
+//         if (typeof refreshPromoCounters === 'function') refreshPromoCounters();
+//     };
+//
+//     runFormatting();
+//
+//     document.body.addEventListener('click', function (e) {
+//         const navLink = e.target.closest('.nav-link');
+//         if (navLink) {
+//             const tabId = navLink.id.replace('btn-', 'tab-');
+//             localStorage.setItem('sellion_tab', tabId);
+//
+//             if (typeof showTab === 'function') showTab(tabId);
+//
+//             if (tabId === 'tab-promos') {
+//                 setTimeout(() => {
+//                     loadPromosByPeriod();
+//                 }, 50);
+//             }
+//
+//             requestAnimationFrame(() => {
+//                 setTimeout(runFormatting, 100);
+//             });
+//         }
+//
+//
+//         const categoryHeader = e.target.closest('.js-category-toggle');
+//         if (categoryHeader) {
+//             const targetClass = categoryHeader.getAttribute('data-target');
+//             const rows = document.querySelectorAll(`.${targetClass}`);
+//             const icon = categoryHeader.querySelector('.toggle-icon');
+//             const firstRow = rows[0];
+//             const isCurrentlyHidden = firstRow ? (firstRow.style.display === 'none') : false;
+//
+//             rows.forEach(row => {
+//                 row.style.display = isCurrentlyHidden ? 'table-row' : 'none';
+//             });
+//
+//             if (icon) {
+//                 icon.style.transform = isCurrentlyHidden ? "rotate(0deg)" : "rotate(-90deg)";
+//                 icon.innerText = isCurrentlyHidden ? "▼" : "▶";
+//             }
+//         }
+//     });
+//
+// });
+//
