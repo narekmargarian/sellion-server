@@ -158,7 +158,7 @@ public class InvoiceService {
         try (Workbook workbook = new XSSFWorkbook()) {
             Sheet sheet = workbook.createSheet("Список долгов");
 
-            // 1. Создаем общий стиль для границ ячеек
+            // 1. Стиль для границ ячеек
             CellStyle cellStyle = workbook.createCellStyle();
             cellStyle.setBorderTop(BorderStyle.THIN);
             cellStyle.setBorderBottom(BorderStyle.THIN);
@@ -173,69 +173,67 @@ public class InvoiceService {
             headerStyle.cloneStyleFrom(cellStyle);
             headerStyle.setFont(boldFont);
 
-            // 2. Создаем заголовки строго по фото (A-F)
+            // 2. Заголовки без колонки "Менеджер" (всего 5 колонок: A-E)
             Row headerRow = sheet.createRow(0);
-            String[] headers = {"ID Счета", "Менеджер", "Дата", "Магазин", "Сумма", "Статус"};
+            String[] headers = {"ID Счета", "Дата", "Магазин", "Сумма", "Статус"};
             for (int i = 0; i < headers.length; i++) {
                 Cell cell = headerRow.createCell(i);
                 cell.setCellValue(headers[i]);
                 cell.setCellStyle(headerStyle);
             }
 
-            // 3. Заполняем данные
+            // 3. Заполнение строк данными
             int rowNum = 1;
             for (Invoice inv : filteredInvoices) {
                 Row row = sheet.createRow(rowNum++);
 
-                // Добавляем все ячейки по порядку и применяем границы
+                // ID Счета (Колонка A)
                 Cell cell0 = row.createCell(0);
                 cell0.setCellValue(inv.getId() != null ? inv.getId().toString() : "N/A");
                 cell0.setCellStyle(cellStyle);
 
+                // Дата (Колонка B)
                 Cell cell1 = row.createCell(1);
-                // Если в Invoice есть имя менеджера, подставьте его сюда вместо ""
-                cell1.setCellValue("");
+                cell1.setCellValue(inv.getCreatedAt() != null ? inv.getCreatedAt().toLocalDate().toString() : "");
                 cell1.setCellStyle(cellStyle);
 
+                // Магазин (Колонка C)
                 Cell cell2 = row.createCell(2);
-                // Подставляем дату создания, если она есть
-                cell2.setCellValue(inv.getCreatedAt() != null ? inv.getCreatedAt().toLocalDate().toString() : "");
+                cell2.setCellValue(inv.getShopName() != null ? inv.getShopName() : "");
                 cell2.setCellStyle(cellStyle);
 
+                // Сумма (Колонка D)
                 Cell cell3 = row.createCell(3);
-                cell3.setCellValue(inv.getShopName() != null ? inv.getShopName() : "");
+                BigDecimal amount = inv.getTotalAmount();
+                cell3.setCellValue(amount != null ? amount.doubleValue() : 0.0);
                 cell3.setCellStyle(cellStyle);
 
+                // Статус (Колонка E)
                 Cell cell4 = row.createCell(4);
-                BigDecimal amount = inv.getTotalAmount();
-                cell4.setCellValue(amount != null ? amount.doubleValue() : 0.0);
+                cell4.setCellValue(inv.getStatus() != null ? inv.getStatus() : "");
                 cell4.setCellStyle(cellStyle);
-
-                Cell cell5 = row.createCell(5);
-                cell5.setCellValue(inv.getStatus() != null ? inv.getStatus() : "");
-                cell5.setCellStyle(cellStyle);
             }
 
-            // 4. Создаем строку "Итого" (строго под колонкой "Магазин" и формула под "Сумма")
+            // 4. Строка "Итого"
             Row totalRow = sheet.createRow(rowNum);
 
-            // Пустые ячейки с границами для сохранения сетки как на фото
-            for (int i = 0; i < 6; i++) {
+            // Заполняем сетку границ для всей итоговой строки (5 колонок)
+            for (int i = 0; i < 5; i++) {
                 totalRow.createCell(i).setCellStyle(headerStyle);
             }
 
-            // Текст "Итого" в колонку D (индекс 3)
-            totalRow.getCell(3).setCellValue("Итого");
+            // Текст "Итого" пишем в колонку C (индекс 2), прямо под названием магазина
+            totalRow.getCell(2).setCellValue("Итого");
 
-            // Формула СУММ в колонку E (индекс 4) для диапазона от строки 2 до последней заполненной
+            // Формула СУММ теперь в колонке D (индекс 3) под всеми суммами
             if (rowNum > 1) {
-                totalRow.getCell(4).setCellFormula("SUM(E2:E" + rowNum + ")");
+                totalRow.getCell(3).setCellFormula("SUM(D2:D" + rowNum + ")");
             } else {
-                totalRow.getCell(4).setCellValue(0.0);
+                totalRow.getCell(3).setCellValue(0.0);
             }
 
-            // Автоподбор ширины колонок, чтобы текст не скрывался
-            for (int i = 0; i < 6; i++) {
+            // Автоподбор ширины колонок
+            for (int i = 0; i < 5; i++) {
                 sheet.autoSizeColumn(i);
             }
 
