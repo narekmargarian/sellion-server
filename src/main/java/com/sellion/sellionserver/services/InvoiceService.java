@@ -11,6 +11,7 @@ import com.sellion.sellionserver.repository.PaymentRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -147,6 +148,12 @@ public class InvoiceService {
 
         List<Invoice> filteredInvoices = allInvoices.stream()
                 .filter(inv -> {
+                    // Исключаем полностью оплаченные счета
+                    String status = inv.getStatus();
+                    if (status != null && (status.equalsIgnoreCase("PAID") || status.equalsIgnoreCase("Оплачен"))) {
+                        return false;
+                    }
+
                     if (start == null || end == null || inv.getCreatedAt() == null) return true;
                     LocalDate invDate = inv.getCreatedAt().toLocalDate();
                     LocalDate startDate = LocalDate.parse(start);
@@ -158,21 +165,18 @@ public class InvoiceService {
         try (Workbook workbook = new XSSFWorkbook()) {
             Sheet sheet = workbook.createSheet("Список долгов");
 
-            // 1. Базовый стиль для границ ячеек
+            // 1. Стили
             CellStyle cellStyle = workbook.createCellStyle();
             cellStyle.setBorderTop(BorderStyle.THIN);
             cellStyle.setBorderBottom(BorderStyle.THIN);
             cellStyle.setBorderLeft(BorderStyle.THIN);
             cellStyle.setBorderRight(BorderStyle.THIN);
 
-            // 2. Специальный стиль для колонки с Суммой (сохраняет вид БД + считает Итого)
             CellStyle amountCellStyle = workbook.createCellStyle();
             amountCellStyle.cloneStyleFrom(cellStyle);
-            // Формат "@" заставляет Excel показывать число ровно так, как его ввели, без искажений
             DataFormat format = workbook.createDataFormat();
-            amountCellStyle.setDataFormat(format.getFormat("@"));
+            amountCellStyle.setDataFormat(format.getFormat("0.00"));
 
-            // Жирный шрифт для шапки и Итого
             Font boldFont = workbook.createFont();
             boldFont.setBold(true);
 
@@ -180,7 +184,7 @@ public class InvoiceService {
             headerStyle.cloneStyleFrom(cellStyle);
             headerStyle.setFont(boldFont);
 
-            // 3. Заголовки таблицы
+            // 2. Шапка таблицы
             Row headerRow = sheet.createRow(0);
             String[] headers = {"ID Счета", "Дата", "Магазин", "Сумма", "Статус"};
             for (int i = 0; i < headers.length; i++) {
@@ -189,7 +193,7 @@ public class InvoiceService {
                 cell.setCellStyle(headerStyle);
             }
 
-            // 4. Заполнение строк данными
+            // 3. Данные
             int rowNum = 1;
             for (Invoice inv : filteredInvoices) {
                 Row row = sheet.createRow(rowNum++);
@@ -209,40 +213,57 @@ public class InvoiceService {
                 cell2.setCellValue(inv.getShopName() != null ? inv.getShopName() : "");
                 cell2.setCellStyle(cellStyle);
 
-                // Сумма (Выводим точную строку из БД, но ячейка остается числовой для формул)
+                // Сумма
                 Cell cell3 = row.createCell(3);
                 BigDecimal amount = inv.getTotalAmount();
                 if (amount != null) {
-                    // toPlainString() исключает экспоненциальный вид (например, 1E+2) и оставляет оригинальный вид
-                    cell3.setCellValue(amount.toPlainString());
+                    cell3.setCellValue(amount.doubleValue());
                 } else {
-                    cell3.setCellValue("0");
+                    cell3.setCellValue(0.0);
                 }
                 cell3.setCellStyle(amountCellStyle);
 
-                // Статус
+                // Статус (Перевод на русский язык)
                 Cell cell4 = row.createCell(4);
-                cell4.setCellValue(inv.getStatus() != null ? inv.getStatus() : "");
+                String rawStatus = inv.getStatus() != null ? inv.getStatus() : "";
+                String russianStatus = rawStatus;
+
+                if (rawStatus.equalsIgnoreCase("UNPAID")) {
+                    russianStatus = "Не оплачен";
+                } else if (rawStatus.equalsIgnoreCase("PARTIAL")) {
+                    russianStatus = "Частично";
+                }
+
+                cell4.setCellValue(russianStatus);
                 cell4.setCellStyle(cellStyle);
             }
 
-            // 5. Строка "Итого"
+            // 4. Строка "Итого"
             Row totalRow = sheet.createRow(rowNum);
 
             for (int i = 0; i < 5; i++) {
                 totalRow.createCell(i).setCellStyle(headerStyle);
             }
 
-            totalRow.getCell(2).setCellValue("Итого");
+            totalRow.getCell(1).setCellValue("Итого");
 
-            // Формула СУММ для колонки D
+            Cell totalFormulaCell = totalRow.getCell(3);
+            totalFormulaCell.setCellStyle(amountCellStyle);
+
             if (rowNum > 1) {
-                totalRow.getCell(3).setCellFormula("SUM(D2:D" + rowNum + ")");
+                // Использование ПРОМЕЖУТОЧНЫЕ.ИТОГИ (SUBTOTAL) вместо СУММ (SUM).
+                // Код 9 означает сумму только отфильтрованных (видимых) ячеек.
+                totalFormulaCell.setCellFormula("SUBTOTAL(9,D2:D" + rowNum + ")");
             } else {
-                totalRow.getCell(3).setCellValue("0");
+                totalFormulaCell.setCellValue(0.0);
             }
 
-            // Автоподбор ширины колонок
+            // 5. Автоматическое включение фильтров для колонок (A1:E...)
+            if (rowNum > 1) {
+                sheet.setAutoFilter(new CellRangeAddress(0, rowNum - 1, 0, 4));
+            }
+
+            // Автоподбор ширины
             for (int i = 0; i < 5; i++) {
                 sheet.autoSizeColumn(i);
             }

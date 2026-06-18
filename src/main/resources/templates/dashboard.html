@@ -396,10 +396,10 @@
                 <input type="text" id="search-invoices" onkeyup="filterTable('search-invoices', 'invoices-table-body')"
                        placeholder="Поиск в таблице..." class="form-control" style="width: 150px;">
 
-                <select id="filter-invoice-manager" class="form-select" style="width: 150px;" onchange="applyInvoiceFilters()">
-                    <option value="">Все менеджеры</option>
-                    <option th:each="m : ${managers}" th:value="${m}" th:text="${m}" th:selected="${m == selectedInvManager}"></option>
-                </select>
+<!--                <select id="filter-invoice-manager" class="form-select" style="width: 150px;" onchange="applyInvoiceFilters()">-->
+<!--                    <option value="">Все менеджеры</option>-->
+<!--                    <option th:each="m : ${managers}" th:value="${m}" th:text="${m}" th:selected="${m == selectedInvManager}"></option>-->
+<!--                </select>-->
 
                 <select id="filter-invoice-status" class="form-select" style="width: 150px;" onchange="applyInvoiceFilters()">
                     <option value="">Все статусы</option>
