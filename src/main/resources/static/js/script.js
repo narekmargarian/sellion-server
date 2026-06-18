@@ -4987,6 +4987,20 @@ document.addEventListener('change', function(e) {
     }
 });
 
+function updateKpiPeriod() {
+    const start = document.getElementById('kpiStartInput').value;
+    const end = document.getElementById('kpiEndInput').value;
+
+    if (!start || !end) {
+        alert('Пожалуйста, выберите обе даты периода');
+        return;
+    }
+
+    // Перезагружает страницу с сохранением вкладки и передачей выбранных дат на сервер
+    window.location.search = `?kpiStart=${start}&kpiEnd=${end}&activeTab=tab-managers`;
+}
+
+
 document.addEventListener('DOMContentLoaded', syncCheckboxesOnPage);
 
 document.addEventListener('DOMContentLoaded', restoreCheckboxes);
@@ -5241,194 +5255,3 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
 
 });
-
-// document.addEventListener("DOMContentLoaded", async () => {
-//
-//     const originalFetch = window.fetch;
-//     window.fetch = async (...args) => {
-//         try {
-//             const response = await originalFetch(...args);
-//
-//             if (!response.ok) {
-//                 let errorMessage = "Произошла ошибка системы";
-//
-//                 let serverMessage = null;
-//                 try {
-//                     const contentType = response.headers.get("content-type");
-//                     if (contentType && contentType.includes("application/json")) {
-//                         const data = await response.clone().json();
-//                         serverMessage = data.error || data.message;
-//                     }
-//                 } catch (e) {
-//                     console.warn("Не удалось распарсить JSON ошибки");
-//                 }
-//
-//                 if (serverMessage) {
-//                     // Чистим текст от "400 BAD_REQUEST", кавычек и системного мусора
-//                     errorMessage = serverMessage
-//                         .replace(/^\d+\s+[A-Z_]+\s+"?|"?$/g, '')
-//                         .trim();
-//
-//
-//                 } else {
-//                     switch (response.status) {
-//                         case 400:
-//                             errorMessage = "Некорректный запрос. Проверьте данные";
-//                             break;
-//                         case 403:
-//                             errorMessage = "Доступ запрещен: Недостаточно прав";
-//                             break;
-//                         case 404:
-//                             errorMessage = "Запрошенный ресурс не найден";
-//                             break;
-//                         case 408:
-//                             errorMessage = "Время ожидания истекло";
-//                             break;
-//                         case 500:
-//                             errorMessage = "Критическая ошибка сервера";
-//                             break;
-//                         case 503:
-//                             errorMessage = "Сервис временно недоступен";
-//                             break;
-//                     }
-//                 }
-//
-//                 if (typeof showToast === 'function') {
-//                     showToast(errorMessage, "error");
-//                 }
-//
-//                 // Отклоняем промис, чтобы код в основном скрипте остановился
-//                 return Promise.reject(new Error(errorMessage));
-//             }
-//             return response;
-//         } catch (error) {
-//             const isKnownError = error.message && (
-//                 error.message.includes("Доступ") ||
-//                 error.message.includes("удален") ||
-//                 error.message.includes("найден") ||
-//                 error.message.includes("ошибка сервера")
-//             );
-//
-//             if (!isKnownError) {
-//                 if (typeof showToast === 'function') showToast("Ошибка сети или сервера", "error");
-//             }
-//             return Promise.reject(error);
-//         }
-//     };
-//
-//
-//     const setDefaultInvoiceDates = () => {
-//         const startInput = document.getElementById('inv-date-start');
-//         const endInput = document.getElementById('inv-date-end');
-//         if (startInput && startInput.value) return;
-//
-//         const now = new Date();
-//         const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-//         const today = now.toISOString().split('T')[0];
-//
-//         if (startInput) startInput.value = firstDay;
-//         if (endInput) endInput.value = today;
-//     };
-//
-//
-//     const token = document.querySelector('input[name="_csrf"]')?.value;
-//     window.apiHeaders = {
-//         'Accept': 'application/json',
-//         'Content-Type': 'application/json'
-//     };
-//     if (token) window.apiHeaders['X-CSRF-TOKEN'] = token;
-//
-//     if (typeof connectWebSocket === 'function') connectWebSocket();
-//
-//     const initData = async () => {
-//         try {
-//             setDefaultInvoiceDates();
-//             const promises = [];
-//             if (typeof loadManagerIds === 'function') promises.push(loadManagerIds());
-//             if (typeof loadApiKeys === 'function') promises.push(loadApiKeys());
-//             await Promise.all(promises);
-//             if (typeof initDeliveryDateLogic === 'function') initDeliveryDateLogic();
-//         } catch (e) {
-//             console.error("Ошибка загрузки начальных данных:", e);
-//         }
-//     };
-//     initData();
-//
-//
-//     const isFirstLoadInSession = !sessionStorage.getItem('sellion_session_active');
-//     let lastTab = localStorage.getItem('sellion_tab') || 'tab-orders';
-//
-//     if (isFirstLoadInSession) {
-//         lastTab = 'tab-orders';
-//         localStorage.setItem('sellion_tab', 'tab-orders');
-//         sessionStorage.setItem('sellion_session_active', 'true');
-//     }
-//
-//     if (typeof showTab === 'function') showTab(lastTab);
-//
-//     const runFormatting = () => {
-//         document.querySelectorAll('.js-date-format').forEach(el => {
-//             const val = el.innerText.trim();
-//             if (val && val !== '---' && val !== '') {
-//                 if (typeof formatDate === 'function') el.innerText = formatDate(val);
-//             }
-//         });
-//
-//         document.querySelectorAll('.js-status-translate').forEach(el => {
-//             if (!el || el.children.length > 0) return;
-//             const rawStatus = el.innerText.trim();
-//             if (rawStatus && typeof translateReturnStatus === 'function') {
-//                 const statusInfo = translateReturnStatus(rawStatus);
-//                 if (statusInfo) {
-//                     el.innerHTML = `<span class="badge ${statusInfo.class || 'bg-secondary'}">${statusInfo.text}</span>`;
-//                 }
-//             }
-//         });
-//
-//         if (typeof refreshReportCounters === 'function') refreshReportCounters();
-//         if (typeof refreshPromoCounters === 'function') refreshPromoCounters();
-//     };
-//
-//     runFormatting();
-//
-//     document.body.addEventListener('click', function (e) {
-//         const navLink = e.target.closest('.nav-link');
-//         if (navLink) {
-//             const tabId = navLink.id.replace('btn-', 'tab-');
-//             localStorage.setItem('sellion_tab', tabId);
-//
-//             if (typeof showTab === 'function') showTab(tabId);
-//
-//             if (tabId === 'tab-promos') {
-//                 setTimeout(() => {
-//                     loadPromosByPeriod();
-//                 }, 50);
-//             }
-//
-//             requestAnimationFrame(() => {
-//                 setTimeout(runFormatting, 100);
-//             });
-//         }
-//
-//
-//         const categoryHeader = e.target.closest('.js-category-toggle');
-//         if (categoryHeader) {
-//             const targetClass = categoryHeader.getAttribute('data-target');
-//             const rows = document.querySelectorAll(`.${targetClass}`);
-//             const icon = categoryHeader.querySelector('.toggle-icon');
-//             const firstRow = rows[0];
-//             const isCurrentlyHidden = firstRow ? (firstRow.style.display === 'none') : false;
-//
-//             rows.forEach(row => {
-//                 row.style.display = isCurrentlyHidden ? 'table-row' : 'none';
-//             });
-//
-//             if (icon) {
-//                 icon.style.transform = isCurrentlyHidden ? "rotate(0deg)" : "rotate(-90deg)";
-//                 icon.innerText = isCurrentlyHidden ? "▼" : "▶";
-//             }
-//         }
-//     });
-//
-// });
-//

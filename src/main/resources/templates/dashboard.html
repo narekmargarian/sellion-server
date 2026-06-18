@@ -689,92 +689,94 @@
         </div>
 
         <div id="tab-managers" class="tab-pane">
-            <!-- Панель управления и фильтрации -->
-            <div class="filter-bar" style="display: flex; justify-content: space-between; align-items: center; background: #ffffff; padding: 16px 24px; border-radius: 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); margin-bottom: 20px;">
-                <h4 style="margin: 0; font-weight: 800; color: #0f172a; display: flex; align-items: center; gap: 10px; font-size: 18px;">
-                    <span>🏆</span> Эффективность торговых представителей
+            <!-- Верхняя панель фильтрации -->
+            <div class="filter-bar" style="display: flex; justify-content: space-between; align-items: center; background: #ffffff; padding: 16px 24px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); margin-bottom: 24px; border: 1px solid #e2e8f0;">
+                <h4 style="margin: 0; font-weight: 800; color: #1e293b; font-size: 18px; display: flex; align-items: center; gap: 8px;">
+                    <span>📈</span> Мониторинг эффективности продаж
                 </h4>
-                <form method="get" th:action="@{/admin}" class="d-inline-flex gap-3" style="align-items: center;">
-                    <input type="hidden" name="activeTab" value="tab-managers">
+
+                <!-- Исправлено: форма никуда не отправляется, управление передано в JS функцию updateKpiPeriod() -->
+                <div class="d-inline-flex gap-3" style="align-items: center;">
                     <div style="display: flex; align-items: center; gap: 8px;">
-                        <label style="font-size: 12px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">Период:</label>
-                        <input type="date" name="kpiStart" class="form-control" th:value="${orderStartDate}" style="border-radius: 8px; border: 1px solid #cbd5e1; padding: 6px 12px; font-weight: 600; color: #334155;">
-                        <input type="date" name="kpiEnd" class="form-control" th:value="${orderEndDate}" style="border-radius: 8px; border: 1px solid #cbd5e1; padding: 6px 12px; font-weight: 600; color: #334155;">
+                        <label style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">Выбрать период:</label>
+                        <!-- Используем ваши оригинальные переменные orderStartDate и orderEndDate, чтобы даты не исчезали из календаря -->
+                        <input type="date" id="kpiStartInput" class="form-control" th:value="${orderStartDate}" style="border-radius: 6px; border: 1px solid #cbd5e1; padding: 6px 12px; font-size: 13px; color: #334155; font-weight: 600;">
+                        <input type="date" id="kpiEndInput" class="form-control" th:value="${orderEndDate}" style="border-radius: 6px; border: 1px solid #cbd5e1; padding: 6px 12px; font-size: 13px; color: #334155; font-weight: 600;">
                     </div>
-                    <button type="submit" class="btn-primary" style="border-radius: 8px; padding: 8px 16px; background: #4f46e5; color: #ffffff; border: none; font-weight: 700; cursor: pointer; transition: background 0.2s;" onmouseover="this.style.background='#4338ca'" onmouseout="this.style.background='#4f46e5'">
-                        ⟳ Обновить
+                    <button type="button" onclick="updateKpiPeriod()" class="btn-primary" style="border-radius: 6px; padding: 7px 16px; background: #4f46e5; color: #ffffff; border: none; font-weight: 700; font-size: 13px; cursor: pointer;">
+                        Обновить данные
                     </button>
-                </form>
-            </div>
-
-            <!-- Сетка карточек -->
-            <div class="manager-table-container">
-                <div class="managers-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px;">
-                    <th:block th:if="${managersKPI != null}" th:each="m : ${managersKPI}">
-                        <div class="glass-card" th:with="stats=${managerStats != null ? managerStats.get(m) : null, kpd=${stats != null ? stats.efficiency : 0}}"
-                             style="background: #ffffff; padding: 24px; border-radius: 16px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02); border-left: 5px solid #4f46e5; display: flex; flex-direction: column; justify-content: space-between; border: 1px solid #e2e8f0; border-left-width: 5px;">
-
-                            <div>
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px;">
-                                    <h5 style="margin: 0; font-weight: 800; font-size: 16px; color: #1e293b;" th:text="${m}">Имя</h5>
-                                    <span style="background: #f8fafc; color: #64748b; font-size: 10px; padding: 4px 8px; border-radius: 6px; font-weight: 700; text-transform: uppercase; border: 1px solid #e2e8f0;">Торговый</span>
-                                </div>
-
-                                <!-- Блок плана (Таргет) -->
-                                <div style="background: #f8fafc; padding: 14px; border-radius: 12px; margin-bottom: 16px; border: 1px solid #e2e8f0;">
-                                    <small style="display: block; color: #64748b; font-size: 10px; font-weight: 700; text-transform: uppercase; margin-bottom: 4px;">Финансовый план</small>
-                                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                                        <b style="font-size: 16px; color: #4f46e5;"
-                                           th:text="${(stats != null and stats.targetAmount != null) ? #numbers.formatDecimal(stats.targetAmount, 1, 'WHITESPACE', 2, 'POINT') + ' ֏' : '0 ֏'}">0 ֏</b>
-                                        <button class="btn-ghost" th:data-manager-id="${m}" onclick="openSetTargetModal(this.getAttribute('data-manager-id'))"
-                                                style="border: none; background: #ffffff; cursor: pointer; font-size: 12px; padding: 6px 10px; border-radius: 8px; border: 1px solid #e2e8f0; font-weight: 600; color: #475569; transition: all 0.2s;" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='#ffffff'">
-                                            ✏️ План
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <!-- Продажи и Возвраты -->
-                                <div style="display: flex; gap: 12px; margin-bottom: 20px;">
-                                    <div style="flex: 1; background: #f0fdf4; padding: 12px; border-radius: 12px; border: 1px solid #dcfce7;">
-                                        <small style="display:block; color: #166534; font-size: 10px; font-weight: 700; text-transform: uppercase; margin-bottom: 2px;">Продано</small>
-                                        <b style="font-size: 14px; color: #166534;" th:text="${stats != null ? #numbers.formatDecimal(stats.totalSales, 1, 'WHITESPACE', 0, 'POINT') + ' ֏' : '0 ֏'}">0 ֏</b>
-                                    </div>
-                                    <div style="flex: 1; background: #fff1f2; padding: 12px; border-radius: 12px; border: 1px solid #ffe4e6;">
-                                        <small style="display:block; color: #991b1b; font-size: 10px; font-weight: 700; text-transform: uppercase; margin-bottom: 2px;">Возвраты</small>
-                                        <b style="font-size: 14px; color: #991b1b;" th:text="${stats != null ? #numbers.formatDecimal(stats.totalReturns, 1, 'WHITESPACE', 0, 'POINT') + ' ֏' : '0 ֏'}">0 ֏</b>
-                                    </div>
-                                </div>
-
-                                <!-- Прогресс-бар -->
-                                <div style="margin-bottom: 20px;">
-                                    <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; margin-bottom: 6px;">
-                                        <span style="color: #64748b;">Выполнение плана</span>
-                                        <span th:style="'font-weight: 800; color: ' + (${kpd} &lt; 50 ? '#ef4444' : (${kpd} &lt; 100 ? '#f59e0b' : '#10b981'))" th:text="${kpd} + '%'">0%</span>
-                                    </div>
-                                    <div style="height: 8px; background: #f1f5f9; border-radius: 4px; overflow: hidden;">
-                                        <div th:style="'height: 100%; transition: width 0.8s ease-in-out; ' +
-                                             'background: ' + (${kpd} &lt; 50 ? '#ef4444' : (${kpd} &lt; 100 ? '#f59e0b' : '#10b981')) + '; ' +
-                                             'width: ' + T(java.lang.Math).min(kpd, 100) + '%'"></div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Действия -->
-                            <div style="display: flex; gap: 8px; border-top: 1px solid #f1f5f9; padding-top: 14px;">
-                                <button class="btn-ghost" style="flex: 1; padding: 8px 10px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 11px; font-weight: 700; color: #475569; cursor: pointer;"
-                                        th:data-name="${m}" onclick="showManagerInvoices(this.getAttribute('data-name'))">
-                                    💳 Счета
-                                </button>
-                                <button class="btn-ghost" style="flex: 1; padding: 8px 10px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 11px; font-weight: 700; color: #475569; cursor: pointer;"
-                                        th:data-name="${m}" onclick="showManagerReport(this.getAttribute('data-name'))">
-                                    📑 Отчет
-                                </button>
-                            </div>
-                        </div>
-                    </th:block>
                 </div>
             </div>
+
+            <!-- Основной список торговых представителей -->
+            <div style="display: flex; flex-direction: column; gap: 14px;">
+                <th:block th:if="${managersKPI != null}" th:each="m : ${managersKPI}">
+
+                    <div class="manager-row-card"
+                         th:with="stats=${managerStats != null ? managerStats.get(m) : null}"
+                         style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px 20px; box-shadow: 0 1px 2px rgba(0,0,0,0.02); display: flex; align-items: center; justify-content: space-between; gap: 20px;">
+
+                        <div style="display: flex; align-items: center; gap: 30px; flex: 1;" th:with="kpd=${stats != null ? stats.efficiency : 0}">
+
+                            <!-- 1. Имя менеджера -->
+                            <div style="min-width: 180px;">
+                                <span style="display: block; font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px;">Представитель</span>
+                                <h5 style="margin: 0; font-weight: 800; color: #0f172a; font-size: 15px;" th:text="${m}">Имя менеджера</h5>
+                            </div>
+
+                            <!-- 2. План продаж (Таргет) -->
+                            <div style="min-width: 140px; background: #f8fafc; padding: 6px 12px; border-radius: 8px; border: 1px solid #f1f5f9;">
+                                <span style="display: block; font-size: 10px; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 2px;">План на месяц</span>
+                                <div style="display: flex; align-items: center; gap: 6px;">
+                                    <b style="color: #4f46e5; font-size: 14px;" th:text="${(stats != null and stats.targetAmount != null) ? #numbers.formatDecimal(stats.targetAmount, 1, 'WHITESPACE', 0, 'POINT') + ' ֏' : '0 ֏'}">0 ֏</b>
+                                    <button style="border: none; background: none; cursor: pointer; font-size: 11px; padding: 2px;" th:data-manager-id="${m}" onclick="openSetTargetModal(this.getAttribute('data-manager-id'))">✏️</button>
+                                </div>
+                            </div>
+
+                            <!-- 3. Продажи -->
+                            <div style="min-width: 120px;">
+                                <span style="display: block; font-size: 10px; font-weight: 700; color: #166534; text-transform: uppercase; margin-bottom: 2px;">Чистые продажи</span>
+                                <b style="color: #15803d; font-size: 14px;" th:text="${stats != null ? #numbers.formatDecimal(stats.totalSales, 1, 'WHITESPACE', 0, 'POINT') + ' ֏' : '0 ֏'}">0 ֏</b>
+                            </div>
+
+                            <!-- 4. Возвраты -->
+                            <div style="min-width: 110px;">
+                                <span style="display: block; font-size: 10px; font-weight: 700; color: #991b1b; text-transform: uppercase; margin-bottom: 2px;">Возвраты</span>
+                                <b style="color: #b91c1c; font-size: 14px;" th:text="${stats != null ? #numbers.formatDecimal(stats.totalReturns, 1, 'WHITESPACE', 0, 'POINT') + ' ֏' : '0 ֏'}">0 ֏</b>
+                            </div>
+
+                            <!-- 5. Прогресс-бар выполнения -->
+                            <div style="flex: 1; max-width: 260px; margin-left: 10px;">
+                                <div style="display: flex; justify-content: space-between; font-size: 10px; font-weight: 700; margin-bottom: 4px; text-transform: uppercase;">
+                                    <span style="color: #64748b;">Выполнение</span>
+                                    <span th:if="${kpd lt 50}" style="color: #ef4444;" th:text="${kpd + '%'}">0%</span>
+                                    <span th:if="${kpd >= 50 and kpd lt 100}" style="color: #f59e0b;" th:text="${kpd + '%'}">0%</span>
+                                    <span th:if="${kpd >= 100}" style="color: #10b981;" th:text="${kpd + '%'}">0%</span>
+                                </div>
+                                <div style="height: 6px; background: #f1f5f9; border-radius: 3px; overflow: hidden; border: 1px solid #f1f5f9;">
+                                    <div th:if="${kpd lt 50}" th:style="'height:100%; background:#ef4444; width:' + ${kpd} + '%'"></div>
+                                    <div th:if="${kpd >= 50 and kpd lt 100}" th:style="'height:100%; background:#f59e0b; width:' + ${kpd} + '%'"></div>
+                                    <div th:if="${kpd >= 100}" style="height:100%; background:#10b981; width:100%"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </th:block>
+            </div>
         </div>
+
+        <!-- Маленький скрипт для обработки периода в условиях SPA (добавьте его вниз страницы) -->
+        <script>
+            function updateKpiPeriod() {
+                const start = document.getElementById('kpiStartInput').value;
+                const end = document.getElementById('kpiEndInput').value;
+
+                // Перезагружаем текущий URL, подставляя даты и флаг открытия вкладки менеджеров
+                window.location.search = `?kpiStart=${start}&kpiEnd=${end}&activeTab=tab-managers`;
+            }
+        </script>
 
         <div id="tab-delivery" class="tab-pane">
             <!-- Сводка (Градиент сохранен) -->
