@@ -148,12 +148,13 @@ public class InvoiceService {
 
         List<Invoice> filteredInvoices = allInvoices.stream()
                 .filter(inv -> {
-                    // Исключаем полностью оплаченные счета
+                    // 1. Исключаем полностью оплаченные счета
                     String status = inv.getStatus();
                     if (status != null && (status.equalsIgnoreCase("PAID") || status.equalsIgnoreCase("Оплачен"))) {
                         return false;
                     }
 
+                    // 2. Фильтрация по датам
                     if (start == null || end == null || inv.getCreatedAt() == null) return true;
                     LocalDate invDate = inv.getCreatedAt().toLocalDate();
                     LocalDate startDate = LocalDate.parse(start);
@@ -165,18 +166,20 @@ public class InvoiceService {
         try (Workbook workbook = new XSSFWorkbook()) {
             Sheet sheet = workbook.createSheet("Список долгов");
 
-            // 1. Стили
+            // Стили границ ячеек
             CellStyle cellStyle = workbook.createCellStyle();
             cellStyle.setBorderTop(BorderStyle.THIN);
             cellStyle.setBorderBottom(BorderStyle.THIN);
             cellStyle.setBorderLeft(BorderStyle.THIN);
             cellStyle.setBorderRight(BorderStyle.THIN);
 
+            // Финансовый формат для Суммы (сохраняет 2 знака после запятой)
             CellStyle amountCellStyle = workbook.createCellStyle();
             amountCellStyle.cloneStyleFrom(cellStyle);
             DataFormat format = workbook.createDataFormat();
             amountCellStyle.setDataFormat(format.getFormat("0.00"));
 
+            // Стиль для Шапки и Итого (жирный шрифт)
             Font boldFont = workbook.createFont();
             boldFont.setBold(true);
 
@@ -184,7 +187,7 @@ public class InvoiceService {
             headerStyle.cloneStyleFrom(cellStyle);
             headerStyle.setFont(boldFont);
 
-            // 2. Шапка таблицы
+            // Шапка таблицы
             Row headerRow = sheet.createRow(0);
             String[] headers = {"ID Счета", "Дата", "Магазин", "Сумма", "Статус"};
             for (int i = 0; i < headers.length; i++) {
@@ -193,7 +196,7 @@ public class InvoiceService {
                 cell.setCellStyle(headerStyle);
             }
 
-            // 3. Данные
+            // Заполнение данными
             int rowNum = 1;
             for (Invoice inv : filteredInvoices) {
                 Row row = sheet.createRow(rowNum++);
@@ -213,14 +216,15 @@ public class InvoiceService {
                 cell2.setCellValue(inv.getShopName() != null ? inv.getShopName() : "");
                 cell2.setCellStyle(cellStyle);
 
-                // Сумма
+                // СУММА (Вычисляем чистый остаток долга: totalAmount - paidAmount)
                 Cell cell3 = row.createCell(3);
-                BigDecimal amount = inv.getTotalAmount();
-                if (amount != null) {
-                    cell3.setCellValue(amount.doubleValue());
-                } else {
-                    cell3.setCellValue(0.0);
-                }
+                BigDecimal total = inv.getTotalAmount() != null ? inv.getTotalAmount() : BigDecimal.ZERO;
+                BigDecimal paid = inv.getPaidAmount() != null ? inv.getPaidAmount() : BigDecimal.ZERO;
+
+                // Получаем чистый долг
+                BigDecimal remainingDebt = total.subtract(paid);
+
+                cell3.setCellValue(remainingDebt.doubleValue());
                 cell3.setCellStyle(amountCellStyle);
 
                 // Статус (Перевод на русский язык)
@@ -238,7 +242,7 @@ public class InvoiceService {
                 cell4.setCellStyle(cellStyle);
             }
 
-            // 4. Строка "Итого"
+            // Строка "Итого"
             Row totalRow = sheet.createRow(rowNum);
 
             for (int i = 0; i < 5; i++) {
@@ -251,19 +255,18 @@ public class InvoiceService {
             totalFormulaCell.setCellStyle(amountCellStyle);
 
             if (rowNum > 1) {
-                // Использование ПРОМЕЖУТОЧНЫЕ.ИТОГИ (SUBTOTAL) вместо СУММ (SUM).
-                // Код 9 означает сумму только отфильтрованных (видимых) ячеек.
+                // Считает сумму только видимых (отфильтрованных) ячеек с долгом
                 totalFormulaCell.setCellFormula("SUBTOTAL(9,D2:D" + rowNum + ")");
             } else {
                 totalFormulaCell.setCellValue(0.0);
             }
 
-            // 5. Автоматическое включение фильтров для колонок (A1:E...)
+            // Автоматические выпадающие фильтры для Excel
             if (rowNum > 1) {
                 sheet.setAutoFilter(new CellRangeAddress(0, rowNum - 1, 0, 4));
             }
 
-            // Автоподбор ширины
+            // Автоподбор ширины колонок
             for (int i = 0; i < 5; i++) {
                 sheet.autoSizeColumn(i);
             }
