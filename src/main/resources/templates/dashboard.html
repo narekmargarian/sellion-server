@@ -366,20 +366,29 @@
 
         <div id="tab-invoices" class="tab-pane">
 
+            <!-- ИСПРАВЛЕНО: Добавлена третья карточка для долга выбранного периода -->
             <div class="summary-card" style="background: #f0fdf4; border-color: #bbf7d0; display: flex; gap: 20px;">
                 <div class="summary-item">
                     <small>Общий долг системы:</small><br>
                     <span class="price-down"
                           th:with="val=${totalInvoiceDebt != null ? totalInvoiceDebt.doubleValue() : 0}"
                           th:text="${(val == 0) ? '0 ֏' : ((val % 1 == 0) ? #numbers.formatInteger(val, 1, 'WHITESPACE') : #numbers.formatDecimal(val, 1, 'WHITESPACE', 2, 'POINT').replaceAll('0$', '')) + ' ֏'}">
-            </span>
+                    </span>
                 </div>
                 <div class="summary-item">
                     <small>Всего оплачено:</small><br>
                     <span class="price-up"
                           th:with="val=${totalPaidSum != null ? totalPaidSum.doubleValue() : 0}"
                           th:text="${(val == 0) ? '0 ֏' : ((val % 1 == 0) ? #numbers.formatInteger(val, 1, 'WHITESPACE') : #numbers.formatDecimal(val, 1, 'WHITESPACE', 2, 'POINT').replaceAll('0$', '')) + ' ֏'}">
-            </span>
+                    </span>
+                </div>
+                <!-- НОВАЯ КАРТОЧКА: Долг выбранного периода -->
+                <div class="summary-item" style="border-left: 1px solid #bbf7d0; padding-left: 20px;">
+                    <small>Долг выбранного периода:</small><br>
+                    <span class="price-down" style="color: #b91c1c; font-weight: 800;"
+                          th:with="val=${periodInvoiceDebt != null ? periodInvoiceDebt.doubleValue() : 0}"
+                          th:text="${(val == 0) ? '0 ֏' : ((val % 1 == 0) ? #numbers.formatInteger(val, 1, 'WHITESPACE') : #numbers.formatDecimal(val, 1, 'WHITESPACE', 2, 'POINT').replaceAll('0$', '')) + ' ֏'}">
+                    </span>
                 </div>
             </div>
 
@@ -414,6 +423,7 @@
                 <table class="table">
                     <thead>
                     <tr>
+                        <th>Дата</th> <!-- ИСПРАВЛЕНО: Столбик перемещен на первое место -->
                         <th>№ Счета</th>
                         <th>Магазин</th>
                         <th>Сумма</th>
@@ -424,6 +434,9 @@
                     </thead>
                     <tbody id="invoices-table-body">
                     <tr th:each="inv : ${invoices}" th:data-manager="${inv.managerId}">
+                        <!-- ИСПРАВЛЕНО: Выводим дату инвойса в формате yyyy-MM-dd -->
+                        <td th:text="${inv.createdAt != null ? #temporals.format(inv.createdAt, 'yyyy-MM-dd') : '---'}"></td>
+
                         <td th:text="${inv.invoiceNumber}"></td>
                         <td th:text="${inv.shopName}" style="font-weight:700;"></td>
                         <td th:text="${#numbers.formatDecimal(inv.totalAmount, 1, 'WHITESPACE', 2, 'POINT') + ' ֏'}"></td>
@@ -452,7 +465,7 @@
                         </td>
                     </tr>
                     <tr th:if="${#lists.isEmpty(invoices)}">
-                        <td colspan="6" style="text-align: center; padding: 20px; color: var(--text-muted);">
+                        <td colspan="7" style="text-align: center; padding: 20px; color: var(--text-muted);"> <!-- ИСПРАВЛЕНО: colspan увеличен до 7 -->
                             За выбранный период счетов не найдено.
                         </td>
                     </tr>
@@ -512,11 +525,12 @@
                         <td th:text="${c.address}"></td>
                         <td th:text="${c.category ?: '---'}"></td> <!-- ОТОБРАЖЕНИЕ КАТЕГОРИИ -->
 
-                        <td class="price-down">
-    <span th:with="val=${c.debt != null ? c.debt.doubleValue() : 0}"
-          th:text="${(val == 0) ? '0 ֏' : ((val % 1 == 0) ? #numbers.formatInteger(val, 1, 'WHITESPACE') : #numbers.formatDecimal(val, 1, 'WHITESPACE', 2, 'POINT').replaceAll('0$', '')) + ' ֏'}">
+                        <td th:with="val=${c.debt != null ? c.debt.doubleValue() : 0}"
+                            th:class="${val > 0} ? 'price-down' : (${val < 0} ? 'price-up' : '')">
+    <span th:text="${(val == 0) ? '0 ֏' : ((val % 1 == 0) ? #numbers.formatInteger(val, 1, 'WHITESPACE') : #numbers.formatDecimal(val, 1, 'WHITESPACE', 2, 'POINT').replaceAll('0$', '')) + ' ֏'}">
     </span>
                         </td>
+
 
 
                     </tr>

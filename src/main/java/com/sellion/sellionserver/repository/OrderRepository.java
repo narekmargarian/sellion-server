@@ -5,6 +5,7 @@ import com.sellion.sellionserver.entity.OrderStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -81,6 +82,9 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     List<Long> findAllIdsByFilters(@Param("mId") String mId,
                                    @Param("start") LocalDateTime start,
                                    @Param("end") LocalDateTime end);
+    @Modifying
+    @Query("UPDATE Order o SET o.status = :status WHERE o.id = :id")
+    void updateStatus(@Param("id") Long id, @Param("status") OrderStatus status);
 
 }
 

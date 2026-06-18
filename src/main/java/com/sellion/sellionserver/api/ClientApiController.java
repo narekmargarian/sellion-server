@@ -4,25 +4,20 @@ import com.sellion.sellionserver.entity.Client;
 import com.sellion.sellionserver.entity.Transaction;
 import com.sellion.sellionserver.repository.ClientRepository;
 import com.sellion.sellionserver.repository.TransactionRepository;
-import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
-
-
 
 @RestController
 @RequestMapping("/api/clients")
@@ -41,10 +36,6 @@ public class ClientApiController {
                 .toList();
     }
 
-
-
-
-
     @DeleteMapping("/{id}")
     @Transactional
     public ResponseEntity<?> deleteClient(@PathVariable Long id) {
@@ -59,12 +50,14 @@ public class ClientApiController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate end) {
 
         Client client = clientRepository.findById(id).orElseThrow();
-        List<Transaction> transactions = transactionRepository.findAllByClientIdOrderByTimestampAsc(id);
 
-        List<Transaction> periodTransactions = transactions.stream()
-                .filter(tx -> !tx.getTimestamp().toLocalDate().isBefore(start) &&
-                        !tx.getTimestamp().toLocalDate().isAfter(end))
-                .collect(Collectors.toList());
+        // ИСПРАВЛЕНО: Вместо выгрузки всей истории в память Java и фильтрации через Stream,
+        // мы переводим LocalDate в LocalDateTime границы суток и делаем эффективный запрос в БД.
+        LocalDateTime startDateTime = start.atStartOfDay();
+        LocalDateTime endDateTime = end.atTime(LocalTime.MAX);
+
+        List<Transaction> periodTransactions = transactionRepository
+                .findAllByClientIdAndTimestampBetween(id, startDateTime, endDateTime);
 
         Map<String, Object> response = new HashMap<>();
         response.put("client", client);
@@ -80,14 +73,9 @@ public class ClientApiController {
         return transactionRepository.findAllByClientIdOrderByTimestampAsc(id);
     }
 
-
     @GetMapping("/search-fast")
     public List<Client> searchFast(@RequestParam String keyword) {
         // Увеличиваем размер страницы до 100 совпадений
         return clientRepository.searchClients(keyword, null, PageRequest.of(0, 100)).getContent();
     }
-
-
-
-
 }

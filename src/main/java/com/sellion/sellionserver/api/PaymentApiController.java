@@ -82,8 +82,9 @@ public class PaymentApiController {
         invoiceRepository.save(invoice);
 
         // 3. Регистрация финансовой операции
+        // ИСПРАВЛЕНО: Передаем invoice.getClientId() вместо null для точной привязки к ID клиента
         financeService.registerOperation(
-                null,
+                invoice.getClientId(),
                 "PAYMENT",
                 paymentAmount,
                 savedPayment.getId(),
@@ -104,4 +105,3 @@ public class PaymentApiController {
     }
 
 }
-

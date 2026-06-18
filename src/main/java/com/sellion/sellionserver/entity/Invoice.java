@@ -33,4 +33,7 @@ public class Invoice {
     private String managerId;
 
     private String shopName;
+
+    @Column(name = "client_id")
+    private Long clientId;
 }

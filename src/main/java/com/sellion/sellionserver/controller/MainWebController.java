@@ -133,6 +133,7 @@ public class MainWebController {
         BigDecimal netProfitBD = rawSales.subtract(rawPurchaseCost).subtract(totalReturnsSum)
                 .setScale(1, RoundingMode.HALF_UP);
 
+
         // --- 4. ОБЩАЯ СТАТИСТИКА И СЧЕТА (ПАГИНАЦИЯ + ФИЛЬТРЫ) ---
         BigDecimal totalInvoiceDebt = Optional.ofNullable(invoiceRepository.calculateTotalDebt()).orElse(BigDecimal.ZERO);
         BigDecimal totalPaidSum = Optional.ofNullable(invoiceRepository.calculateTotalPaid()).orElse(BigDecimal.ZERO);
@@ -141,13 +142,32 @@ public class MainWebController {
         String managerParam = (invoiceManager != null && !invoiceManager.isEmpty()) ? invoiceManager : null;
         String statusParam = (invoiceStatus != null && !invoiceStatus.isEmpty()) ? invoiceStatus : null;
 
-        Pageable invPageable = PageRequest.of(invoicePage, 15, Sort.by("createdAt").descending());
+        // ИСПРАВЛЕНО (Пункт 3): Увеличен размер страницы с 15 до 100 записей
+        Pageable invPageable = PageRequest.of(invoicePage, 100, Sort.by("createdAt").descending());
 
-        // ВАЖНО: Загружаем только один раз с учетом ВСЕХ фильтров
+        // Загружаем пагинированную страницу (100 штук) для отображения в таблице
         Page<Invoice> invoicesPage = invoiceRepository.findFilteredInvoices(
                 invStartDT, invEndDT, managerParam, statusParam, invPageable);
 
         List<Invoice> invoicesList = invoicesPage.getContent();
+
+        // ИСПРАВЛЕНО (Пункт 2): Считаем общую сумму и оплаты за ВЫБРАННЫЙ ПЕРИОД по фильтрам без лимита страниц
+        // Для этого делаем вызов метода без пагинации (он нам понадобится в InvoiceRepository)
+        List<Invoice> allInvoicesForPeriod = invoiceRepository.findAllFilteredInvoicesNoPage(
+                invStartDT, invEndDT, managerParam, statusParam);
+
+        BigDecimal periodTotalAmount = allInvoicesForPeriod.stream()
+                .map(inv -> inv.getTotalAmount() != null ? inv.getTotalAmount() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal periodPaidAmount = allInvoicesForPeriod.stream()
+                .map(inv -> inv.getPaidAmount() != null ? inv.getPaidAmount() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        // Чистый долг именно выбранного периода для третьей карточки
+        BigDecimal periodInvoiceDebt = periodTotalAmount.subtract(periodPaidAmount).setScale(2, RoundingMode.HALF_UP);
+
+
 
         long activeOrdersCount = allOrdersForPeriod.size();
         BigDecimal avgCheck = (activeOrdersCount == 0) ? BigDecimal.ZERO : rawSales.divide(BigDecimal.valueOf(activeOrdersCount), 2, RoundingMode.HALF_UP);
@@ -203,6 +223,7 @@ public class MainWebController {
         model.addAttribute("promoEndDefault", pEnd.toString());
 
 
+
         List<Long> allOrderIds = allOrdersForPeriod.stream()
                 .map(Order::getId)
                 .filter(Objects::nonNull)
@@ -221,18 +242,24 @@ public class MainWebController {
 
         addModel(page, orderManagerId, returnManagerId, model, ordersPage, totalOrdersSum, rawSales, rawPurchaseCost, netProfitBD, avgCheck, limitedLogs, invoicesList, totalInvoiceDebt, totalPaidSum, oStartDT.toLocalDate(), oEndDT.toLocalDate(), allReturns, totalReturnsSum, rStartDT.toLocalDate(), rEndDT.toLocalDate());
 
-        addInvModel(invoicePage, invoiceManager, invoiceStatus, model, invoicesList, invoicesPage, invStartDT.toLocalDate(), invEndDT.toLocalDate());
+        // ИСПРАВЛЕНО: Передаем periodInvoiceDebt аргументом в самый конец метода
+        addInvModel(invoicePage, invoiceManager, invoiceStatus, model, invoicesList, invoicesPage, invStartDT.toLocalDate(), invEndDT.toLocalDate(), periodInvoiceDebt);
         groupAndWarehouse(activeTab, clientPage, clientCategory, clientSearch, model, managersForUI, managerStats, invoicesList);
         return "dashboard";
 
+
     }
 
-    private static void addInvModel(int invoicePage, String invoiceManager, String invoiceStatus, Model model, List<Invoice> invoicesList, Page<Invoice> invoicesPage, LocalDate invStartD, LocalDate invEndD) {
+    private static void addInvModel(int invoicePage, String invoiceManager, String invoiceStatus, Model model,
+                                    List<Invoice> invoicesList, Page<Invoice> invoicesPage,
+                                    LocalDate invStartD, LocalDate invEndD, BigDecimal periodInvoiceDebt) { // Принимаем значение
         model.addAttribute("invoices", invoicesList);
         model.addAttribute("invCurrentPage", invoicePage);
         model.addAttribute("invTotalPages", invoicesPage.getTotalPages());
 
-        // ИСПРАВЛЕНО: Только yyyy-MM-dd для корректной работы input type="date"
+        // ИСПРАВЛЕНО (Пункт 2): Добавляем значение долга выбранного периода в модель для отображения в карточке
+        model.addAttribute("periodInvoiceDebt", periodInvoiceDebt);
+
         java.time.format.DateTimeFormatter isoDate = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd");
         model.addAttribute("invoiceStart", invStartD.format(isoDate));
         model.addAttribute("invoiceEnd", invEndD.format(isoDate));
@@ -240,6 +267,7 @@ public class MainWebController {
         model.addAttribute("selectedInvManager", invoiceManager);
         model.addAttribute("selectedInvStatus", invoiceStatus);
     }
+
 
 
     private static void addModel(int page, String orderManagerId, String returnManagerId, Model model, Page<Order> ordersPage, BigDecimal totalOrdersSum, BigDecimal rawSales, BigDecimal rawPurchaseCost, BigDecimal netProfitBD, BigDecimal avgCheck, List<AuditLog> limitedLogs, List<Invoice> invoices, BigDecimal totalInvoiceDebt, BigDecimal totalPaidSum, LocalDate startD, LocalDate endD, List<ReturnOrder> allReturns, BigDecimal totalReturnsSum, LocalDate startR, LocalDate endR) {

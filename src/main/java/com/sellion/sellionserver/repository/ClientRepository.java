@@ -38,10 +38,18 @@ public interface ClientRepository extends JpaRepository<Client, Long> {
     @Query("UPDATE Client c SET c.isDeleted = true WHERE c.id = :id")
     void softDeleteById(Long id);
 
-    @Modifying
+//    @Modifying
+//    @Transactional
+//    @Query("UPDATE Client c SET c.debt = c.debt + :delta WHERE c.id = :id")
+//    void updateDebt(@Param("id") Long id, @Param("delta") BigDecimal delta);
+
+
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Transactional
     @Query("UPDATE Client c SET c.debt = c.debt + :delta WHERE c.id = :id")
     void updateDebt(@Param("id") Long id, @Param("delta") BigDecimal delta);
+
 
     List<Client> findAllByIsDeletedFalse();
 

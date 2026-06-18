@@ -12,7 +12,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
-import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -23,13 +22,12 @@ public class FinanceService {
 
     /**
      * Регистрация финансовой операции.
-     * Исправлено: добавлена нормализация имен и принудительное сохранение баланса.
+     * Исправлено: Защита от Race Condition (состояния гонки) через атомарный UPDATE на уровне БД.
      */
     @Transactional(rollbackFor = Exception.class)
     public void registerOperation(Long clientId, String type, BigDecimal amount, Long refId, String comment, String shopName) {
 
         // 1. ПОИСК КЛИЕНТА (Нормализация)
-        // Убираем возможные пробелы в начале и конце, которые часто бывают при ручном вводе
         String cleanShopName = (shopName != null) ? shopName.trim() : "";
 
         Client client;
@@ -37,18 +35,12 @@ public class FinanceService {
             client = clientRepository.findById(clientId)
                     .orElseThrow(() -> new RuntimeException("Клиент с ID " + clientId + " не найден"));
         } else {
-
             client = clientRepository.findByNameIgnoreCase(cleanShopName)
                     .orElseThrow(() -> new RuntimeException("Критическая ошибка: Магазин '" + cleanShopName +
                             "' не найден в справочнике! Проверьте, что в разделе 'Клиенты' название совпадает до буквы."));
-//            // Ищем по очищенному имени
-//            client = clientRepository.findByName(cleanShopName)
-//                    .orElseThrow(() -> new RuntimeException("Клиент '" + cleanShopName + "' не найден в справочнике! Проверьте название магазина."));
         }
 
-        // 2. РАСЧЕТ НОВОГО ДОЛГА
-        BigDecimal currentDebt = Optional.ofNullable(client.getDebt()).orElse(BigDecimal.ZERO);
-
+        // 2. РАСЧЕТ ИЗМЕНЕНИЯ (DELTA)
         // Масштабируем сумму до 2 знаков (стандарт для валют)
         BigDecimal delta = amount.setScale(2, RoundingMode.HALF_UP);
 
@@ -57,17 +49,21 @@ public class FinanceService {
             delta = delta.negate();
         }
 
-        BigDecimal newDebt = currentDebt.add(delta);
+        // 3. АТОМАРНОЕ ОБНОВЛЕНИЕ В БД (Защита от Race Condition)
+        // Изменение происходит внутри СУБД: debt = debt + delta
+        clientRepository.updateDebt(client.getId(), delta);
 
-        // 3. ОБНОВЛЕНИЕ КЛИЕНТА
-        client.setDebt(newDebt);
-        // Используем saveAndFlush, чтобы баланс обновился в БД немедленно
-        clientRepository.saveAndFlush(client);
+        // 4. ПОЛУЧЕНИЕ АКТУАЛЬНОГО БАЛАНСА ДЛЯ АУДИТА
+        // Запрашиваем свежий объект из БД, чтобы узнать точный balanceAfter, посчитанный базой
+        Client updatedClient = clientRepository.findById(client.getId())
+                .orElseThrow(() -> new RuntimeException("Ошибка при получении обновленных данных клиента"));
 
-        // 4. ЗАПИСЬ ТРАНЗАКЦИИ (Аудит)
+        BigDecimal newDebt = updatedClient.getDebt();
+
+        // 5. ЗАПИСЬ ТРАНЗАКЦИИ (Аудит)
         Transaction tx = Transaction.builder()
-                .clientId(client.getId())
-                .clientName(client.getName())
+                .clientId(updatedClient.getId())
+                .clientName(updatedClient.getName())
                 .type(type)
                 .referenceId(refId)
                 .amount(amount.setScale(2, RoundingMode.HALF_UP))
@@ -79,6 +75,6 @@ public class FinanceService {
         transactionRepository.save(tx);
 
         log.info("Финансы [{}]: Магазин [{}], Операция [{}], Итог долга [{}]",
-                type, client.getName(), amount, newDebt);
+                type, updatedClient.getName(), amount, newDebt);
     }
 }
