@@ -330,7 +330,7 @@ public class MainWebController {
         model.addAttribute("products", activeProducts);
 
         // 2. КЛИЕНТЫ: Исправляем фильтр категорий и поиск
-        int pageSize = 50;
+        int pageSize = 100;
         Pageable pageable = PageRequest.of(clientPage, pageSize, Sort.by("name").ascending());
 
         // Очищаем параметры (убираем лишние пробелы)
