@@ -754,6 +754,12 @@ public class AdminManagementController {
             borderStyle.setBorderLeft(org.apache.poi.ss.usermodel.BorderStyle.THIN);
             borderStyle.setBorderRight(org.apache.poi.ss.usermodel.BorderStyle.THIN);
 
+            // Финансовый формат для цен и стоимости
+            org.apache.poi.ss.usermodel.CellStyle priceStyle = workbook.createCellStyle();
+            priceStyle.cloneStyleFrom(borderStyle);
+            org.apache.poi.ss.usermodel.DataFormat format = workbook.createDataFormat();
+            priceStyle.setDataFormat(format.getFormat("0.00"));
+
             org.apache.poi.ss.usermodel.CellStyle headerStyle = workbook.createCellStyle();
             headerStyle.cloneStyleFrom(borderStyle);
             org.apache.poi.ss.usermodel.Font font = workbook.createFont();
@@ -761,11 +767,11 @@ public class AdminManagementController {
             headerStyle.setFont(font);
 
             org.apache.poi.ss.usermodel.CellStyle footerStyle = workbook.createCellStyle();
-            footerStyle.cloneStyleFrom(borderStyle);
+            footerStyle.cloneStyleFrom(priceStyle);
             footerStyle.setFont(font);
 
-            // Шапка: Добавлен "Код" первым
-            String[] columns = {"Код", "Категория", "Наименование", "Штрих-код", "Остаток (шт)", "Цена (֏)", "Себестоимость (֏)", "Общая стоимость (֏)"};
+            // 1. Из массива удалена "Себестоимость (֏)" (теперь колонок 7, индексы 0-6)
+            String[] columns = {"Код", "Категория", "Наименование", "Штрих-код", "Остаток (шт)", "Цена (֏)", "Общая стоимость (֏)"};
             org.apache.poi.ss.usermodel.Row headerRow = sheet.createRow(0);
             for (int i = 0; i < columns.length; i++) {
                 org.apache.poi.ss.usermodel.Cell cell = headerRow.createCell(i);
@@ -777,8 +783,8 @@ public class AdminManagementController {
             products.sort(java.util.Comparator.comparing(Product::getCategory).thenComparing(Product::getName));
 
             int rowIdx = 1;
-            java.math.BigDecimal grandTotal = java.math.BigDecimal.ZERO;
 
+            // 2. Заполнение строк данными со смещенными индексами
             for (Product p : products) {
                 org.apache.poi.ss.usermodel.Row row = sheet.createRow(rowIdx++);
                 createCellWithStyle(row, 0, p.getProductCode() != null ? p.getProductCode() : "", borderStyle);
@@ -786,25 +792,41 @@ public class AdminManagementController {
                 createCellWithStyle(row, 2, p.getName(), borderStyle);
                 createCellWithStyle(row, 3, p.getBarcode(), borderStyle);
                 createCellWithStyle(row, 4, p.getStockQuantity(), borderStyle);
-                createCellWithStyle(row, 5, p.getPrice().doubleValue(), borderStyle);
-                double purchase = (p.getPurchasePrice() != null) ? p.getPurchasePrice().doubleValue() : 0;
-                createCellWithStyle(row, 6, purchase, borderStyle);
+
+                // Цена (֏) теперь в индексе 5
+                createCellWithStyle(row, 5, p.getPrice().doubleValue(), priceStyle);
+
+                // Общая стоимость (֏) теперь в индексе 6
                 java.math.BigDecimal rowTotal = p.getPrice().multiply(java.math.BigDecimal.valueOf(p.getStockQuantity()));
-                createCellWithStyle(row, 7, rowTotal.doubleValue(), borderStyle);
-                grandTotal = grandTotal.add(rowTotal);
+                createCellWithStyle(row, 6, rowTotal.doubleValue(), priceStyle);
             }
 
-            // ИТОГ: Просто две ячейки в конце строки, без пустых рамок слева
+            // 3. ИТОГ: Смещен на одну колонку левее (индексы 5 и 6)
             org.apache.poi.ss.usermodel.Row footerRow = sheet.createRow(rowIdx + 1);
-            org.apache.poi.ss.usermodel.Cell labelCell = footerRow.createCell(6);
+
+            // Текст "ИТОГО ПО СКЛАДУ" пишем в колонку 5 (Цена)
+            org.apache.poi.ss.usermodel.Cell labelCell = footerRow.createCell(5);
             labelCell.setCellValue("ИТОГО ПО СКЛАДУ:");
-            labelCell.setCellStyle(footerStyle);
+            labelCell.setCellStyle(headerStyle);
 
-            org.apache.poi.ss.usermodel.Cell totalCell = footerRow.createCell(7);
-            totalCell.setCellValue(grandTotal.doubleValue());
+            // Динамическая формула SUBTOTAL в колонку 6 (Общая стоимость)
+            org.apache.poi.ss.usermodel.Cell totalCell = footerRow.createCell(6);
             totalCell.setCellStyle(footerStyle);
+            if (rowIdx > 1) {
+                // Пересчитывает сумму автоматически, если наложить фильтр на товары
+                totalCell.setCellFormula("SUBTOTAL(9,G2:G" + rowIdx + ")");
+            } else {
+                totalCell.setCellValue(0.0);
+            }
 
-            for (int i = 0; i < columns.length; i++) sheet.autoSizeColumn(i);
+            // 4. Включение встроенного автофильтра для Excel по всей шапке таблицы (A1:G...)
+            if (rowIdx > 1) {
+                sheet.setAutoFilter(new org.apache.poi.ss.util.CellRangeAddress(0, rowIdx - 1, 0, 6));
+            }
+
+            for (int i = 0; i < columns.length; i++) {
+                sheet.autoSizeColumn(i);
+            }
 
             java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
             workbook.write(out);
@@ -818,6 +840,7 @@ public class AdminManagementController {
             return new ResponseEntity<>(org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
+
 
     private void createCellWithStyle(org.apache.poi.ss.usermodel.Row row, int column, Object value, org.apache.poi.ss.usermodel.CellStyle style) {
         org.apache.poi.ss.usermodel.Cell cell = row.createCell(column);
