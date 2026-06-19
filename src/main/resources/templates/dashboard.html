@@ -767,16 +767,16 @@
             </div>
         </div>
 
-        <!-- Маленький скрипт для обработки периода в условиях SPA (добавьте его вниз страницы) -->
-        <script>
-            function updateKpiPeriod() {
-                const start = document.getElementById('kpiStartInput').value;
-                const end = document.getElementById('kpiEndInput').value;
+<!--        &lt;!&ndash; Маленький скрипт для обработки периода в условиях SPA (добавьте его вниз страницы) &ndash;&gt;-->
+<!--        <script>-->
+<!--            function updateKpiPeriod() {-->
+<!--                const start = document.getElementById('kpiStartInput').value;-->
+<!--                const end = document.getElementById('kpiEndInput').value;-->
 
-                // Перезагружаем текущий URL, подставляя даты и флаг открытия вкладки менеджеров
-                window.location.search = `?kpiStart=${start}&kpiEnd=${end}&activeTab=tab-managers`;
-            }
-        </script>
+<!--                // Перезагружаем текущий URL, подставляя даты и флаг открытия вкладки менеджеров-->
+<!--                window.location.search = `?kpiStart=${start}&kpiEnd=${end}&activeTab=tab-managers`;-->
+<!--            }-->
+<!--        </script>-->
 
         <div id="tab-delivery" class="tab-pane">
             <!-- Сводка (Градиент сохранен) -->
@@ -1165,15 +1165,19 @@
                     </div>
                 </div>
 
-                <!-- Прибыль -->
+                <!-- Прибыль (Скрыта под ****) -->
                 <div class="glass-card"
-                     style="background: linear-gradient(to bottom right, #ffffff, #f0fdf4) !important;">
+                     id="profit-card"
+                     style="background: linear-gradient(to bottom right, #ffffff, #f0fdf4) !important; cursor: pointer; user-select: none;"
+                     title="Нажмите, чтобы показать/скрыть сумму">
                     <div style="font-size: 11px; font-weight: 700; color: #15803d; text-transform: uppercase; margin-bottom: 4px;">
                         <span class="dot" style="background: #22c55e;"></span>Прибыль
+                        <i id="profit-toggle-icon" class="fa-solid fa-eye" style="font-size: 10px; margin-left: 4px; color: #16a34a;"></i>
                     </div>
-                    <div style="font-size: 22px; font-weight: 800; color: #15803d; letter-spacing: -0.5px;"
-                         th:text="${netProfit != null ? #numbers.formatDecimal(netProfit, 1, 'WHITESPACE', 2, 'POINT') + ' ֏' : '0 ֏'}">
-                        0 ֏
+                    <div id="profit-amount"
+                         style="font-size: 22px; font-weight: 800; color: #15803d; letter-spacing: -0.5px;"
+                         th:data-value="${netProfit != null ? #numbers.formatDecimal(netProfit, 1, 'WHITESPACE', 2, 'POINT') + ' ֏' : '0 ֏'}">
+                        **** ֏
                     </div>
                 </div>
 

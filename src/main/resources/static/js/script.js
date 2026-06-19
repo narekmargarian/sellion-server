@@ -5000,6 +5000,31 @@ function updateKpiPeriod() {
     window.location.search = `?kpiStart=${start}&kpiEnd=${end}&activeTab=tab-managers`;
 }
 
+document.addEventListener("DOMContentLoaded", function () {
+    const profitCard = document.getElementById("profit-card");
+    const profitAmount = document.getElementById("profit-amount");
+    const profitIcon = document.getElementById("profit-toggle-icon");
+
+    if (profitCard && profitAmount) {
+        profitCard.addEventListener("click", function () {
+            const realValue = profitAmount.getAttribute("data-value");
+
+            if (profitAmount.textContent.trim() === "**** ֏") {
+                profitAmount.textContent = realValue;
+                if (profitIcon) {
+                    profitIcon.classList.remove("fa-eye");
+                    profitIcon.classList.add("fa-eye-slash");
+                }
+            } else {
+                profitAmount.textContent = "**** ֏";
+                if (profitIcon) {
+                    profitIcon.classList.remove("fa-eye-slash");
+                    profitIcon.classList.add("fa-eye");
+                }
+            }
+        });
+    }
+});
 
 document.addEventListener('DOMContentLoaded', syncCheckboxesOnPage);
 

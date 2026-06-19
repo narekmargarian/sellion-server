@@ -35,4 +35,5 @@ public class Product {
     private BigDecimal promoPercent = BigDecimal.ZERO;
 
 
+
 }
