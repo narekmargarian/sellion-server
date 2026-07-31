@@ -41,7 +41,9 @@ public class SecurityConfig {
                 )
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(csrf -> csrf.ignoringRequestMatchers("/ws-sellion/**", "/api/**"))
+                .addFilterBefore(new PlatformBlockerFilter(), UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(apiKeyAuthFilter(), UsernamePasswordAuthenticationFilter.class)
+
 
                 // КРИТИЧНО: Чтобы API не выдавало HTML-страницу логина при ошибках
                 .exceptionHandling(exceptions -> exceptions

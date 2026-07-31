@@ -767,17 +767,6 @@
             </div>
         </div>
 
-<!--        &lt;!&ndash; Маленький скрипт для обработки периода в условиях SPA (добавьте его вниз страницы) &ndash;&gt;-->
-<!--        <script>-->
-<!--            function updateKpiPeriod() {-->
-<!--                const start = document.getElementById('kpiStartInput').value;-->
-<!--                const end = document.getElementById('kpiEndInput').value;-->
-
-<!--                // Перезагружаем текущий URL, подставляя даты и флаг открытия вкладки менеджеров-->
-<!--                window.location.search = `?kpiStart=${start}&kpiEnd=${end}&activeTab=tab-managers`;-->
-<!--            }-->
-<!--        </script>-->
-
         <div id="tab-delivery" class="tab-pane">
             <!-- Сводка (Градиент сохранен) -->
             <div class="summary-card"
@@ -1796,6 +1785,22 @@
         </div>
 
         <div id="toast-container"></div>
+
+        <!-- Модальное окно потери соединения -->
+        <div id="offlineModal" style="display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(4px); z-index: 99999; align-items: center; justify-content: center;">
+            <div style="background: white; padding: 30px; border-radius: 20px; max-width: 400px; width: 90%; text-align: center; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);">
+                <div style="width: 70px; height: 70px; background: #fee2e2; color: #ef4444; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; font-size: 30px;">
+                    <i class="fa-solid fa-wifi-slash"></i>
+                </div>
+                <h3 style="font-size: 18px; font-weight: 800; color: #1e293b; margin-bottom: 10px;">НЕТ ИНТЕРНЕТ-СОЕДИНЕНИЯ</h3>
+                <p style="font-size: 13px; color: #64748b; line-height: 1.5; margin-bottom: 20px;">
+                    Связь с сервером потеряна. Проверьте подключение к сети. Некоторые функции могут быть недоступны.
+                </p>
+                <div style="display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 12px; color: #94a3b8; font-weight: 600;">
+                    <span class="fa-solid fa-spinner fa-spin"></span> Ожидание восстановления сети...
+                </div>
+            </div>
+        </div>
 
 
         <script th:src="@{/js/sockjs.min.js}"></script>

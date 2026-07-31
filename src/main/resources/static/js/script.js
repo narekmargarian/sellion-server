@@ -4963,6 +4963,57 @@ function submitInvoiceAction(orderId) {
 }
 
 
+// Функция проверки и управления статусом сети
+function initNetworkStatusListener() {
+    const offlineModal = document.getElementById('offlineModal');
+
+    // Проверяем текущее состояние при загрузке страницы
+    if (!navigator.onLine) {
+        showOfflineModal();
+    }
+
+    // Слушаем событие потери связи
+    window.addEventListener('offline', () => {
+        showOfflineModal();
+        if (typeof showToast === 'function') {
+            showToast("Соединение с интернетом потеряно!", "error");
+        }
+    });
+
+    // Слушаем событие восстановления связи
+    window.addEventListener('online', () => {
+        hideOfflineModal();
+        if (typeof showToast === 'function') {
+            showToast("Интернет-соединение восстановлено!", "success");
+        }
+
+        // Опционально: можно автоматически перезагрузить данные или страницу,
+        // чтобы синхронизировать состояние с сервером
+        setTimeout(() => {
+            location.reload();
+        }, 1000);
+    });
+}
+
+function showOfflineModal() {
+    const modal = document.getElementById('offlineModal');
+    if (modal) {
+        modal.style.display = 'flex';
+    }
+}
+
+function hideOfflineModal() {
+    const modal = document.getElementById('offlineModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+// Запускаем инициализацию при загрузке DOM
+document.addEventListener('DOMContentLoaded', () => {
+    initNetworkStatusListener();
+});
+
 document.addEventListener('change', function(e) {
     if (e.target.classList.contains('order-print-check')) {
         const id = Number(e.target.value); // Сохраняем как число
