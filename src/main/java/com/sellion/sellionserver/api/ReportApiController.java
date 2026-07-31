@@ -40,6 +40,9 @@ public class ReportApiController {
     private final InvoiceExcelService invoiceExcelService;
     private final EmailService emailService;
 
+    /**
+     * Экспорт детального отчета по заказам (с поддержкой менеджера как в оригинале).
+     */
     @GetMapping("/orders-detailed")
     public ResponseEntity<?> exportOrdersDetailed(
             @RequestParam String start,
@@ -49,6 +52,7 @@ public class ReportApiController {
             LocalDateTime from = LocalDate.parse(start).atStartOfDay();
             LocalDateTime to = LocalDate.parse(end).atTime(LocalTime.MAX);
 
+            // 1. Получаем заказы нужного менеджера за выбранный период
             List<Order> orders;
             if (managerId != null && !managerId.trim().isEmpty() && !managerId.equals("null") && !managerId.equals("undefined") && !managerId.equals("Все менеджеры")) {
                 orders = orderRepository.findOrdersByManagerAndDateRange(managerId, from, to);
@@ -56,12 +60,16 @@ public class ReportApiController {
                 orders = orderRepository.findOrdersBetweenDates(from, to);
             }
 
-            // ЕСЛИ ДАННЫХ НЕТ: возвращаем 200 OK с ключом "message", чтобы фронтенд показал всплывающее уведомление поверх всех окон
             if (orders.isEmpty()) {
-                return ResponseEntity.ok(Map.of("message", "Заказы за выбранный период не найдены."));
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("message", "Заказы за период " + start + " - " + end + " не найдены."));
             }
 
+            // 2. Считаем сводную статистику по каждому товару (ID товара -> [Количество штук, Сумма в деньгах])
+            // Подтягиваем названия товаров из базы
             Map<Long, Integer> productQuantities = new HashMap<>();
+            Map<Long, BigDecimal> productAmounts = new HashMap<>();
+
             for (Order order : orders) {
                 if (order.getItems() != null) {
                     order.getItems().forEach((productId, qty) -> {
@@ -70,13 +78,16 @@ public class ReportApiController {
                 }
             }
 
+            // Получаем актуальные данные товаров (названия, цены)
             List<com.sellion.sellionserver.entity.Product> products = productRepository.findAllById(productQuantities.keySet());
             Map<Long, com.sellion.sellionserver.entity.Product> productMap = products.stream()
                     .collect(Collectors.toMap(com.sellion.sellionserver.entity.Product::getId, java.util.function.Function.identity()));
 
+            // 3. Создаем НОВЫЙ Excel-файл (Apache POI) с нуля именно под эту задачу
             try (org.apache.poi.ss.usermodel.Workbook workbook = new org.apache.poi.xssf.usermodel.XSSFWorkbook()) {
                 org.apache.poi.ss.usermodel.Sheet sheet = workbook.createSheet("Свод по товарам");
 
+                // Заголовок
                 int rowIdx = 0;
                 org.apache.poi.ss.usermodel.Row headerRow = sheet.createRow(rowIdx++);
                 headerRow.createCell(0).setCellValue("Наименование товара");
@@ -84,6 +95,7 @@ public class ReportApiController {
                 headerRow.createCell(2).setCellValue("Количество (шт)");
                 headerRow.createCell(3).setCellValue("Общая сумма (֏)");
 
+                // Заполняем строками
                 for (Map.Entry<Long, Integer> entry : productQuantities.entrySet()) {
                     Long productId = entry.getKey();
                     Integer totalQty = entry.getValue();
@@ -91,6 +103,8 @@ public class ReportApiController {
 
                     String productName = (p != null && p.getName() != null) ? p.getName() : "Товар ID: " + productId;
                     String category = (p != null && p.getCategory() != null) ? p.getCategory() : "Без категории";
+
+                    // Примерный расчет суммы по средней цене или базовой цене товара
                     BigDecimal price = (p != null && p.getPrice() != null) ? p.getPrice() : BigDecimal.ZERO;
                     BigDecimal totalSum = price.multiply(BigDecimal.valueOf(totalQty));
 
@@ -101,6 +115,7 @@ public class ReportApiController {
                     row.createCell(3).setCellValue(totalSum.doubleValue());
                 }
 
+                // Автоподгон ширины колонок
                 for (int i = 0; i < 4; i++) {
                     sheet.autoSizeColumn(i);
                 }
