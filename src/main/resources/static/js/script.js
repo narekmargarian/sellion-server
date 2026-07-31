@@ -4502,40 +4502,40 @@ async function cancelOrder(id) {
     });
 }
 
-function toggleGlobalSelect(masterCheckbox, childClass) {
-    const isOrder = (childClass === 'order-print-check');
-
-    // 1. Визуально переключаем все чекбоксы на текущей странице
-    const pageCheckboxes = document.querySelectorAll('.' + childClass);
-    pageCheckboxes.forEach(cb => cb.checked = masterCheckbox.checked);
-
-    // 2. Достаем массив всех ID из атрибута
-    let allIdsRaw = masterCheckbox.getAttribute('data-all-ids') || "[]";
-    // Убираем скобки и лишние пробелы, превращаем в чистый массив строк
-    const allIds = allIdsRaw.replace(/[\[\]]/g, '').split(',')
-        .map(id => id.trim()).filter(id => id !== "");
-
-    if (masterCheckbox.checked) {
-        // Добавляем все ID в глобальный список (без дубликатов)
-        allIds.forEach(id => {
-            if (isOrder) {
-                if (!selectedOrderIds.includes(id)) selectedOrderIds.push(id);
-            } else {
-                if (!selectedReturnIds.includes(id)) selectedReturnIds.push(id);
-            }
-        });
-    } else {
-        // Если галочка снята — полностью очищаем список для этого типа
-        if (isOrder) {
-            selectedOrderIds = [];
-        } else {
-            selectedReturnIds = [];
-        }
-    }
-
-    saveAllToStorage();
-    console.log("Выбрано сейчас:", isOrder ? selectedOrderIds : selectedReturnIds);
-}
+//function toggleGlobalSelect(masterCheckbox, childClass) {
+//    const isOrder = (childClass === 'order-print-check');
+//
+//    // 1. Визуально переключаем все чекбоксы на текущей странице
+//    const pageCheckboxes = document.querySelectorAll('.' + childClass);
+//    pageCheckboxes.forEach(cb => cb.checked = masterCheckbox.checked);
+//
+//    // 2. Достаем массив всех ID из атрибута
+//    let allIdsRaw = masterCheckbox.getAttribute('data-all-ids') || "[]";
+//    // Убираем скобки и лишние пробелы, превращаем в чистый массив строк
+//    const allIds = allIdsRaw.replace(/[\[\]]/g, '').split(',')
+//        .map(id => id.trim()).filter(id => id !== "");
+//
+//    if (masterCheckbox.checked) {
+//        // Добавляем все ID в глобальный список (без дубликатов)
+//        allIds.forEach(id => {
+//            if (isOrder) {
+//                if (!selectedOrderIds.includes(id)) selectedOrderIds.push(id);
+//            } else {
+//                if (!selectedReturnIds.includes(id)) selectedReturnIds.push(id);
+//            }
+//        });
+//    } else {
+//        // Если галочка снята — полностью очищаем список для этого типа
+//        if (isOrder) {
+//            selectedOrderIds = [];
+//        } else {
+//            selectedReturnIds = [];
+//        }
+//    }
+//
+//    saveAllToStorage();
+//    console.log("Выбрано сейчас:", isOrder ? selectedOrderIds : selectedReturnIds);
+//}
 
 // function showConfirmModal(title, text, type, onConfirm) {
 //     const modal = document.getElementById('customModal');
@@ -4586,6 +4586,167 @@ function toggleGlobalSelect(masterCheckbox, childClass) {
 //         }
 //     };
 // }
+
+
+function toggleGlobalSelect(masterCheckbox, childClass) {
+    const isOrder = (childClass === 'order-print-check');
+
+    // 1. Собираем ID ТОЛЬКО видимых (отфильтрованных) чекбоксов на текущей странице
+    const pageCheckboxes = document.querySelectorAll('.' + childClass);
+    const visibleIds = [];
+
+    pageCheckboxes.forEach(cb => {
+        // Проверяем, не скрыта ли строка фильтром (если родительский tr не display: none)
+        const row = cb.closest('tr');
+        if (row && row.style.display !== 'none') {
+            cb.checked = masterCheckbox.checked;
+            const val = isOrder ? Number(cb.value) : Number(cb.value);
+            if (masterCheckbox.checked) {
+                visibleIds.push(val);
+            }
+        }
+    });
+
+    // 2. Обновляем глобальный массив для видимых элементов
+    if (masterCheckbox.checked) {
+        visibleIds.forEach(id => {
+            if (isOrder) {
+                if (!selectedOrderIds.includes(id)) selectedOrderIds.push(id);
+            } else {
+                if (!selectedReturnIds.includes(id)) selectedReturnIds.push(id);
+            }
+        });
+    } else {
+        // Убираем из выбранных только те, что были видны при снятии галочки
+        if (isOrder) {
+            selectedOrderIds = selectedOrderIds.filter(id => !visibleIds.includes(id));
+        } else {
+            selectedReturnIds = selectedReturnIds.filter(id => !visibleIds.includes(id));
+        }
+    }
+
+    saveAllToStorage();
+    if (typeof updateSelectedCounter === 'function') updateSelectedCounter();
+}
+
+function openViewReportModal() {
+    const today = new Date().toISOString().split('T')[0];
+    const startInput = document.getElementById('view-report-start');
+    const endInput = document.getElementById('view-report-end');
+
+    if (startInput && !startInput.value) startInput.value = today;
+    if (endInput && !endInput.value) endInput.value = today;
+
+    // Загружаем менеджеров с сервера динамически
+    loadManagersIntoDropdown();
+
+    const modal = document.getElementById('modal-view-report');
+    if (modal) modal.style.display = 'flex';
+}
+
+function loadManagersIntoDropdown() {
+    const select = document.getElementById('view-report-manager') || document.querySelector('select[name="managerId"]');
+    if (!select) return;
+
+    // Если уже загружено, не дергаем сервер повторно
+    if (select.options.length > 1) return;
+
+    fetch('/api/reports/excel/managers-list')
+        .then(response => response.json())
+        .then(managers => {
+            // Сохраняем дефолтный пункт про все менеджеры
+            select.innerHTML = '<option value="">-- Все менеджеры (общий отчет) --</option>';
+
+            managers.forEach(name => {
+                const option = document.createElement('option');
+                option.value = name; // Здесь будет "1011", "1012" или "Офис"
+                option.textContent = name === "Офис" ? "Офис" : "Менеджер " + name;
+                select.appendChild(option);
+            });
+        })
+        .catch(err => console.error("Ошибка загрузки списка менеджеров:", err));
+}
+
+
+function populateManagersDropdown() {
+    const reportSelect = document.getElementById('view-report-manager');
+    if (!reportSelect) return;
+
+    // Ищем на странице существующий фильтр менеджеров, чтобы не делать лишний запрос
+    const existingManagerSelect = document.querySelector('select[name="managerId"]') || document.getElementById('filter-manager');
+
+    if (existingManagerSelect && reportSelect.options.length <= 1) {
+        // Копируем варианты из основного фильтра страницы
+        for (let i = 1; i < existingManagerSelect.options.length; i++) {
+            const opt = existingManagerSelect.options[i];
+            const newOpt = document.createElement('option');
+            newOpt.value = opt.value;
+            newOpt.textContent = opt.textContent;
+            reportSelect.appendChild(newOpt);
+        }
+    }
+}
+
+async function previewReportData() {
+    const start = document.getElementById('view-report-start').value;
+    const end = document.getElementById('view-report-end').value;
+    const managerId = document.getElementById('view-report-manager').value;
+    const container = document.getElementById('report-preview-content');
+    const downloadBtn = document.getElementById('btn-download-excel');
+
+    if (!start || !end) {
+        return showToast("Укажите диапазон дат!", "error");
+    }
+
+    container.innerHTML = `<div style="text-align: center; color: #64748b; padding-top: 30px;"><i class="fa-solid fa-spinner fa-spin"></i> Проверка данных...</div>`;
+    downloadBtn.disabled = true;
+    downloadBtn.style.background = '#cbd5e1';
+    downloadBtn.style.cursor = 'not-allowed';
+
+    try {
+        let url = `/api/reports/excel/orders-detailed?start=${start}&end=${end}`;
+        if (managerId) url += `&managerId=${managerId}`;
+
+        const response = await fetch(url);
+
+        if (response.status === 404) {
+            container.innerHTML = `<div style="text-align: center; color: #ef4444; padding-top: 30px; font-weight: 600;">Заказы за выбранный период не найдены.</div>`;
+            return;
+        }
+
+        if (!response.ok) throw new Error("Ошибка сервера");
+
+        container.innerHTML = `
+            <div style="background: #ecfdf5; border: 1px solid #10b981; padding: 15px; border-radius: 10px; color: #065f46; text-align: center;">
+                <i class="fa-solid fa-circle-check" style="font-size: 22px; margin-bottom: 6px; display: block; color: #10b981;"></i>
+                <div style="font-weight: 800; font-size: 13px; margin-bottom: 2px;">Данные успешно найдены!</div>
+                <div style="font-size: 11px; color: #047857;">Нажмите «Скачать Excel» для получения детального файла.</div>
+            </div>
+        `;
+
+        downloadBtn.disabled = false;
+        downloadBtn.style.background = '#63AA2F';
+        downloadBtn.style.cursor = 'pointer';
+
+    } catch (e) {
+        console.error(e);
+        container.innerHTML = `<div style="text-align: center; color: #ef4444; padding-top: 30px;">Ошибка проверки данных</div>`;
+    }
+}
+
+function downloadReportExcel() {
+    const start = document.getElementById('view-report-start').value;
+    const end = document.getElementById('view-report-end').value;
+    const managerId = document.getElementById('view-report-manager').value;
+
+    if (!start || !end) return;
+
+    let url = `/api/reports/excel/orders-detailed?start=${start}&end=${end}`;
+    if (managerId) url += `&managerId=${managerId}`;
+
+    window.location.href = url;
+    showToast("Скачивание Excel отчета...", "success");
+}
 
 
 

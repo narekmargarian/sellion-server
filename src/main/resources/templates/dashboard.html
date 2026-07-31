@@ -135,6 +135,10 @@
                         title="Сводка товаров за день">
                     📋
                 </button>
+
+                <button type="button" onclick="openViewReportModal()" title="Выгрузка отчетов" style="background: #1e293b; color: white; border: none; width: 38px; height: 38px; border-radius: 10px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; font-size: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                    <i class="fa-solid fa-file-excel" style="color: #63AA2F;"></i>
+                </button>
             </div>
 
             <div class="table-container">
@@ -1802,6 +1806,63 @@
             </div>
         </div>
 
+        <!-- Модальное окно выгрузки отчетов -->
+        <div id="modal-view-report" style="display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(4px); z-index: 99999; align-items: center; justify-content: center;">
+            <div style="background: white; padding: 25px; border-radius: 20px; max-width: 600px; width: 90%; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); max-height: 90vh; display: flex; flex-direction: column;">
+
+                <!-- Шапка модалки -->
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h3 style="font-size: 16px; font-weight: 800; color: #1e293b; margin: 0;">
+                        <i class="fa-solid fa-chart-line" style="color: #63AA2F; margin-right: 8px;"></i> Выгрузка отчетов по заказам
+                    </h3>
+                    <!-- Гарантированное закрытие через inline-функцию -->
+                    <button type="button" onclick="document.getElementById('modal-view-report').style.display='none'" style="background: #f1f5f9; border: none; width: 32px; height: 32px; border-radius: 50%; font-size: 16px; cursor: pointer; color: #64748b; display: flex; align-items: center; justify-content: center;">✕</button>
+                </div>
+
+                <!-- Настройки: Период и Менеджер -->
+                <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 15px;">
+                    <div style="display: flex; gap: 10px;">
+                        <div style="flex: 1;">
+                            <label style="font-size: 11px; font-weight: 700; color: #64748b; display: block; margin-bottom: 5px;">ПЕРИОД С</label>
+                            <input type="date" id="view-report-start" class="form-control" style="width: 100%; padding: 9px; border-radius: 8px; border: 1px solid #cbd5e1;">
+                        </div>
+                        <div style="flex: 1;">
+                            <label style="font-size: 11px; font-weight: 700; color: #64748b; display: block; margin-bottom: 5px;">ПО</label>
+                            <input type="date" id="view-report-end" class="form-control" style="width: 100%; padding: 9px; border-radius: 8px; border: 1px solid #cbd5e1;">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label style="font-size: 11px; font-weight: 700; color: #64748b; display: block; margin-bottom: 5px;">МЕНЕДЖЕР</label>
+                        <select id="view-report-manager" class="form-control" style="width: 100%; padding: 9px; border-radius: 8px; border: 1px solid #cbd5e1; background: white;">
+                            <option value="">-- Все менеджеры (общий отчет) --</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Кнопка проверки -->
+                <button type="button" onclick="previewReportData()" style="background: #1e293b; color: white; border: none; padding: 10px; border-radius: 8px; font-weight: 700; cursor: pointer; width: 100%; margin-bottom: 15px;">
+                    <i class="fa-solid fa-magnifying-glass"></i> Проверить наличие данных
+                </button>
+
+                <!-- Область предпросмотра -->
+                <div id="report-preview-content" style="flex: 1; overflow-y: auto; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 15px; margin-bottom: 20px; min-height: 120px; max-height: 250px;">
+                    <div style="text-align: center; color: #94a3b8; padding-top: 30px; font-size: 13px;">
+                        Укажите параметры и нажмите «Проверить наличие данных»
+                    </div>
+                </div>
+
+                <!-- Кнопки действий -->
+                <div style="display: flex; gap: 10px;">
+                    <button type="button" id="btn-download-excel" onclick="downloadReportExcel()" disabled style="flex: 1; background: #cbd5e1; color: white; border: none; padding: 12px; border-radius: 12px; font-weight: 800; cursor: not-allowed; text-transform: uppercase; font-size: 11px; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                        <i class="fa-solid fa-file-excel"></i> Скачать Excel
+                    </button>
+                    <button type="button" onclick="document.getElementById('modal-view-report').style.display='none'" style="background: #64748b; color: white; border: none; padding: 12px 20px; border-radius: 12px; font-weight: 800; cursor: pointer; text-transform: uppercase; font-size: 11px;">
+                        Закрыть
+                    </button>
+                </div>
+            </div>
+        </div>
 
         <script th:src="@{/js/sockjs.min.js}"></script>
         <script th:src="@{/js/stomp.min.js}"></script>
