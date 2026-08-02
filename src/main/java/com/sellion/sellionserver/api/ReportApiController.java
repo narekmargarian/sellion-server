@@ -204,6 +204,57 @@ public class ReportApiController {
         }
     }
 
+    /**
+     * Список менеджеров для выпадающего списка в модалке отчетов.
+     */
+    @GetMapping("/managers-list")
+    public ResponseEntity<?> getManagersList() {
+        try {
+            // Берем список уникальных менеджеров из заказов или репозитория
+            List<String> managers = orderRepository.findDistinctManagers(); // Убедись, что такой метод есть в OrderRepository, либо передавай список из базы
+            return ResponseEntity.ok(managers);
+        } catch (Exception e) {
+            log.error("Ошибка получения списка менеджеров: ", e);
+            // Возвращаем пустой список или дефолтные значения, если метода нет
+            return ResponseEntity.ok(Collections.emptyList());
+        }
+    }
+
+    /**
+     * Экспорт детального отчета по заказам с учетом менеджера.
+     */
+    @GetMapping("/orders-detailed")
+    public ResponseEntity<?> exportOrdersDetailed(
+            @RequestParam String start,
+            @RequestParam String end,
+            @RequestParam(required = false) String managerId) {
+        try {
+            LocalDateTime from = LocalDate.parse(start).atStartOfDay();
+            LocalDateTime to = LocalDate.parse(end).atTime(LocalTime.MAX);
+
+            List<Order> orders;
+
+            // Если указан менеджер и он не пустой — фильтруем по нему
+            if (managerId != null && !managerId.isBlank()) {
+                orders = orderRepository.findInvoicedOrdersBetweenDatesAndManager(from, to, managerId);
+            } else {
+                orders = orderRepository.findInvoicedOrdersBetweenDates(from, to);
+            }
+
+            if (orders.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("message", "Заказы за период " + start + " - " + end + " не найдены."));
+            }
+
+            try (Workbook workbook = invoiceExcelService.generateExcel(orders, null, "Отчет по продажам")) {
+                return getResponseEntity(workbook, "Orders_Report_" + start + ".xlsx");
+            }
+        } catch (Exception e) {
+            log.error("Ошибка генерации отчета по заказах: ", e);
+            return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
+        }
+    }
+
     @Data
     public static class ReportRequest {
         private String start;

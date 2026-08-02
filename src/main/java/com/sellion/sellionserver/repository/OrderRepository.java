@@ -63,6 +63,13 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     );
 
 
+
+    @Query("SELECT o FROM Order o WHERE o.createdAt BETWEEN :start AND :end AND o.invoiceId IS NOT NULL AND o.status != 'CANCELLED' AND o.managerId = :managerId")
+    List<Order> findInvoicedOrdersBetweenDatesAndManager(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end, @Param("managerId") String managerId);
+
+    @Query("SELECT DISTINCT o.managerId FROM Order o WHERE o.managerId IS NOT NULL")
+    List<String> findDistinctManagers();
+
     boolean existsByAndroidId(String androidId);
     List<Order> findByManagerIdAndCreatedAtBetween(String managerId, LocalDateTime start, LocalDateTime end);
 
