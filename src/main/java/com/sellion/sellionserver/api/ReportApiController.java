@@ -33,12 +33,10 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
-import java.time.format.DateTimeFormatter;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
 
 @RestController
 @RequestMapping("/api/reports/excel")
@@ -50,6 +48,7 @@ public class ReportApiController {
     private final ReturnOrderRepository returnOrderRepository;
     private final InvoiceExcelService invoiceExcelService;
     private final EmailService emailService;
+
     @Autowired
     private ProductRepository productRepository;
 
@@ -57,8 +56,7 @@ public class ReportApiController {
     private OrderService orderService;
 
     /**
-     * Экспорт детального отчета по заказам (с поддержкой опционального менеджера).
-     * ИДЕАЛЬНО: Используем try-with-resources для мгновенного освобождения памяти.
+     * Старый метод (НЕ ТРОГАЕМ, работает в другом месте)
      */
     @GetMapping("/orders-detailed")
     public ResponseEntity<?> exportOrdersDetailed(
@@ -71,7 +69,6 @@ public class ReportApiController {
 
             List<Order> orders;
 
-            // Если указан менеджер и он не пустой — фильтруем по нему
             if (managerId != null && !managerId.isBlank()) {
                 orders = orderRepository.findInvoicedOrdersBetweenDatesAndManager(from, to, managerId);
             } else {
@@ -92,14 +89,9 @@ public class ReportApiController {
         }
     }
 
-    /**
-     * Массовая отправка данных бухгалтеру.
-     * ИДЕАЛЬНО: Поддержка нескольких типов данных в одном письме с защитой от пустых отчетов.
-     */
     @PostMapping("/send-to-accountant")
-    public ResponseEntity<?> sendToAccountant(@RequestBody ReportRequest request) { // Использование DTO и @RequestBody
+    public ResponseEntity<?> sendToAccountant(@RequestBody ReportRequest request) {
         try {
-            // Извлекаем данные из объекта request
             String start = request.getStart();
             String end = request.getEnd();
             String email = request.getEmail();
@@ -108,12 +100,8 @@ public class ReportApiController {
             LocalDateTime to = LocalDate.parse(end).atTime(LocalTime.MAX);
             List<String> reportTypes = (request.getTypes() != null) ? request.getTypes() : Collections.emptyList();
 
-
-
-            // Логика выборки данных
             List<Order> orders = reportTypes.contains("orders") ?
                     orderRepository.findOrdersBetweenDates(from, to) : Collections.emptyList();
-
 
             List<ReturnOrder> returns = reportTypes.contains("returns") ?
                     returnOrderRepository.findReturnsBetweenDates(from, to) : Collections.emptyList();
@@ -123,7 +111,6 @@ public class ReportApiController {
                         .body(Map.of("message", "Нет данных для отправки за указанный период."));
             }
 
-            // Генерация и отправка
             try (Workbook workbook = invoiceExcelService.generateExcel(orders, returns, "Sellion ERP: Финансовый отчет")) {
                 byte[] bytes = workbookToBytes(workbook);
 
@@ -146,9 +133,6 @@ public class ReportApiController {
         }
     }
 
-    /**
-     * Отправка выбранных корректировок (для изменения фактур).
-     */
     @PostMapping("/send-selected-corrections")
     @Transactional(readOnly = true)
     public ResponseEntity<?> sendSelectedCorrections(@RequestBody Map<String, Object> payload) {
@@ -181,12 +165,9 @@ public class ReportApiController {
         }
     }
 
-    // --- ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ (ИДЕАЛЬНАЯ РАБОТА С ПАМЯТЬЮ) ---
-
     private byte[] workbookToBytes(Workbook workbook) throws IOException {
         try (ByteArrayOutputStream bos = new ByteArrayOutputStream()) {
             workbook.write(bos);
-            // Если используем SXSSF, обязательно вызываем dispose для очистки временных файлов
             if (workbook instanceof SXSSFWorkbook sx) {
                 sx.dispose();
             }
@@ -205,17 +186,12 @@ public class ReportApiController {
         return new ResponseEntity<>(bytes, headers, HttpStatus.OK);
     }
 
-    /**
-     * Экспорт детального отчета по возвратам.
-     * ДОБАВЛЕНО: Эндпоинт, который вызывается при нажатии кнопки "Экспорт Возвратов".
-     */
     @GetMapping("/returns-detailed")
     public ResponseEntity<?> exportReturnsDetailed(@RequestParam String start, @RequestParam String end) {
         try {
             LocalDateTime from = LocalDate.parse(start).atStartOfDay();
             LocalDateTime to = LocalDate.parse(end).atTime(LocalTime.MAX);
 
-            // Получаем список возвратов за период
             List<ReturnOrder> returns = returnOrderRepository.findReturnsBetweenDates(from, to);
 
             if (returns.isEmpty()) {
@@ -223,7 +199,6 @@ public class ReportApiController {
                         .body(Map.of("message", "Возвраты за период " + start + " - " + end + " не найдены."));
             }
 
-            // Генерируем Excel. Передаем null в заказы и наш список в возвраты.
             try (Workbook workbook = invoiceExcelService.generateExcel(null, returns, "Отчет по возвратам")) {
                 return getResponseEntity(workbook, "Returns_Report_" + start + "_" + end + ".xlsx");
             }
@@ -233,31 +208,28 @@ public class ReportApiController {
         }
     }
 
-    /**
-     * Список менеджеров для выпадающего списка в модалке отчетов.
-     */
     @GetMapping("/managers-list")
     public ResponseEntity<?> getManagersList() {
         try {
-            // Берем список уникальных менеджеров из заказов или репозитория
-            List<String> managers = orderRepository.findDistinctManagers(); // Убедись, что такой метод есть в OrderRepository, либо передавай список из базы
+            List<String> managers = orderRepository.findDistinctManagers();
             return ResponseEntity.ok(managers);
         } catch (Exception e) {
             log.error("Ошибка получения списка менеджеров: ", e);
-            // Возвращаем пустой список или дефолтные значения, если метода нет
             return ResponseEntity.ok(Collections.emptyList());
         }
     }
 
-
-    @GetMapping("/api/reports/excel/orders-detailed")
-    public void downloadDetailedReport(
+    /**
+     * НОВЫЙ метод для скачивания сводного отчета по товарам (сгруппированные позиции).
+     * Доступен по адресу: GET /api/reports/excel/orders-product-summary
+     */
+    @GetMapping("/orders-product-summary")
+    public void downloadProductSummaryReport(
             @RequestParam("start") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate start,
             @RequestParam("end") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate end,
             @RequestParam(value = "managerId", required = false) String managerId,
             HttpServletResponse response) throws IOException {
 
-        // 1. Получаем заказы через сервис
         List<Order> orders = orderService.getOrdersForPeriod(start, end, managerId);
 
         if (orders.isEmpty()) {
@@ -265,7 +237,6 @@ public class ReportApiController {
             return;
         }
 
-        // 2. Группируем и суммируем товары
         Map<Long, ProductReportDto> reportMap = new HashMap<>();
 
         for (Order order : orders) {
@@ -282,8 +253,6 @@ public class ReportApiController {
 
                 Product product = productRepository.findById(productId).orElse(null);
                 String productName = (product != null) ? product.getName() : "Товар #" + productId;
-
-                // ИСПРАВЛЕНО: раз category это String, вызываем напрямую без .getName()
                 String category = (product != null && product.getCategory() != null) ? product.getCategory() : "Без категории";
 
                 BigDecimal basePrice = (product != null && product.getPrice() != null) ? product.getPrice() : BigDecimal.ZERO;
@@ -296,7 +265,6 @@ public class ReportApiController {
             }
         }
 
-        // 3. Генерация Excel через Apache POI
         Workbook workbook = new XSSFWorkbook();
         Sheet sheet = workbook.createSheet("Детализация товаров");
 
@@ -316,7 +284,7 @@ public class ReportApiController {
         }
 
         response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-        response.setHeader("Content-Disposition", "attachment; filename=detailed_report_" + start + "_to_" + end + ".xlsx");
+        response.setHeader("Content-Disposition", "attachment; filename=product_summary_" + start + "_to_" + end + ".xlsx");
 
         try (OutputStream outputStream = response.getOutputStream()) {
             workbook.write(outputStream);
@@ -331,5 +299,4 @@ public class ReportApiController {
         private String email;
         private List<String> types;
     }
-
 }
