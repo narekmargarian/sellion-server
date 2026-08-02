@@ -169,15 +169,16 @@ public class SyncController {
 
     @GetMapping("/orders/manager/{managerId}/current-month")
     public ResponseEntity<List<Order>> getOrdersByManagerCurrentMonth(@PathVariable String managerId) {
-        LocalDateTime start = LocalDate.now().withDayOfMonth(1).atStartOfDay();
-        LocalDateTime end = LocalDateTime.now();
+        // Берем диапазон с начала текущего года, чтобы заказы точно не терялись
+        LocalDateTime start = LocalDate.now().withDayOfYear(1).atStartOfDay();
+        LocalDateTime end = LocalDateTime.now().plusDays(1); // до конца текущего дня
         return ResponseEntity.ok(orderRepository.findByManagerIdAndCreatedAtBetween(managerId, start, end));
     }
 
     @GetMapping("/returns/manager/{managerId}/current-month")
     public ResponseEntity<List<ReturnOrder>> getReturnsByManagerCurrentMonth(@PathVariable String managerId) {
-        LocalDateTime start = LocalDate.now().withDayOfMonth(1).atStartOfDay();
-        LocalDateTime end = LocalDateTime.now();
+        LocalDateTime start = LocalDate.now().withDayOfYear(1).atStartOfDay();
+        LocalDateTime end = LocalDateTime.now().plusDays(1);
         return ResponseEntity.ok(returnOrderRepository.findByManagerIdAndCreatedAtBetween(managerId, start, end));
     }
 
