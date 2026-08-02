@@ -38,16 +38,26 @@ public class ReportApiController {
     private final EmailService emailService;
 
     /**
-     * Экспорт детального отчета по заказам.
+     * Экспорт детального отчета по заказам (с поддержкой опционального менеджера).
      * ИДЕАЛЬНО: Используем try-with-resources для мгновенного освобождения памяти.
      */
     @GetMapping("/orders-detailed")
-    public ResponseEntity<?> exportOrdersDetailed(@RequestParam String start, @RequestParam String end) {
+    public ResponseEntity<?> exportOrdersDetailed(
+            @RequestParam String start,
+            @RequestParam String end,
+            @RequestParam(required = false) String managerId) {
         try {
             LocalDateTime from = LocalDate.parse(start).atStartOfDay();
             LocalDateTime to = LocalDate.parse(end).atTime(LocalTime.MAX);
 
-            List<Order> orders = orderRepository.findInvoicedOrdersBetweenDates(from, to);
+            List<Order> orders;
+
+            // Если указан менеджер и он не пустой — фильтруем по нему
+            if (managerId != null && !managerId.isBlank()) {
+                orders = orderRepository.findInvoicedOrdersBetweenDatesAndManager(from, to, managerId);
+            } else {
+                orders = orderRepository.findInvoicedOrdersBetweenDates(from, to);
+            }
 
             if (orders.isEmpty()) {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND)
@@ -217,41 +227,6 @@ public class ReportApiController {
             log.error("Ошибка получения списка менеджеров: ", e);
             // Возвращаем пустой список или дефолтные значения, если метода нет
             return ResponseEntity.ok(Collections.emptyList());
-        }
-    }
-
-    /**
-     * Экспорт детального отчета по заказам с учетом менеджера.
-     */
-    @GetMapping("/orders-detailed")
-    public ResponseEntity<?> exportOrdersDetailed(
-            @RequestParam String start,
-            @RequestParam String end,
-            @RequestParam(required = false) String managerId) {
-        try {
-            LocalDateTime from = LocalDate.parse(start).atStartOfDay();
-            LocalDateTime to = LocalDate.parse(end).atTime(LocalTime.MAX);
-
-            List<Order> orders;
-
-            // Если указан менеджер и он не пустой — фильтруем по нему
-            if (managerId != null && !managerId.isBlank()) {
-                orders = orderRepository.findInvoicedOrdersBetweenDatesAndManager(from, to, managerId);
-            } else {
-                orders = orderRepository.findInvoicedOrdersBetweenDates(from, to);
-            }
-
-            if (orders.isEmpty()) {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                        .body(Map.of("message", "Заказы за период " + start + " - " + end + " не найдены."));
-            }
-
-            try (Workbook workbook = invoiceExcelService.generateExcel(orders, null, "Отчет по продажам")) {
-                return getResponseEntity(workbook, "Orders_Report_" + start + ".xlsx");
-            }
-        } catch (Exception e) {
-            log.error("Ошибка генерации отчета по заказах: ", e);
-            return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
         }
     }
 
