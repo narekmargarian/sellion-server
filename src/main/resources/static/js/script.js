@@ -4141,33 +4141,33 @@ document.querySelectorAll('.tab-link, [data-tab]').forEach(tab => {
     });
 });
 
-function updateSelectedCounter() {
-    const counter = document.getElementById('selected-count');
-    if (counter) {
-        // Считаем общее количество из памяти, а не только на странице
-        counter.innerText = selectedOrderIds.length;
-    }
-}
+//function updateSelectedCounter() {
+//    const counter = document.getElementById('selected-count');
+//    if (counter) {
+//        // Считаем общее количество из памяти, а не только на странице
+//        counter.innerText = selectedOrderIds.length;
+//    }
+//}
 
-function restoreCheckboxes() {
-    const checkboxes = document.querySelectorAll('.order-print-check');
-    let foundOnPage = 0;
-
-    checkboxes.forEach(cb => {
-        if (selectedOrderIds.includes(cb.value)) {
-            cb.checked = true;
-            foundOnPage++;
-        }
-    });
-
-    // Если все чекбоксы на данной странице выбраны, ставим галочку и в "Выбрать все"
-    const selectAllBtn = document.getElementById('select-all-orders');
-    if (selectAllBtn && checkboxes.length > 0) {
-        selectAllBtn.checked = (foundOnPage === checkboxes.length);
-    }
-
-    updateSelectedCounter();
-}
+//function restoreCheckboxes() {
+//    const checkboxes = document.querySelectorAll('.order-print-check');
+//    let foundOnPage = 0;
+//
+//    checkboxes.forEach(cb => {
+//        if (selectedOrderIds.includes(cb.value)) {
+//            cb.checked = true;
+//            foundOnPage++;
+//        }
+//    });
+//
+//    // Если все чекбоксы на данной странице выбраны, ставим галочку и в "Выбрать все"
+//    const selectAllBtn = document.getElementById('select-all-orders');
+//    if (selectAllBtn && checkboxes.length > 0) {
+//        selectAllBtn.checked = (foundOnPage === checkboxes.length);
+//    }
+//
+//    updateSelectedCounter();
+//}
 
 function clearOrderSelection() {
     // 1. Очищаем массив в оперативной памяти (JS)
@@ -4205,26 +4205,26 @@ function clearAllSelections() {
     syncCheckboxesOnPage();
 }
 
-function syncCheckboxesOnPage() {
-    // Синхроним заказы
-    document.querySelectorAll('.order-print-check').forEach(cb => {
-        // Приводим ID к числу для сравнения
-        cb.checked = selectedOrderIds.includes(Number(cb.value));
-    });
-    // Синхроним возвраты
-    document.querySelectorAll('.return-print-check').forEach(cb => {
-        cb.checked = selectedReturnIds.includes(Number(cb.value));
-    });
-
-    // Обновляем главный чекбокс "Выбрать все"
-    const orderSelectAll = document.getElementById('select-all-orders');
-    if (orderSelectAll) {
-        const pageCheckboxes = document.querySelectorAll('.order-print-check');
-        if (pageCheckboxes.length > 0) {
-            orderSelectAll.checked = Array.from(pageCheckboxes).every(cb => cb.checked);
-        }
-    }
-}
+//function syncCheckboxesOnPage() {
+//    // Синхроним заказы
+//    document.querySelectorAll('.order-print-check').forEach(cb => {
+//        // Приводим ID к числу для сравнения
+//        cb.checked = selectedOrderIds.includes(Number(cb.value));
+//    });
+//    // Синхроним возвраты
+//    document.querySelectorAll('.return-print-check').forEach(cb => {
+//        cb.checked = selectedReturnIds.includes(Number(cb.value));
+//    });
+//
+//    // Обновляем главный чекбокс "Выбрать все"
+//    const orderSelectAll = document.getElementById('select-all-orders');
+//    if (orderSelectAll) {
+//        const pageCheckboxes = document.querySelectorAll('.order-print-check');
+//        if (pageCheckboxes.length > 0) {
+//            orderSelectAll.checked = Array.from(pageCheckboxes).every(cb => cb.checked);
+//        }
+//    }
+//}
 
 function clearReturnSelection() {
     selectedReturnIds = [];
@@ -4236,66 +4236,66 @@ function clearReturnSelection() {
     if (typeof showToast === "function") showToast("Выбор возвратов очищен", "info");
 }
 
-function printDailySummary() {
-    // ИСПРАВЛЕНО: Берем данные из глобального массива
-    if (selectedOrderIds.length === 0) {
-        showToast("Выберите заказы для сводки!", "error");
-        return;
-    }
+//function printDailySummary() {
+//    // ИСПРАВЛЕНО: Берем данные из глобального массива
+//    if (selectedOrderIds.length === 0) {
+//        showToast("Выберите заказы для сводки!", "error");
+//        return;
+//    }
+//
+//    const frame = document.getElementById('printFrame');
+//    const url = '/admin/orders/print-daily-summary';
+//
+//    const newFrame = frame.cloneNode(true);
+//    frame.parentNode.replaceChild(newFrame, frame);
+//
+//    newFrame.addEventListener('load', function () {
+//        if (newFrame.contentWindow.location.href === "about:blank") return;
+//        setTimeout(() => {
+//            newFrame.contentWindow.focus();
+//            newFrame.contentWindow.print();
+//        }, 300);
+//    }, {once: true});
+//
+//    // ИСПРАВЛЕНО: передаем накопленные ID
+//    submitAsPost(url, selectedOrderIds, 'printFrame');
+//
+//    clearOrderSelection();
+//}
 
-    const frame = document.getElementById('printFrame');
-    const url = '/admin/orders/print-daily-summary';
-
-    const newFrame = frame.cloneNode(true);
-    frame.parentNode.replaceChild(newFrame, frame);
-
-    newFrame.addEventListener('load', function () {
-        if (newFrame.contentWindow.location.href === "about:blank") return;
-        setTimeout(() => {
-            newFrame.contentWindow.focus();
-            newFrame.contentWindow.print();
-        }, 300);
-    }, {once: true});
-
-    // ИСПРАВЛЕНО: передаем накопленные ID
-    submitAsPost(url, selectedOrderIds, 'printFrame');
-
-    clearOrderSelection();
-}
-
-function printSelectedOperations(type) {
-    // ИСПРАВЛЕНО: Берем данные из соответствующего глобального массива
-    const selectedIds = type === 'order' ? selectedOrderIds : selectedReturnIds;
-
-    if (selectedIds.length === 0) {
-        showToast("Сначала выберите записи галочкой!", "error");
-        return;
-    }
-
-    const frame = document.getElementById('printFrame');
-    const url = type === 'order' ? '/admin/orders/print-batch' : '/admin/returns/print-batch';
-
-    const newFrame = frame.cloneNode(true);
-    frame.parentNode.replaceChild(newFrame, frame);
-
-    newFrame.addEventListener('load', function () {
-        if (newFrame.contentWindow.location.href === "about:blank") return;
-
-        setTimeout(() => {
-            newFrame.contentWindow.focus();
-            newFrame.contentWindow.print();
-        }, 300);
-    }, {once: true});
-
-    submitAsPost(url, selectedIds, 'printFrame');
-
-    // ИСПРАВЛЕНО: очищаем именно тот тип, который напечатали
-    if (type === 'order') {
-        clearOrderSelection();
-    } else {
-        clearReturnSelection();
-    }
-}
+//function printSelectedOperations(type) {
+//    // ИСПРАВЛЕНО: Берем данные из соответствующего глобального массива
+//    const selectedIds = type === 'order' ? selectedOrderIds : selectedReturnIds;
+//
+//    if (selectedIds.length === 0) {
+//        showToast("Сначала выберите записи галочкой!", "error");
+//        return;
+//    }
+//
+//    const frame = document.getElementById('printFrame');
+//    const url = type === 'order' ? '/admin/orders/print-batch' : '/admin/returns/print-batch';
+//
+//    const newFrame = frame.cloneNode(true);
+//    frame.parentNode.replaceChild(newFrame, frame);
+//
+//    newFrame.addEventListener('load', function () {
+//        if (newFrame.contentWindow.location.href === "about:blank") return;
+//
+//        setTimeout(() => {
+//            newFrame.contentWindow.focus();
+//            newFrame.contentWindow.print();
+//        }, 300);
+//    }, {once: true});
+//
+//    submitAsPost(url, selectedIds, 'printFrame');
+//
+//    // ИСПРАВЛЕНО: очищаем именно тот тип, который напечатали
+//    if (type === 'order') {
+//        clearOrderSelection();
+//    } else {
+//        clearReturnSelection();
+//    }
+//}
 
 function printInvoiceInline(url) {
     const iframe = document.createElement('iframe');
@@ -4453,6 +4453,7 @@ function handleCreateInvoice(orderId) {
         }
     );
 }
+
 async function cancelOrder(id) {
     // Вызываем твое новое красивое модальное окно
     // Параметры: Заголовок, Текст, Тип ('danger' для красного), и функция действия
@@ -4588,26 +4589,118 @@ async function cancelOrder(id) {
 // }
 
 
+//function toggleGlobalSelect(masterCheckbox, childClass) {
+//    const isOrder = (childClass === 'order-print-check');
+//
+//    // 1. Собираем ID ТОЛЬКО видимых (отфильтрованных) чекбоксов на текущей странице
+//    const pageCheckboxes = document.querySelectorAll('.' + childClass);
+//    const visibleIds = [];
+//
+//    pageCheckboxes.forEach(cb => {
+//        // Проверяем, не скрыта ли строка фильтром (если родительский tr не display: none)
+//        const row = cb.closest('tr');
+//        if (row && row.style.display !== 'none') {
+//            cb.checked = masterCheckbox.checked;
+//            const val = isOrder ? Number(cb.value) : Number(cb.value);
+//            if (masterCheckbox.checked) {
+//                visibleIds.push(val);
+//            }
+//        }
+//    });
+//
+//    // 2. Обновляем глобальный массив для видимых элементов
+//    if (masterCheckbox.checked) {
+//        visibleIds.forEach(id => {
+//            if (isOrder) {
+//                if (!selectedOrderIds.includes(id)) selectedOrderIds.push(id);
+//            } else {
+//                if (!selectedReturnIds.includes(id)) selectedReturnIds.push(id);
+//            }
+//        });
+//    } else {
+//        // Убираем из выбранных только те, что были видны при снятии галочки
+//        if (isOrder) {
+//            selectedOrderIds = selectedOrderIds.filter(id => !visibleIds.includes(id));
+//        } else {
+//            selectedReturnIds = selectedReturnIds.filter(id => !visibleIds.includes(id));
+//        }
+//    }
+//
+//    saveAllToStorage();
+//    if (typeof updateSelectedCounter === 'function') updateSelectedCounter();
+//}
+
+
+// ==========================================
+// 1. УПРАВЛЕНИЕ СУММАМИ ВЫБРАННЫХ
+// ==========================================
+
+function updateSelectedCounter() {
+    // Обновляем счетчики и суммы для заказов
+    let selectedOrderSum = 0;
+
+    // Если у вас в DOM хранится сумма строк (например, в data-атрибуте строки таблицы или элемента)
+    // Либо если суммы передаются в объектах ordersData / возвратах.
+    // Пройдемся по всем чекбоксам заказов:
+    document.querySelectorAll('.order-print-check').forEach(cb => {
+        if (cb.checked) {
+            const row = cb.closest('tr');
+            if (row) {
+                // Ищем ячейку с суммой (предположим, она имеет класс .order-total или берется из данных)
+                // Или из дата-атрибута data-amount на чекбоксе/строке: cb.dataset.amount
+                const amount = parseFloat(cb.dataset.amount || row.dataset.amount || 0);
+                selectedOrderSum += amount;
+            }
+        }
+    });
+
+    // Выводим сумму выбранных заказов в элемент (например, с id="selected-orders-sum")
+    const orderSumContainer = document.getElementById('selected-orders-sum');
+    if (orderSumContainer) {
+        orderSumContainer.innerText = `Сумма выбранных: ${selectedOrderSum.toLocaleString()} ֏`;
+    }
+
+    // Аналогично для возвратов
+    let selectedReturnSum = 0;
+    document.querySelectorAll('.return-print-check').forEach(cb => {
+        if (cb.checked) {
+            const row = cb.closest('tr');
+            if (row) {
+                const amount = parseFloat(cb.dataset.amount || row.dataset.amount || 0);
+                selectedReturnSum += amount;
+            }
+        }
+    });
+
+    const returnSumContainer = document.getElementById('selected-returns-sum');
+    if (returnSumContainer) {
+        returnSumContainer.innerText = `Сумма выбранных: ${selectedReturnSum.toLocaleString()} ֏`;
+    }
+}
+
+
+// ==========================================
+// 2. ИСПРАВЛЕННЫЙ ГЛОБАЛЬНЫЙ ВЫБОР (С УЧЕТОМ ФИЛЬТРА/ПОИСКА)
+// ==========================================
+
 function toggleGlobalSelect(masterCheckbox, childClass) {
     const isOrder = (childClass === 'order-print-check');
-
-    // 1. Собираем ID ТОЛЬКО видимых (отфильтрованных) чекбоксов на текущей странице
     const pageCheckboxes = document.querySelectorAll('.' + childClass);
     const visibleIds = [];
 
     pageCheckboxes.forEach(cb => {
-        // Проверяем, не скрыта ли строка фильтром (если родительский tr не display: none)
         const row = cb.closest('tr');
+        // Проверяем, что строка отображается (не скрыта поиском/фильтром)
         if (row && row.style.display !== 'none') {
             cb.checked = masterCheckbox.checked;
-            const val = isOrder ? Number(cb.value) : Number(cb.value);
+            const val = Number(cb.value);
             if (masterCheckbox.checked) {
                 visibleIds.push(val);
             }
         }
     });
 
-    // 2. Обновляем глобальный массив для видимых элементов
+    // Корректируем глобальный массив строго по ВИДИМЫМ на экране элементам
     if (masterCheckbox.checked) {
         visibleIds.forEach(id => {
             if (isOrder) {
@@ -4617,7 +4710,7 @@ function toggleGlobalSelect(masterCheckbox, childClass) {
             }
         });
     } else {
-        // Убираем из выбранных только те, что были видны при снятии галочки
+        // Убираем из выбранных только те элементы, которые сейчас видны в таблице
         if (isOrder) {
             selectedOrderIds = selectedOrderIds.filter(id => !visibleIds.includes(id));
         } else {
@@ -4626,7 +4719,113 @@ function toggleGlobalSelect(masterCheckbox, childClass) {
     }
 
     saveAllToStorage();
-    if (typeof updateSelectedCounter === 'function') updateSelectedCounter();
+    syncCheckboxesOnPage();
+    updateSelectedCounter();
+}
+
+
+// ==========================================
+// 3. СИНХРОНИЗАЦИЯ И ВОССТАНОВЛЕНИЕ ЧЕКБОКСОВ
+// ==========================================
+
+function syncCheckboxesOnPage() {
+    document.querySelectorAll('.order-print-check').forEach(cb => {
+        cb.checked = selectedOrderIds.includes(Number(cb.value));
+    });
+
+    document.querySelectorAll('.return-print-check').forEach(cb => {
+        cb.checked = selectedReturnIds.includes(Number(cb.value));
+    });
+
+    // Синхронизация мастер-чекбокса заказов
+    const orderSelectAll = document.getElementById('select-all-orders');
+    if (orderSelectAll) {
+        const visibleCheckboxes = Array.from(document.querySelectorAll('.order-print-check')).filter(cb => {
+            const row = cb.closest('tr');
+            return row && row.style.display !== 'none';
+        });
+        if (visibleCheckboxes.length > 0) {
+            orderSelectAll.checked = visibleCheckboxes.every(cb => cb.checked);
+        } else {
+            orderSelectAll.checked = false;
+        }
+    }
+
+    // Синхронизация мастер-чекбокса возвратов
+    const returnSelectAll = document.getElementById('select-all-returns');
+    if (returnSelectAll) {
+        const visibleCheckboxes = Array.from(document.querySelectorAll('.return-print-check')).filter(cb => {
+            const row = cb.closest('tr');
+            return row && row.style.display !== 'none';
+        });
+        if (visibleCheckboxes.length > 0) {
+            returnSelectAll.checked = visibleCheckboxes.every(cb => cb.checked);
+        } else {
+            returnSelectAll.checked = false;
+        }
+    }
+
+    updateSelectedCounter();
+}
+
+function restoreCheckboxes() {
+    syncCheckboxesOnPage();
+}
+
+
+// ==========================================
+// 4. ПЕЧАТЬ БЕЗ АВТОМАТИЧЕСКОГО СБРОСА ВЫБОРА
+// ==========================================
+
+function printDailySummary() {
+    if (selectedOrderIds.length === 0) {
+        showToast("Выберите заказы для сводки!", "error");
+        return;
+    }
+
+    const frame = document.getElementById('printFrame');
+    const url = '/admin/orders/print-daily-summary';
+
+    const newFrame = frame.cloneNode(true);
+    frame.parentNode.replaceChild(newFrame, frame);
+
+    newFrame.addEventListener('load', function () {
+        if (newFrame.contentWindow.location.href === "about:blank") return;
+        setTimeout(() => {
+            newFrame.contentWindow.focus();
+            newFrame.contentWindow.print();
+        }, 300);
+    }, {once: true});
+
+    submitAsPost(url, selectedOrderIds, 'printFrame');
+    // УДАЛИЛИ вызов clearOrderSelection(), чтобы выбор НЕ сбрасывался после печати!
+}
+
+function printSelectedOperations(type) {
+    const selectedIds = type === 'order' ? selectedOrderIds : selectedReturnIds;
+
+    if (selectedIds.length === 0) {
+        showToast("Сначала выберите записи галочкой!", "error");
+        return;
+    }
+
+    const frame = document.getElementById('printFrame');
+    const url = type === 'order' ? '/admin/orders/print-batch' : '/admin/returns/print-batch';
+
+    const newFrame = frame.cloneNode(true);
+    frame.parentNode.replaceChild(newFrame, frame);
+
+    newFrame.addEventListener('load', function () {
+        if (newFrame.contentWindow.location.href === "about:blank") return;
+
+        setTimeout(() => {
+            newFrame.contentWindow.focus();
+            newFrame.contentWindow.print();
+        }, 300);
+    }, {once: true});
+
+    submitAsPost(url, selectedIds, 'printFrame');
+    // УДАЛИЛИ автоматическую очиску выбора (clearOrderSelection / clearReturnSelection) по вашему требованию!
 }
 
 function openViewReportModal() {

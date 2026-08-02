@@ -96,8 +96,12 @@
                     <span class="price-up"
                           th:with="val=${totalOrdersSum != null ? totalOrdersSum.doubleValue() : 0}"
                           th:text="${val == 0 ? '0 ֏' : (val % 1 == 0 ? #numbers.formatInteger(val, 1, 'WHITESPACE') : #numbers.formatDecimal(val, 1, 'WHITESPACE', 2, 'POINT').replaceAll('0$', '')) + ' ֏'}">
-        0 ֏
-    </span>
+                     0 ֏
+                      </span>
+                </div>
+
+                <div id="selected-orders-sum" style="font-weight: 800; color: #6366f1;">
+                    Сумма выбранных: 0 ֏
                 </div>
             </div>
 
@@ -164,20 +168,20 @@
                     </tr>
                     </thead>
                     <tbody id="orders-table-body">
-                    <tr th:each="o : ${orders}" th:data-id="${o.id}"
+                    <tr th:each="o : ${orders}" th:data-id="${o.id}" th:data-amount="${o.totalAmount != null ? o.totalAmount : 0}"
                         onclick="if(!event.target.closest('button, input')){ openOrderDetails(this.getAttribute('data-id')) }">
                         <td onclick="event.stopPropagation()">
-                            <input type="checkbox" class="order-print-check" th:value="${o.id}">
+                            <input type="checkbox" class="order-print-check" th:value="${o.id}" onchange="updateSelectedCounter()">
                         </td>
 
                         <td class="js-date-format" th:text="${o.createdAt}"></td>
                         <td th:text="${o.managerId}" style="font-weight:600; color:var(--accent);"></td>
                         <td th:text="${o.shopName}" style="font-weight:700;"></td>
                         <td class="price-up">
-    <span th:with="val=${o.totalAmount != null ? o.totalAmount.doubleValue() : 0}"
-          th:text="${val == 0 ? '0 ֏' : (val % 1 == 0 ? #numbers.formatInteger(val, 1, 'WHITESPACE') : #numbers.formatDecimal(val, 1, 'WHITESPACE', 2, 'POINT').replaceAll('0$', '')) + ' ֏'}">
-        0 ֏
-    </span>
+<span th:with="val=${o.totalAmount != null ? o.totalAmount.doubleValue() : 0}"
+      th:text="${val == 0 ? '0 ֏' : (val % 1 == 0 ? #numbers.formatInteger(val, 1, 'WHITESPACE') : #numbers.formatDecimal(val, 1, 'WHITESPACE', 2, 'POINT').replaceAll('0$', '')) + ' ֏'}">
+    0 ֏
+</span>
                         </td>
 
 
@@ -190,9 +194,9 @@
                                 <span class="badge bg-secondary">СПИСАНО</span>
                             </th:block>
                             <th:block th:unless="${o.shopName == 'СПИСАНИЕ'}">
-                        <span th:class="|badge ${o.invoiceId != null ? 'bg-success' : (o.status.name() == 'RESERVED' ? 'bg-info' : 'bg-primary')}|"
-                              th:text="${o.invoiceId != null ? 'ПРОВЕРЕНО' : (o.status.name() == 'RESERVED' ? 'В резерве' : 'Новый')}">
-                        </span>
+                    <span th:class="|badge ${o.invoiceId != null ? 'bg-success' : (o.status.name() == 'RESERVED' ? 'bg-info' : 'bg-primary')}|"
+                          th:text="${o.invoiceId != null ? 'ПРОВЕРЕНО' : (o.status.name() == 'RESERVED' ? 'В резерве' : 'Новый')}">
+                    </span>
                             </th:block>
                             <br/>
                             <small class="text-muted"
@@ -221,8 +225,8 @@
 
                                     <span th:if="${o.invoiceId != null}" class="badge bg-light text-dark"
                                           style="border:1px solid #ccc; padding: 7px; border-radius:4px;">
-                                                     Счет №[[${o.invoiceId}]]
-                                                             </span>
+                                                 Счет №[[${o.invoiceId}]]
+                                                         </span>
                                 </th:block>
 
 
@@ -247,8 +251,8 @@
                    th:if="${currentPage > 0}" class="btn-ghost">← Назад</a>
 
                 <span style="align-self: center; font-weight: 700;">
-        Страница <span th:text="${currentPage + 1}"></span> из <span th:text="${totalPages}"></span>
-    </span>
+    Страница <span th:text="${currentPage + 1}"></span> из <span th:text="${totalPages}"></span>
+</span>
 
                 <!-- Кнопка ВПЕРЕД -->
                 <a th:href="@{/admin(activeTab='tab-orders', page=${currentPage + 1}, orderStartDate=${orderStartDate}, orderEndDate=${orderEndDate}, orderManagerId=${selectedOrderManager})}"
@@ -267,8 +271,12 @@
                     <span class="price-down"
                           th:with="val=${totalReturnsSum != null ? totalReturnsSum.doubleValue() : 0}"
                           th:text="${val == 0 ? '0 ֏' : (val % 1 == 0 ? #numbers.formatInteger(val, 1, 'WHITESPACE') : #numbers.formatDecimal(val, 1, 'WHITESPACE', 2, 'POINT').replaceAll('0$', '')) + ' ֏'}">
-        0 ֏
-    </span>
+                     0 ֏
+                     </span>
+                </div>
+
+                <div id="selected-returns-sum" style="font-weight: 800; color: #ef4444;">
+                    Сумма выбранных: 0 ֏
                 </div>
             </div>
 
@@ -297,7 +305,7 @@
                     </button>
                 </form>
 
-                <button class="btn-primary" onclick="openCreateReturnModal()" title="Новый возврат">+</button>
+                <button class="btn-primary" onclick="openCreateReturnModal()" title="New return">+</button>
 
                 <button type="button" class="btn-primary"
                         style="background: #10b981;"
@@ -331,11 +339,12 @@
                     <tbody id="returns-table-body">
                     <tr th:each="r : ${returns}"
                         th:data-id="${r.id}"
+                        th:data-amount="${r.totalAmount != null ? r.totalAmount : 0}"
                         onclick="openReturnDetails(this.getAttribute('data-id'))"
                         style="cursor:pointer;">
 
                         <td onclick="event.stopPropagation()">
-                            <input type="checkbox" class="return-print-check" th:value="${r.id}"
+                            <input type="checkbox" class="return-print-check" th:value="${r.id}" onchange="updateSelectedCounter()"
                                    style="cursor:pointer;">
                         </td>
 
@@ -353,10 +362,10 @@
                         </td>
 
                         <td class="price-down">
-    <span th:with="val=${r.totalAmount != null ? r.totalAmount.doubleValue() : 0}"
-          th:text="${val == 0 ? '0 ֏' : (val % 1 == 0 ? #numbers.formatInteger(val, 1, 'WHITESPACE') : #numbers.formatDecimal(val, 1, 'WHITESPACE', 2, 'POINT').replaceAll('0$', '')) + ' ֏'}">
-        0 ֏
-    </span>
+<span th:with="val=${r.totalAmount != null ? r.totalAmount.doubleValue() : 0}"
+      th:text="${val == 0 ? '0 ֏' : (val % 1 == 0 ? #numbers.formatInteger(val, 1, 'WHITESPACE') : #numbers.formatDecimal(val, 1, 'WHITESPACE', 2, 'POINT').replaceAll('0$', '')) + ' ֏'}">
+    0 ֏
+</span>
                         </td>
 
                         <td>
