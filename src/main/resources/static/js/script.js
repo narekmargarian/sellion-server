@@ -4282,46 +4282,79 @@ function printRouteSheet() {
 }
 
 function printCompactOrders() {
-    // ИСПРАВЛЕНО: Берем из глобального списка
-    if (selectedOrderIds.length === 0) return showToast("Выберите хотя бы один заказ", "error");
+    // Оставляем только те ID, которые сейчас реально видны на экране
+    const visibleIds = selectedOrderIds.filter(id => {
+        const checkbox = document.querySelector(`.order-print-check[value="${id}"]`);
+        if (!checkbox) return false;
+        const row = checkbox.closest('tr');
+        return row && row.style.display !== 'none';
+    });
+
+    if (visibleIds.length === 0) return showToast("Выберите хотя бы один заказ", "error");
 
     const params = new URLSearchParams();
     params.append('type', 'order');
-    selectedOrderIds.forEach(id => params.append('ids', id));
+    visibleIds.forEach(id => params.append('ids', id));
 
     const url = `/admin/logistic/print-compact?${params.toString()}`;
     printAction(url);
 }
 
 function printCompactReturns() {
-    // ИСПРАВЛЕНО: Берем из глобального списка
-    if (selectedReturnIds.length === 0) return showToast("Выберите хотя бы один возврат", "error");
+    // Оставляем только те ID, которые сейчас реально видны на экране
+    const visibleIds = selectedReturnIds.filter(id => {
+        const checkbox = document.querySelector(`.return-print-check[value="${id}"]`);
+        if (!checkbox) return false;
+        const row = checkbox.closest('tr');
+        return row && row.style.display !== 'none';
+    });
+
+    if (visibleIds.length === 0) return showToast("Выберите хотя бы один возврат", "error");
 
     const params = new URLSearchParams();
     params.append('type', 'return');
-    selectedReturnIds.forEach(id => params.append('ids', id));
+    visibleIds.forEach(id => params.append('ids', id));
 
     const url = `/admin/logistic/print-compact?${params.toString()}`;
     printAction(url);
 }
 
 function printSelectedRows(tableId) {
-    const selected = tableId.includes('order') ? selectedOrderIds : selectedReturnIds;
+    const isOrder = tableId.includes('order');
+    const rawSelected = isOrder ? selectedOrderIds : selectedReturnIds;
+    const checkClass = isOrder ? 'order-print-check' : 'return-print-check';
+
+    // Оставляем только те ID, которые сейчас реально видны на экране (прошли фильтр/поиск)
+    const selected = rawSelected.filter(id => {
+        const checkbox = document.querySelector(`.${checkClass}[value="${id}"]`);
+        if (!checkbox) return false;
+        const row = checkbox.closest('tr');
+        return row && row.style.display !== 'none';
+    });
+
     if (selected.length === 0) return alert("Выберите хотя бы одну запись");
 
     const form = document.createElement('form');
     form.method = 'POST';
-    form.action = tableId.includes('order') ? '/admin/orders/print-batch' : '/admin/returns/print-batch';
+    form.action = isOrder ? '/admin/orders/print-batch' : '/admin/returns/print-batch';
     form.target = '_blank';
 
-    const csrfToken = document.querySelector('meta[name="_csrf"]').content;
-    const csrfInput = document.createElement('input');
-    csrfInput.name = '_csrf';
-    csrfInput.value = csrfToken;
-    form.appendChild(csrfInput);
+    // Безопасное получение CSRF-токена (из meta-тега или input)
+    const csrfMeta = document.querySelector('meta[name="_csrf"]');
+    const csrfInputVal = document.querySelector('input[name="_csrf"]');
+    const csrfToken = csrfMeta ? csrfMeta.content : (csrfInputVal ? csrfInputVal.value : '');
+
+    if (csrfToken) {
+        const csrfInput = document.createElement('input');
+        csrfInput.type = 'hidden';
+        csrfInput.name = '_csrf';
+        csrfInput.value = csrfToken;
+        form.appendChild(csrfInput);
+    }
 
     selected.forEach(id => {
         const input = document.createElement('input');
+        input.type = 'hidden';
         input.name = 'ids';
         input.value = id;
         form.appendChild(input);
@@ -4521,7 +4554,15 @@ function restoreCheckboxes() {
 }
 
 function printDailySummary() {
-    if (selectedOrderIds.length === 0) {
+    // Фильтруем массив: оставляем только те ID, чьи строки прямо сейчас ВИДИМЫ в таблице
+    const visibleSelectedIds = selectedOrderIds.filter(id => {
+        const checkbox = document.querySelector(`.order-print-check[value="${id}"]`);
+        if (!checkbox) return false;
+        const row = checkbox.closest('tr');
+        return row && row.style.display !== 'none';
+    });
+
+    if (visibleSelectedIds.length === 0) {
         showToast("Выберите заказы для сводки!", "error");
         return;
     }
@@ -4540,12 +4581,21 @@ function printDailySummary() {
         }, 300);
     }, {once: true});
 
-    submitAsPost(url, selectedOrderIds, 'printFrame');
-    // УДАЛИЛИ вызов clearOrderSelection(), чтобы выбор НЕ сбрасывался после печати!
+    // Отправляем строго отфильтрованные по видимости ID
+    submitAsPost(url, visibleSelectedIds, 'printFrame');
 }
 
 function printSelectedOperations(type) {
-    const selectedIds = type === 'order' ? selectedOrderIds : selectedReturnIds;
+    const rawSelected = type === 'order' ? selectedOrderIds : selectedReturnIds;
+    const checkClass = type === 'order' ? 'order-print-check' : 'return-print-check';
+
+    // Оставляем только те выбранные ID, которые сейчас отображаются на экране
+    const selectedIds = rawSelected.filter(id => {
+        const checkbox = document.querySelector(`.${checkClass}[value="${id}"]`);
+        if (!checkbox) return false;
+        const row = checkbox.closest('tr');
+        return row && row.style.display !== 'none';
+    });
 
     if (selectedIds.length === 0) {
         showToast("Сначала выберите записи галочкой!", "error");
@@ -4567,8 +4617,8 @@ function printSelectedOperations(type) {
         }, 300);
     }, {once: true});
 
+    // Отправляем строго отфильтрованные по видимости ID
     submitAsPost(url, selectedIds, 'printFrame');
-    // УДАЛИЛИ автоматическую очиску выбора (clearOrderSelection / clearReturnSelection) по вашему требованию!
 }
 
 function openViewReportModal() {
