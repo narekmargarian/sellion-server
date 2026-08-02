@@ -4679,6 +4679,21 @@ function populateManagersDropdown() {
     }
 }
 
+function downloadReportExcel() {
+    const start = document.getElementById('view-report-start').value;
+    const end = document.getElementById('view-report-end').value;
+    const managerId = document.getElementById('view-report-manager').value;
+
+    if (!start || !end) return;
+
+    // ИСПРАВЛЕНО: Изменено на новый метод сводки по товарам
+    let url = `/api/reports/excel/orders-product-summary?start=${start}&end=${end}`;
+    if (managerId) url += `&managerId=${managerId}`;
+
+    window.location.href = url;
+    showToast("Скачивание Excel отчета...", "success");
+}
+
 async function previewReportData() {
     const start = document.getElementById('view-report-start').value;
     const end = document.getElementById('view-report-end').value;
@@ -4696,7 +4711,8 @@ async function previewReportData() {
     downloadBtn.style.cursor = 'not-allowed';
 
     try {
-        let url = `/api/reports/excel/orders-detailed?start=${start}&end=${end}`;
+        // ИСПРАВЛЕНО: Изменено на новый метод сводки по товарам
+        let url = `/api/reports/excel/orders-product-summary?start=${start}&end=${end}`;
         if (managerId) url += `&managerId=${managerId}`;
 
         const response = await fetch(url);
@@ -4724,20 +4740,6 @@ async function previewReportData() {
         console.error(e);
         container.innerHTML = `<div style="text-align: center; color: #ef4444; padding-top: 30px;">Ошибка проверки данных</div>`;
     }
-}
-
-function downloadReportExcel() {
-    const start = document.getElementById('view-report-start').value;
-    const end = document.getElementById('view-report-end').value;
-    const managerId = document.getElementById('view-report-manager').value;
-
-    if (!start || !end) return;
-
-    let url = `/api/reports/excel/orders-detailed?start=${start}&end=${end}`;
-    if (managerId) url += `&managerId=${managerId}`;
-
-    window.location.href = url;
-    showToast("Скачивание Excel отчета...", "success");
 }
 
 function showConfirmModal(title, message, type, onConfirm) {
