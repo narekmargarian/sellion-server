@@ -219,10 +219,8 @@ public class ReportApiController {
         }
     }
 
-    /**
-     * НОВЫЙ метод для скачивания сводного отчета по товарам (сгруппированные позиции).
-     * Доступен по адресу: GET /api/reports/excel/orders-product-summary
-     */
+
+
     @GetMapping("/orders-product-summary")
     public void downloadProductSummaryReport(
             @RequestParam("start") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate start,
@@ -268,6 +266,7 @@ public class ReportApiController {
         Workbook workbook = new XSSFWorkbook();
         Sheet sheet = workbook.createSheet("Детализация товаров");
 
+        // 1. Шапка таблицы
         Row headerRow = sheet.createRow(0);
         headerRow.createCell(0).setCellValue("Категория");
         headerRow.createCell(1).setCellValue("Наименование товара");
@@ -275,13 +274,27 @@ public class ReportApiController {
         headerRow.createCell(3).setCellValue("Сумма (֏)");
 
         int rowNum = 1;
+        int totalQuantity = 0;
+        BigDecimal totalAmountSum = BigDecimal.ZERO;
+
+        // 2. Заполнение строк данными
         for (ProductReportDto dto : reportMap.values()) {
             Row row = sheet.createRow(rowNum++);
             row.createCell(0).setCellValue(dto.getCategory());
             row.createCell(1).setCellValue(dto.getProductName());
             row.createCell(2).setCellValue(dto.getQuantity());
             row.createCell(3).setCellValue(dto.getAmount().doubleValue());
+
+            // Аккумулируем итоги
+            totalQuantity += dto.getQuantity();
+            totalAmountSum = totalAmountSum.add(dto.getAmount());
         }
+
+        // 3. Строка ИТОГО в самом низу
+        Row totalRow = sheet.createRow(rowNum);
+        totalRow.createCell(1).setCellValue("ИТОГО");
+        totalRow.createCell(2).setCellValue(totalQuantity);
+        totalRow.createCell(3).setCellValue(totalAmountSum.doubleValue());
 
         response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         response.setHeader("Content-Disposition", "attachment; filename=product_summary_" + start + "_to_" + end + ".xlsx");
