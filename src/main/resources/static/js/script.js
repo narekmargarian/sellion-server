@@ -4141,34 +4141,6 @@ document.querySelectorAll('.tab-link, [data-tab]').forEach(tab => {
     });
 });
 
-//function updateSelectedCounter() {
-//    const counter = document.getElementById('selected-count');
-//    if (counter) {
-//        // Считаем общее количество из памяти, а не только на странице
-//        counter.innerText = selectedOrderIds.length;
-//    }
-//}
-
-//function restoreCheckboxes() {
-//    const checkboxes = document.querySelectorAll('.order-print-check');
-//    let foundOnPage = 0;
-//
-//    checkboxes.forEach(cb => {
-//        if (selectedOrderIds.includes(cb.value)) {
-//            cb.checked = true;
-//            foundOnPage++;
-//        }
-//    });
-//
-//    // Если все чекбоксы на данной странице выбраны, ставим галочку и в "Выбрать все"
-//    const selectAllBtn = document.getElementById('select-all-orders');
-//    if (selectAllBtn && checkboxes.length > 0) {
-//        selectAllBtn.checked = (foundOnPage === checkboxes.length);
-//    }
-//
-//    updateSelectedCounter();
-//}
-
 function clearOrderSelection() {
     // 1. Очищаем массив в оперативной памяти (JS)
     selectedOrderIds = [];
@@ -4205,27 +4177,6 @@ function clearAllSelections() {
     syncCheckboxesOnPage();
 }
 
-//function syncCheckboxesOnPage() {
-//    // Синхроним заказы
-//    document.querySelectorAll('.order-print-check').forEach(cb => {
-//        // Приводим ID к числу для сравнения
-//        cb.checked = selectedOrderIds.includes(Number(cb.value));
-//    });
-//    // Синхроним возвраты
-//    document.querySelectorAll('.return-print-check').forEach(cb => {
-//        cb.checked = selectedReturnIds.includes(Number(cb.value));
-//    });
-//
-//    // Обновляем главный чекбокс "Выбрать все"
-//    const orderSelectAll = document.getElementById('select-all-orders');
-//    if (orderSelectAll) {
-//        const pageCheckboxes = document.querySelectorAll('.order-print-check');
-//        if (pageCheckboxes.length > 0) {
-//            orderSelectAll.checked = Array.from(pageCheckboxes).every(cb => cb.checked);
-//        }
-//    }
-//}
-
 function clearReturnSelection() {
     selectedReturnIds = [];
     localStorage.removeItem('selectedReturnIds');
@@ -4235,67 +4186,6 @@ function clearReturnSelection() {
     if (typeof updateSelectedCounter === "function") updateSelectedCounter();
     if (typeof showToast === "function") showToast("Выбор возвратов очищен", "info");
 }
-
-//function printDailySummary() {
-//    // ИСПРАВЛЕНО: Берем данные из глобального массива
-//    if (selectedOrderIds.length === 0) {
-//        showToast("Выберите заказы для сводки!", "error");
-//        return;
-//    }
-//
-//    const frame = document.getElementById('printFrame');
-//    const url = '/admin/orders/print-daily-summary';
-//
-//    const newFrame = frame.cloneNode(true);
-//    frame.parentNode.replaceChild(newFrame, frame);
-//
-//    newFrame.addEventListener('load', function () {
-//        if (newFrame.contentWindow.location.href === "about:blank") return;
-//        setTimeout(() => {
-//            newFrame.contentWindow.focus();
-//            newFrame.contentWindow.print();
-//        }, 300);
-//    }, {once: true});
-//
-//    // ИСПРАВЛЕНО: передаем накопленные ID
-//    submitAsPost(url, selectedOrderIds, 'printFrame');
-//
-//    clearOrderSelection();
-//}
-
-//function printSelectedOperations(type) {
-//    // ИСПРАВЛЕНО: Берем данные из соответствующего глобального массива
-//    const selectedIds = type === 'order' ? selectedOrderIds : selectedReturnIds;
-//
-//    if (selectedIds.length === 0) {
-//        showToast("Сначала выберите записи галочкой!", "error");
-//        return;
-//    }
-//
-//    const frame = document.getElementById('printFrame');
-//    const url = type === 'order' ? '/admin/orders/print-batch' : '/admin/returns/print-batch';
-//
-//    const newFrame = frame.cloneNode(true);
-//    frame.parentNode.replaceChild(newFrame, frame);
-//
-//    newFrame.addEventListener('load', function () {
-//        if (newFrame.contentWindow.location.href === "about:blank") return;
-//
-//        setTimeout(() => {
-//            newFrame.contentWindow.focus();
-//            newFrame.contentWindow.print();
-//        }, 300);
-//    }, {once: true});
-//
-//    submitAsPost(url, selectedIds, 'printFrame');
-//
-//    // ИСПРАВЛЕНО: очищаем именно тот тип, который напечатали
-//    if (type === 'order') {
-//        clearOrderSelection();
-//    } else {
-//        clearReturnSelection();
-//    }
-//}
 
 function printInvoiceInline(url) {
     const iframe = document.createElement('iframe');
@@ -4503,138 +4393,6 @@ async function cancelOrder(id) {
     });
 }
 
-//function toggleGlobalSelect(masterCheckbox, childClass) {
-//    const isOrder = (childClass === 'order-print-check');
-//
-//    // 1. Визуально переключаем все чекбоксы на текущей странице
-//    const pageCheckboxes = document.querySelectorAll('.' + childClass);
-//    pageCheckboxes.forEach(cb => cb.checked = masterCheckbox.checked);
-//
-//    // 2. Достаем массив всех ID из атрибута
-//    let allIdsRaw = masterCheckbox.getAttribute('data-all-ids') || "[]";
-//    // Убираем скобки и лишние пробелы, превращаем в чистый массив строк
-//    const allIds = allIdsRaw.replace(/[\[\]]/g, '').split(',')
-//        .map(id => id.trim()).filter(id => id !== "");
-//
-//    if (masterCheckbox.checked) {
-//        // Добавляем все ID в глобальный список (без дубликатов)
-//        allIds.forEach(id => {
-//            if (isOrder) {
-//                if (!selectedOrderIds.includes(id)) selectedOrderIds.push(id);
-//            } else {
-//                if (!selectedReturnIds.includes(id)) selectedReturnIds.push(id);
-//            }
-//        });
-//    } else {
-//        // Если галочка снята — полностью очищаем список для этого типа
-//        if (isOrder) {
-//            selectedOrderIds = [];
-//        } else {
-//            selectedReturnIds = [];
-//        }
-//    }
-//
-//    saveAllToStorage();
-//    console.log("Выбрано сейчас:", isOrder ? selectedOrderIds : selectedReturnIds);
-//}
-
-// function showConfirmModal(title, text, type, onConfirm) {
-//     const modal = document.getElementById('customModal');
-//     const titleEl = document.getElementById('modalTitle');
-//     const messageEl = document.getElementById('modalMessage');
-//     const iconContainer = document.getElementById('modalIconContainer');
-//     const iconInner = document.getElementById('modalIconInner');
-//     const oldConfirmBtn = document.getElementById('modalConfirmBtn');
-//
-//     if (!modal || !oldConfirmBtn) return;
-//
-//     // --- ФИКС ПЕРВОГО НАЖАТИЯ ---
-//     // Клонируем кнопку, чтобы полностью стереть память о прошлых нажатиях
-//     const confirmBtn = oldConfirmBtn.cloneNode(true);
-//     oldConfirmBtn.parentNode.replaceChild(confirmBtn, oldConfirmBtn);
-//     // ----------------------------
-//
-//     titleEl.innerText = title;
-//     messageEl.innerText = text;
-//
-//     // Сброс и настройка стилей
-//     iconContainer.className = "mx-auto flex items-center justify-center h-20 w-20 rounded-full mb-6 transition-all flex-shrink-0";
-//     iconInner.className = "fa-solid text-3xl";
-//
-//     if (type === 'delete' || type === 'danger') {
-//         iconContainer.classList.add('bg-red-50', 'text-red-600');
-//         iconInner.className = "fa-solid fa-trash-can text-3xl";
-//         confirmBtn.style.backgroundColor = '#ef4444';
-//     } else if (type === 'invoice') {
-//         iconContainer.classList.add('bg-green-50', 'text-green-600');
-//         iconInner.className = "fa-solid fa-file-invoice-dollar text-3xl";
-//         confirmBtn.style.backgroundColor = '#63AA2F';
-//     } else {
-//         iconContainer.classList.add('bg-blue-50', 'text-blue-600');
-//         iconInner.className = "fa-solid fa-circle-info text-3xl";
-//         confirmBtn.style.backgroundColor = '#0f172a';
-//     }
-//
-//     // Показываем окно
-//     modal.style.display = 'flex';
-//     modal.classList.remove('hidden');
-//
-//     // Назначаем действие НОВОЙ кнопке. Теперь она "чистая" и сработает сразу.
-//     confirmBtn.onclick = function() {
-//         closeCustomModal();
-//         if (typeof onConfirm === 'function') {
-//             onConfirm();
-//         }
-//     };
-// }
-
-
-//function toggleGlobalSelect(masterCheckbox, childClass) {
-//    const isOrder = (childClass === 'order-print-check');
-//
-//    // 1. Собираем ID ТОЛЬКО видимых (отфильтрованных) чекбоксов на текущей странице
-//    const pageCheckboxes = document.querySelectorAll('.' + childClass);
-//    const visibleIds = [];
-//
-//    pageCheckboxes.forEach(cb => {
-//        // Проверяем, не скрыта ли строка фильтром (если родительский tr не display: none)
-//        const row = cb.closest('tr');
-//        if (row && row.style.display !== 'none') {
-//            cb.checked = masterCheckbox.checked;
-//            const val = isOrder ? Number(cb.value) : Number(cb.value);
-//            if (masterCheckbox.checked) {
-//                visibleIds.push(val);
-//            }
-//        }
-//    });
-//
-//    // 2. Обновляем глобальный массив для видимых элементов
-//    if (masterCheckbox.checked) {
-//        visibleIds.forEach(id => {
-//            if (isOrder) {
-//                if (!selectedOrderIds.includes(id)) selectedOrderIds.push(id);
-//            } else {
-//                if (!selectedReturnIds.includes(id)) selectedReturnIds.push(id);
-//            }
-//        });
-//    } else {
-//        // Убираем из выбранных только те, что были видны при снятии галочки
-//        if (isOrder) {
-//            selectedOrderIds = selectedOrderIds.filter(id => !visibleIds.includes(id));
-//        } else {
-//            selectedReturnIds = selectedReturnIds.filter(id => !visibleIds.includes(id));
-//        }
-//    }
-//
-//    saveAllToStorage();
-//    if (typeof updateSelectedCounter === 'function') updateSelectedCounter();
-//}
-
-
-// ==========================================
-// 1. УПРАВЛЕНИЕ СУММАМИ ВЫБРАННЫХ
-// ==========================================
-
 function updateSelectedCounter() {
     // Обновляем счетчики и суммы для заказов
     let selectedOrderSum = 0;
@@ -4678,41 +4436,36 @@ function updateSelectedCounter() {
     }
 }
 
-
-// ==========================================
-// 2. ИСПРАВЛЕННЫЙ ГЛОБАЛЬНЫЙ ВЫБОР (С УЧЕТОМ ФИЛЬТРА/ПОИСКА)
-// ==========================================
-
 function toggleGlobalSelect(masterCheckbox, childClass) {
     const isOrder = (childClass === 'order-print-check');
     const pageCheckboxes = document.querySelectorAll('.' + childClass);
     const visibleIds = [];
 
+    // Собираем ID только тех строк, которые реально отображаются на экране (прошли поиск/фильтр)
     pageCheckboxes.forEach(cb => {
         const row = cb.closest('tr');
-        // Проверяем, что строка отображается (не скрыта поиском/фильтром)
         if (row && row.style.display !== 'none') {
             cb.checked = masterCheckbox.checked;
             const val = Number(cb.value);
-            if (masterCheckbox.checked) {
-                visibleIds.push(val);
-            }
+            visibleIds.push(val);
         }
     });
 
-    // Корректируем глобальный массив строго по ВИДИМЫМ на экране элементам
-    if (masterCheckbox.checked) {
-        visibleIds.forEach(id => {
-            if (isOrder) {
+    if (isOrder) {
+        if (masterCheckbox.checked) {
+            // Добавляем только видимые на экране в общий список (без дубликатов)
+            visibleIds.forEach(id => {
                 if (!selectedOrderIds.includes(id)) selectedOrderIds.push(id);
-            } else {
-                if (!selectedReturnIds.includes(id)) selectedReturnIds.push(id);
-            }
-        });
-    } else {
-        // Убираем из выбранных только те элементы, которые сейчас видны в таблице
-        if (isOrder) {
+            });
+        } else {
+            // Удаляем из общего списка только те, которые сейчас видны на экране
             selectedOrderIds = selectedOrderIds.filter(id => !visibleIds.includes(id));
+        }
+    } else {
+        if (masterCheckbox.checked) {
+            visibleIds.forEach(id => {
+                if (!selectedReturnIds.includes(id)) selectedReturnIds.push(id);
+            });
         } else {
             selectedReturnIds = selectedReturnIds.filter(id => !visibleIds.includes(id));
         }
@@ -4723,11 +4476,6 @@ function toggleGlobalSelect(masterCheckbox, childClass) {
     updateSelectedCounter();
 }
 
-
-// ==========================================
-// 3. СИНХРОНИЗАЦИЯ И ВОССТАНОВЛЕНИЕ ЧЕКБОКСОВ
-// ==========================================
-
 function syncCheckboxesOnPage() {
     document.querySelectorAll('.order-print-check').forEach(cb => {
         cb.checked = selectedOrderIds.includes(Number(cb.value));
@@ -4737,7 +4485,7 @@ function syncCheckboxesOnPage() {
         cb.checked = selectedReturnIds.includes(Number(cb.value));
     });
 
-    // Синхронизация мастер-чекбокса заказов
+    // Синхронизация мастер-чекбокса заказов (только по видимым строкам!)
     const orderSelectAll = document.getElementById('select-all-orders');
     if (orderSelectAll) {
         const visibleCheckboxes = Array.from(document.querySelectorAll('.order-print-check')).filter(cb => {
@@ -4751,7 +4499,7 @@ function syncCheckboxesOnPage() {
         }
     }
 
-    // Синхронизация мастер-чекбокса возвратов
+    // Синхронизация мастер-чекбокса возвратов (только по видимым строкам!)
     const returnSelectAll = document.getElementById('select-all-returns');
     if (returnSelectAll) {
         const visibleCheckboxes = Array.from(document.querySelectorAll('.return-print-check')).filter(cb => {
@@ -4771,11 +4519,6 @@ function syncCheckboxesOnPage() {
 function restoreCheckboxes() {
     syncCheckboxesOnPage();
 }
-
-
-// ==========================================
-// 4. ПЕЧАТЬ БЕЗ АВТОМАТИЧЕСКОГО СБРОСА ВЫБОРА
-// ==========================================
 
 function printDailySummary() {
     if (selectedOrderIds.length === 0) {
@@ -4947,8 +4690,6 @@ function downloadReportExcel() {
     showToast("Скачивание Excel отчета...", "success");
 }
 
-
-
 function showConfirmModal(title, message, type, onConfirm) {
     // ИСПРАВЛЕНИЕ: Если мы уже нажали "Подтвердить" в первом окне,
     // и система пытается открыть второе окно - мы пропускаем вопрос и сразу выполняем действие!
@@ -5025,8 +4766,6 @@ function showConfirmModal(title, message, type, onConfirm) {
     modal.style.display = 'flex';
 }
 
-
-// Глобальный флаг, который сообщает системе, что мы уже в процессе подтверждения
 window.isModalExecuting = false;
 
 function closeCustomModal() {
@@ -5044,14 +4783,6 @@ function closeCustomModal() {
     // При закрытии сбрасываем флаг
     window.isModalExecuting = false;
 }
-
-// function closeCustomModal() {
-//     const modal = document.getElementById('customModal');
-//     if (modal) {
-//         modal.style.display = 'none';
-//         modal.classList.add('hidden');
-//     }
-// }
 
 function closeModal(id) {
     const modal = document.getElementById(id);
@@ -5301,7 +5032,7 @@ function handleLogout() {
         }
     );
 }
-// Эта функция ТОЛЬКО отправляет данные
+
 function submitInvoiceAction(orderId) {
     const form = document.createElement('form');
     form.method = 'POST';
@@ -5322,8 +5053,6 @@ function submitInvoiceAction(orderId) {
     form.submit(); // Сразу отправляем
 }
 
-
-// Функция проверки и управления статусом сети
 function initNetworkStatusListener() {
     const offlineModal = document.getElementById('offlineModal');
 
@@ -5369,10 +5098,270 @@ function hideOfflineModal() {
     }
 }
 
-// Запускаем инициализацию при загрузке DOM
 document.addEventListener('DOMContentLoaded', () => {
     initNetworkStatusListener();
 });
+
+
+//function toggleGlobalSelect(masterCheckbox, childClass) {
+//    const isOrder = (childClass === 'order-print-check');
+//
+//    // 1. Визуально переключаем все чекбоксы на текущей странице
+//    const pageCheckboxes = document.querySelectorAll('.' + childClass);
+//    pageCheckboxes.forEach(cb => cb.checked = masterCheckbox.checked);
+//
+//    // 2. Достаем массив всех ID из атрибута
+//    let allIdsRaw = masterCheckbox.getAttribute('data-all-ids') || "[]";
+//    // Убираем скобки и лишние пробелы, превращаем в чистый массив строк
+//    const allIds = allIdsRaw.replace(/[\[\]]/g, '').split(',')
+//        .map(id => id.trim()).filter(id => id !== "");
+//
+//    if (masterCheckbox.checked) {
+//        // Добавляем все ID в глобальный список (без дубликатов)
+//        allIds.forEach(id => {
+//            if (isOrder) {
+//                if (!selectedOrderIds.includes(id)) selectedOrderIds.push(id);
+//            } else {
+//                if (!selectedReturnIds.includes(id)) selectedReturnIds.push(id);
+//            }
+//        });
+//    } else {
+//        // Если галочка снята — полностью очищаем список для этого типа
+//        if (isOrder) {
+//            selectedOrderIds = [];
+//        } else {
+//            selectedReturnIds = [];
+//        }
+//    }
+//
+//    saveAllToStorage();
+//    console.log("Выбрано сейчас:", isOrder ? selectedOrderIds : selectedReturnIds);
+//}
+
+// function showConfirmModal(title, text, type, onConfirm) {
+//     const modal = document.getElementById('customModal');
+//     const titleEl = document.getElementById('modalTitle');
+//     const messageEl = document.getElementById('modalMessage');
+//     const iconContainer = document.getElementById('modalIconContainer');
+//     const iconInner = document.getElementById('modalIconInner');
+//     const oldConfirmBtn = document.getElementById('modalConfirmBtn');
+//
+//     if (!modal || !oldConfirmBtn) return;
+//
+//     // --- ФИКС ПЕРВОГО НАЖАТИЯ ---
+//     // Клонируем кнопку, чтобы полностью стереть память о прошлых нажатиях
+//     const confirmBtn = oldConfirmBtn.cloneNode(true);
+//     oldConfirmBtn.parentNode.replaceChild(confirmBtn, oldConfirmBtn);
+//     // ----------------------------
+//
+//     titleEl.innerText = title;
+//     messageEl.innerText = text;
+//
+//     // Сброс и настройка стилей
+//     iconContainer.className = "mx-auto flex items-center justify-center h-20 w-20 rounded-full mb-6 transition-all flex-shrink-0";
+//     iconInner.className = "fa-solid text-3xl";
+//
+//     if (type === 'delete' || type === 'danger') {
+//         iconContainer.classList.add('bg-red-50', 'text-red-600');
+//         iconInner.className = "fa-solid fa-trash-can text-3xl";
+//         confirmBtn.style.backgroundColor = '#ef4444';
+//     } else if (type === 'invoice') {
+//         iconContainer.classList.add('bg-green-50', 'text-green-600');
+//         iconInner.className = "fa-solid fa-file-invoice-dollar text-3xl";
+//         confirmBtn.style.backgroundColor = '#63AA2F';
+//     } else {
+//         iconContainer.classList.add('bg-blue-50', 'text-blue-600');
+//         iconInner.className = "fa-solid fa-circle-info text-3xl";
+//         confirmBtn.style.backgroundColor = '#0f172a';
+//     }
+//
+//     // Показываем окно
+//     modal.style.display = 'flex';
+//     modal.classList.remove('hidden');
+//
+//     // Назначаем действие НОВОЙ кнопке. Теперь она "чистая" и сработает сразу.
+//     confirmBtn.onclick = function() {
+//         closeCustomModal();
+//         if (typeof onConfirm === 'function') {
+//             onConfirm();
+//         }
+//     };
+// }
+
+
+//function toggleGlobalSelect(masterCheckbox, childClass) {
+//    const isOrder = (childClass === 'order-print-check');
+//
+//    // 1. Собираем ID ТОЛЬКО видимых (отфильтрованных) чекбоксов на текущей странице
+//    const pageCheckboxes = document.querySelectorAll('.' + childClass);
+//    const visibleIds = [];
+//
+//    pageCheckboxes.forEach(cb => {
+//        // Проверяем, не скрыта ли строка фильтром (если родительский tr не display: none)
+//        const row = cb.closest('tr');
+//        if (row && row.style.display !== 'none') {
+//            cb.checked = masterCheckbox.checked;
+//            const val = isOrder ? Number(cb.value) : Number(cb.value);
+//            if (masterCheckbox.checked) {
+//                visibleIds.push(val);
+//            }
+//        }
+//    });
+//
+//    // 2. Обновляем глобальный массив для видимых элементов
+//    if (masterCheckbox.checked) {
+//        visibleIds.forEach(id => {
+//            if (isOrder) {
+//                if (!selectedOrderIds.includes(id)) selectedOrderIds.push(id);
+//            } else {
+//                if (!selectedReturnIds.includes(id)) selectedReturnIds.push(id);
+//            }
+//        });
+//    } else {
+//        // Убираем из выбранных только те, что были видны при снятии галочки
+//        if (isOrder) {
+//            selectedOrderIds = selectedOrderIds.filter(id => !visibleIds.includes(id));
+//        } else {
+//            selectedReturnIds = selectedReturnIds.filter(id => !visibleIds.includes(id));
+//        }
+//    }
+//
+//    saveAllToStorage();
+//    if (typeof updateSelectedCounter === 'function') updateSelectedCounter();
+//}
+
+//function updateSelectedCounter() {
+//    const counter = document.getElementById('selected-count');
+//    if (counter) {
+//        // Считаем общее количество из памяти, а не только на странице
+//        counter.innerText = selectedOrderIds.length;
+//    }
+//}
+
+//function restoreCheckboxes() {
+//    const checkboxes = document.querySelectorAll('.order-print-check');
+//    let foundOnPage = 0;
+//
+//    checkboxes.forEach(cb => {
+//        if (selectedOrderIds.includes(cb.value)) {
+//            cb.checked = true;
+//            foundOnPage++;
+//        }
+//    });
+//
+//    // Если все чекбоксы на данной странице выбраны, ставим галочку и в "Выбрать все"
+//    const selectAllBtn = document.getElementById('select-all-orders');
+//    if (selectAllBtn && checkboxes.length > 0) {
+//        selectAllBtn.checked = (foundOnPage === checkboxes.length);
+//    }
+//
+//    updateSelectedCounter();
+//}
+
+
+
+//function syncCheckboxesOnPage() {
+//    // Синхроним заказы
+//    document.querySelectorAll('.order-print-check').forEach(cb => {
+//        // Приводим ID к числу для сравнения
+//        cb.checked = selectedOrderIds.includes(Number(cb.value));
+//    });
+//    // Синхроним возвраты
+//    document.querySelectorAll('.return-print-check').forEach(cb => {
+//        cb.checked = selectedReturnIds.includes(Number(cb.value));
+//    });
+//
+//    // Обновляем главный чекбокс "Выбрать все"
+//    const orderSelectAll = document.getElementById('select-all-orders');
+//    if (orderSelectAll) {
+//        const pageCheckboxes = document.querySelectorAll('.order-print-check');
+//        if (pageCheckboxes.length > 0) {
+//            orderSelectAll.checked = Array.from(pageCheckboxes).every(cb => cb.checked);
+//        }
+//    }
+//}
+
+//function printDailySummary() {
+//    // ИСПРАВЛЕНО: Берем данные из глобального массива
+//    if (selectedOrderIds.length === 0) {
+//        showToast("Выберите заказы для сводки!", "error");
+//        return;
+//    }
+//
+//    const frame = document.getElementById('printFrame');
+//    const url = '/admin/orders/print-daily-summary';
+//
+//    const newFrame = frame.cloneNode(true);
+//    frame.parentNode.replaceChild(newFrame, frame);
+//
+//    newFrame.addEventListener('load', function () {
+//        if (newFrame.contentWindow.location.href === "about:blank") return;
+//        setTimeout(() => {
+//            newFrame.contentWindow.focus();
+//            newFrame.contentWindow.print();
+//        }, 300);
+//    }, {once: true});
+//
+//    // ИСПРАВЛЕНО: передаем накопленные ID
+//    submitAsPost(url, selectedOrderIds, 'printFrame');
+//
+//    clearOrderSelection();
+//}
+
+//function printSelectedOperations(type) {
+//    // ИСПРАВЛЕНО: Берем данные из соответствующего глобального массива
+//    const selectedIds = type === 'order' ? selectedOrderIds : selectedReturnIds;
+//
+//    if (selectedIds.length === 0) {
+//        showToast("Сначала выберите записи галочкой!", "error");
+//        return;
+//    }
+//
+//    const frame = document.getElementById('printFrame');
+//    const url = type === 'order' ? '/admin/orders/print-batch' : '/admin/returns/print-batch';
+//
+//    const newFrame = frame.cloneNode(true);
+//    frame.parentNode.replaceChild(newFrame, frame);
+//
+//    newFrame.addEventListener('load', function () {
+//        if (newFrame.contentWindow.location.href === "about:blank") return;
+//
+//        setTimeout(() => {
+//            newFrame.contentWindow.focus();
+//            newFrame.contentWindow.print();
+//        }, 300);
+//    }, {once: true});
+//
+//    submitAsPost(url, selectedIds, 'printFrame');
+//
+//    // ИСПРАВЛЕНО: очищаем именно тот тип, который напечатали
+//    if (type === 'order') {
+//        clearOrderSelection();
+//    } else {
+//        clearReturnSelection();
+//    }
+//}
+
+// function closeCustomModal() {
+//     const modal = document.getElementById('customModal');
+//     if (modal) {
+//         modal.style.display = 'none';
+//         modal.classList.add('hidden');
+//     }
+// }
+
+function updateKpiPeriod() {
+    const start = document.getElementById('kpiStartInput').value;
+    const end = document.getElementById('kpiEndInput').value;
+
+    if (!start || !end) {
+        alert('Пожалуйста, выберите обе даты периода');
+        return;
+    }
+
+    // Перезагружает страницу с сохранением вкладки и передачей выбранных дат на сервер
+    window.location.search = `?kpiStart=${start}&kpiEnd=${end}&activeTab=tab-managers`;
+}
 
 document.addEventListener('change', function(e) {
     if (e.target.classList.contains('order-print-check')) {
@@ -5397,19 +5386,6 @@ document.addEventListener('change', function(e) {
         syncCheckboxesOnPage();
     }
 });
-
-function updateKpiPeriod() {
-    const start = document.getElementById('kpiStartInput').value;
-    const end = document.getElementById('kpiEndInput').value;
-
-    if (!start || !end) {
-        alert('Пожалуйста, выберите обе даты периода');
-        return;
-    }
-
-    // Перезагружает страницу с сохранением вкладки и передачей выбранных дат на сервер
-    window.location.search = `?kpiStart=${start}&kpiEnd=${end}&activeTab=tab-managers`;
-}
 
 document.addEventListener("DOMContentLoaded", function () {
     const profitCard = document.getElementById("profit-card");
@@ -5590,9 +5566,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     runFormatting();
 
-    // --------------------------------------------------------------------------------
-    // ЗАЩИТА ФИЛЬТРОВ И ПАГИНАЦИИ (Никогда не теряем даты, поиск и лимит 200 записей)
-    // --------------------------------------------------------------------------------
+
     const enforceFiltersAndPagination = () => {
         const currentUrl = new URL(window.location.href);
         const currentParams = currentUrl.searchParams;

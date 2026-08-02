@@ -1260,3 +1260,6 @@ column; gap: 10px; }
 .promo-card:hover {
     border-color: #6366f1 !important;
 }
+#modal-view-report {
+    z-index: 2000 !important; /* Ставим ниже тостов, но выше остального интерфейса */
+}
