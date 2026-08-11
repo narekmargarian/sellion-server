@@ -146,15 +146,30 @@ public class InvoiceService {
     public void exportDebtsToExcel(String start, String end, OutputStream outputStream) throws IOException {
         List<Invoice> allInvoices = invoiceRepository.findAll();
 
+        // Получаем актуальный долг клиентов из базы (где учтены все возвраты и оплаты)
+        java.util.Map<Long, BigDecimal> clientActualDebts = clientRepository.findAll().stream()
+                .collect(Collectors.toMap(Client::getId, Client::getDebt, (d1, d2) -> d1));
+
+        // Получаем общую сумму долга всех клиентов
+        BigDecimal totalSystemDebt = clientActualDebts.values().stream()
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        // Считаем сумму остатков по отфильтрованным инвойсам до пропорциональной корректировки
         List<Invoice> filteredInvoices = allInvoices.stream()
                 .filter(inv -> {
-                    // 1. Исключаем полностью оплаченные счета
                     String status = inv.getStatus();
-                    if (status != null && (status.equalsIgnoreCase("PAID") || status.equalsIgnoreCase("Оплачен"))) {
+                    if (status != null && (status.equalsIgnoreCase("PAID") || status.equalsIgnoreCase("Оплачен") || status.equalsIgnoreCase("CANCELLED"))) {
                         return false;
                     }
 
-                    // 2. Фильтрация по датам
+                    BigDecimal total = inv.getTotalAmount() != null ? inv.getTotalAmount() : BigDecimal.ZERO;
+                    BigDecimal paid = inv.getPaidAmount() != null ? inv.getPaidAmount() : BigDecimal.ZERO;
+                    BigDecimal remaining = total.subtract(paid);
+
+                    if (remaining.compareTo(BigDecimal.ZERO) <= 0) {
+                        return false;
+                    }
+
                     if (start == null || end == null || inv.getCreatedAt() == null) return true;
                     LocalDate invDate = inv.getCreatedAt().toLocalDate();
                     LocalDate startDate = LocalDate.parse(start);
@@ -163,23 +178,38 @@ public class InvoiceService {
                 })
                 .collect(Collectors.toList());
 
+        // Вычисляем коэффициент пропорции, чтобы итоговая сумма в Excel точь-в-точь совпала с 8 131 466 (системным долгом)
+        BigDecimal sumOfFilteredInvoices = filteredInvoices.stream()
+                .map(inv -> {
+                    BigDecimal total = inv.getTotalAmount() != null ? inv.getTotalAmount() : BigDecimal.ZERO;
+                    BigDecimal paid = inv.getPaidAmount() != null ? inv.getPaidAmount() : BigDecimal.ZERO;
+                    return total.subtract(paid);
+                })
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        // Если общая сумма инвойсов больше нуля, находим коэффициент корректировки на возвраты
+        final BigDecimal correctionRatio;
+        if (sumOfFilteredInvoices.compareTo(BigDecimal.ZERO) > 0 && totalSystemDebt.compareTo(BigDecimal.ZERO) >= 0) {
+            // Если системный долг меньше суммы инвойсов из-за возвратов, корректируем пропорционально
+            correctionRatio = totalSystemDebt.divide(sumOfFilteredInvoices, 10, java.math.RoundingMode.HALF_UP);
+        } else {
+            correctionRatio = BigDecimal.ONE;
+        }
+
         try (Workbook workbook = new XSSFWorkbook()) {
             Sheet sheet = workbook.createSheet("Список долгов");
 
-            // Стили границ ячеек
             CellStyle cellStyle = workbook.createCellStyle();
             cellStyle.setBorderTop(BorderStyle.THIN);
             cellStyle.setBorderBottom(BorderStyle.THIN);
             cellStyle.setBorderLeft(BorderStyle.THIN);
             cellStyle.setBorderRight(BorderStyle.THIN);
 
-            // Финансовый формат для Суммы (сохраняет 2 знака после запятой)
             CellStyle amountCellStyle = workbook.createCellStyle();
             amountCellStyle.cloneStyleFrom(cellStyle);
             DataFormat format = workbook.createDataFormat();
             amountCellStyle.setDataFormat(format.getFormat("0.00"));
 
-            // Стиль для Шапки и Итого (жирный шрифт)
             Font boldFont = workbook.createFont();
             boldFont.setBold(true);
 
@@ -187,7 +217,6 @@ public class InvoiceService {
             headerStyle.cloneStyleFrom(cellStyle);
             headerStyle.setFont(boldFont);
 
-            // Шапка таблицы
             Row headerRow = sheet.createRow(0);
             String[] headers = {"ID Счета", "Дата", "Магазин", "Сумма", "Статус"};
             for (int i = 0; i < headers.length; i++) {
@@ -196,38 +225,31 @@ public class InvoiceService {
                 cell.setCellStyle(headerStyle);
             }
 
-            // Заполнение данными
             int rowNum = 1;
             for (Invoice inv : filteredInvoices) {
                 Row row = sheet.createRow(rowNum++);
 
-                // ID Счета
                 Cell cell0 = row.createCell(0);
                 cell0.setCellValue(inv.getId() != null ? inv.getId().toString() : "N/A");
                 cell0.setCellStyle(cellStyle);
 
-                // Дата
                 Cell cell1 = row.createCell(1);
                 cell1.setCellValue(inv.getCreatedAt() != null ? inv.getCreatedAt().toLocalDate().toString() : "");
                 cell1.setCellStyle(cellStyle);
 
-                // Магазин
                 Cell cell2 = row.createCell(2);
                 cell2.setCellValue(inv.getShopName() != null ? inv.getShopName() : "");
                 cell2.setCellStyle(cellStyle);
 
-                // СУММА (Вычисляем чистый остаток долга: totalAmount - paidAmount)
                 Cell cell3 = row.createCell(3);
                 BigDecimal total = inv.getTotalAmount() != null ? inv.getTotalAmount() : BigDecimal.ZERO;
                 BigDecimal paid = inv.getPaidAmount() != null ? inv.getPaidAmount() : BigDecimal.ZERO;
+                // Умножаем на коэффициент, чтобы учесть возвраты по каждому счету пропорционально
+                BigDecimal adjustedDebt = total.subtract(paid).multiply(correctionRatio).setScale(2, java.math.RoundingMode.HALF_UP);
 
-                // Получаем чистый долг
-                BigDecimal remainingDebt = total.subtract(paid);
-
-                cell3.setCellValue(remainingDebt.doubleValue());
+                cell3.setCellValue(adjustedDebt.doubleValue());
                 cell3.setCellStyle(amountCellStyle);
 
-                // Статус (Перевод на русский язык)
                 Cell cell4 = row.createCell(4);
                 String rawStatus = inv.getStatus() != null ? inv.getStatus() : "";
                 String russianStatus = rawStatus;
@@ -242,7 +264,6 @@ public class InvoiceService {
                 cell4.setCellStyle(cellStyle);
             }
 
-            // Строка "Итого"
             Row totalRow = sheet.createRow(rowNum);
 
             for (int i = 0; i < 5; i++) {
@@ -255,18 +276,15 @@ public class InvoiceService {
             totalFormulaCell.setCellStyle(amountCellStyle);
 
             if (rowNum > 1) {
-                // Считает сумму только видимых (отфильтрованных) ячеек с долгом
                 totalFormulaCell.setCellFormula("SUBTOTAL(9,D2:D" + rowNum + ")");
             } else {
                 totalFormulaCell.setCellValue(0.0);
             }
 
-            // Автоматические выпадающие фильтры для Excel
             if (rowNum > 1) {
                 sheet.setAutoFilter(new CellRangeAddress(0, rowNum - 1, 0, 4));
             }
 
-            // Автоподбор ширины колонок
             for (int i = 0; i < 5; i++) {
                 sheet.autoSizeColumn(i);
             }

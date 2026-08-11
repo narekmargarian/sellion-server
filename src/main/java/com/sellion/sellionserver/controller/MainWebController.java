@@ -135,7 +135,16 @@ public class MainWebController {
 
 
         // --- 4. ОБЩАЯ СТАТИСТИКА И СЧЕТА (ПАГИНАЦИЯ + ФИЛЬТРЫ) ---
-        BigDecimal totalInvoiceDebt = Optional.ofNullable(invoiceRepository.calculateTotalDebt()).orElse(BigDecimal.ZERO);
+        // ИЗМЕНЕНИЕ: Учитываем возвраты в общем долге системы (totalInvoiceDebt)
+        BigDecimal totalInvoiceDebt = Optional.ofNullable(invoiceRepository.calculateTotalDebt()).orElse(BigDecimal.ZERO)
+                .subtract(
+                        Optional.ofNullable(returnOrderRepository.findAll().stream()
+                                .filter(r -> r != null && r.getStatus() == ReturnStatus.CONFIRMED)
+                                .map(r -> r.getTotalAmount() != null ? r.getTotalAmount() : BigDecimal.ZERO)
+                                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                        ).orElse(BigDecimal.ZERO)
+                );
+
         BigDecimal totalPaidSum = Optional.ofNullable(invoiceRepository.calculateTotalPaid()).orElse(BigDecimal.ZERO);
 
         // Подготовка параметров для фильтра
@@ -151,6 +160,36 @@ public class MainWebController {
 
         List<Invoice> invoicesList = invoicesPage.getContent();
 
+        // ---------------------------------------------------------
+        // ТОЧЕЧНОЕ ДОБАВЛЕНИЕ: Корректировка отображаемой суммы инвойсов в таблице на лету
+        // ---------------------------------------------------------
+        List<ReturnOrder> allConfirmedReturns = returnOrderRepository.findAll().stream()
+                .filter(r -> r != null && r.getStatus() == ReturnStatus.CONFIRMED)
+                .collect(Collectors.toList());
+
+        Map<String, BigDecimal> returnsByShop = allConfirmedReturns.stream()
+                .filter(r -> r.getShopName() != null)
+                .collect(Collectors.groupingBy(
+                        ReturnOrder::getShopName,
+                        Collectors.mapping(
+                                r -> r.getTotalAmount() != null ? r.getTotalAmount() : BigDecimal.ZERO,
+                                Collectors.reducing(BigDecimal.ZERO, BigDecimal::add)
+                        )
+                ));
+
+        for (Invoice inv : invoicesList) {
+            if (inv.getShopName() != null && returnsByShop.containsKey(inv.getShopName())) {
+                BigDecimal shopReturns = returnsByShop.get(inv.getShopName());
+                if (shopReturns.compareTo(BigDecimal.ZERO) > 0) {
+                    BigDecimal currentTotal = inv.getTotalAmount() != null ? inv.getTotalAmount() : BigDecimal.ZERO;
+                    BigDecimal newTotal = currentTotal.subtract(shopReturns);
+                    if (newTotal.compareTo(BigDecimal.ZERO) < 0) newTotal = BigDecimal.ZERO;
+                    inv.setTotalAmount(newTotal);
+                }
+            }
+        }
+        // ---------------------------------------------------------
+
         // ИСПРАВЛЕНО (Пункт 2): Считаем общую сумму и оплаты за ВЫБРАННЫЙ ПЕРИОД по фильтрам без лимита страниц
         // Для этого делаем вызов метода без пагинации (он нам понадобится в InvoiceRepository)
         List<Invoice> allInvoicesForPeriod = invoiceRepository.findAllFilteredInvoicesNoPage(
@@ -164,8 +203,14 @@ public class MainWebController {
                 .map(inv -> inv.getPaidAmount() != null ? inv.getPaidAmount() : BigDecimal.ZERO)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        // Чистый долг именно выбранного периода для третьей карточки
-        BigDecimal periodInvoiceDebt = periodTotalAmount.subtract(periodPaidAmount).setScale(2, RoundingMode.HALF_UP);
+        // ИЗМЕНЕНИЕ: Вычитаем подтвержденные возвраты за выбранный период для корректного расчета periodInvoiceDebt
+        BigDecimal periodReturnsSum = returnOrderRepository.findReturnsBetweenDates(invStartDT, invEndDT).stream()
+                .filter(r -> r != null && r.getStatus() == ReturnStatus.CONFIRMED)
+                .map(r -> r.getTotalAmount() != null ? r.getTotalAmount() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        // Чистый долг именно выбранного периода для третьей карточки с учетом возвратов
+        BigDecimal periodInvoiceDebt = periodTotalAmount.subtract(periodPaidAmount).subtract(periodReturnsSum).setScale(2, RoundingMode.HALF_UP);
 
 
 
