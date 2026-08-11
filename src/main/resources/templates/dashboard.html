@@ -500,14 +500,15 @@
             </div>
         </div>
 
+
         <div id="tab-clients" class="tab-pane">
 
             <div class="filter-bar">
-                <!-- ИСПРАВЛЕНО: Теперь поиск идет по всей базе через Enter -->
+                <!-- Поиск с задержкой через функцию debounceSearch, которая должна быть в общем JS-файле -->
                 <input type="text" id="search-clients"
                        th:value="${clientSearch}"
-                       onkeypress="if(event.key === 'Enter') applyClientFilters()"
-                       placeholder="Поиск (Enter)..." class="form-control w-25">
+                       oninput="debounceSearch()"
+                       placeholder="Поиск..." class="form-control w-25">
 
                 <select id="filter-client-category" class="form-select w-25"
                         onchange="applyClientFilters()">
@@ -525,23 +526,25 @@
                 <table class="table">
                     <thead>
                     <tr>
+                        <th>ИНН</th>
                         <th>Магазин</th>
                         <th>Адрес</th>
-                        <th>Категория</th> <!-- НОВАЯ КОЛОНКА -->
+                        <th>Категория</th>
                         <th>Долг</th>
                     </tr>
                     </thead>
                     <tbody id="clients-table-body">
                     <tr th:each="c : ${clients}" th:onclick="'openClientDetails(' + ${c.id} + ')'"
                         style="cursor:pointer;">
+                        <td th:text="${c.inn ?: '---'}"></td>
                         <td th:text="${c.name}" style="font-weight:700;"></td>
                         <td th:text="${c.address}"></td>
-                        <td th:text="${c.category ?: '---'}"></td> <!-- ОТОБРАЖЕНИЕ КАТЕГОРИИ -->
+                        <td th:text="${c.category ?: '---'}"></td>
 
                         <td th:with="val=${c.debt != null ? c.debt.doubleValue() : 0}"
                             th:class="${val > 0} ? 'price-down' : (${val < 0} ? 'price-up' : '')">
-    <span th:text="${(val == 0) ? '0 ֏' : ((val % 1 == 0) ? #numbers.formatInteger(val, 1, 'WHITESPACE') : #numbers.formatDecimal(val, 1, 'WHITESPACE', 2, 'POINT').replaceAll('0$', '')) + ' ֏'}">
-    </span>
+<span th:text="${(val == 0) ? '0 ֏' : ((val % 1 == 0) ? #numbers.formatInteger(val, 1, 'WHITESPACE') : #numbers.formatDecimal(val, 1, 'WHITESPACE', 2, 'POINT').replaceAll('0$', '')) + ' ֏'}">
+</span>
                         </td>
 
 
@@ -568,9 +571,9 @@
 
                     <!-- Счётчик страниц -->
                     <span style="font-weight: 700; background: #f1f5f9; padding: 5px 15px; border-radius: 20px; font-size: 13px; border: 1px solid #e2e8f0;">
-                     Страница <span th:text="${clientCurrentPage + 1}"></span> из <span
+                 Страница <span th:text="${clientCurrentPage + 1}"></span> из <span
                             th:text="${clientTotalPages}"></span>
-                       </span>
+                   </span>
 
                     <!-- Кнопка ВПЕРЕД (Добавлен clientSearch) -->
                     <a th:href="@{/admin(activeTab='tab-clients', clientPage=${clientCurrentPage + 1}, clientCategory=${selectedCategory}, clientSearch=${clientSearch})}"

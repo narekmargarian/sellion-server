@@ -5030,6 +5030,14 @@ async function checkPromosBeforeSave(items) {
     }
 }
 
+let searchTimeout;
+function debounceSearch() {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => {
+        applyClientFilters();
+    }, 400); // Поиск автоматически запустится через 0.4 секунды после остановки ввода
+}
+
 async function deletePromoAction(id) {
     showConfirmModal(
         "Удаление акции",
