@@ -332,7 +332,8 @@ function enableClientEdit() {
     if (!client) return;
     const info = document.getElementById('client-info');
 
-    const managerOptions = managerIdList.map(m =>
+    // Добавлена опция "Нет данных" в начало списка
+    const managerOptions = `<option value="">-- Нет данных --</option>` + managerIdList.map(m =>
         `<option value="${m}" ${m === client.managerId ? 'selected' : ''}>${m}</option>`
     ).join('');
 

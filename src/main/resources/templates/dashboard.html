@@ -1439,7 +1439,8 @@
                         <div style="display: flex; flex-direction: column; gap: 10px;">
                             <div>
                                 <label class="label-small">МЕНЕДЖЕР</label>
-                                <select name="managerId" id="new-client-manager-id" class="form-select" required>
+                                <select name="managerId" id="new-client-manager-id" class="form-select">
+                                    <option value="">-- Нет данных --</option>
                                     <!-- Если список менеджеров передается из модели -->
                                     <option th:each="m : ${managerIdList}" th:value="${m}" th:text="${m}"></option>
                                 </select>
