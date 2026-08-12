@@ -508,8 +508,8 @@
                 <!-- Поиск с задержкой через функцию debounceSearch, которая должна быть в общем JS-файле -->
                 <input type="text" id="search-clients"
                        th:value="${clientSearch}"
-                       oninput="debounceSearch()"
-                       placeholder="Поиск..." class="form-control w-25">
+                       onkeydown="if(event.key === 'Enter') applyClientFilters()"
+                       placeholder="Поиск (нажмите Enter)..." class="form-control w-25">
 
                 <select id="filter-client-category" class="form-select w-25"
                         onchange="applyClientFilters()">
