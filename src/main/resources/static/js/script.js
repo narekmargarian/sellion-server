@@ -436,7 +436,7 @@ async function openCreateClientModal() {
     // 1. Сначала открываем окно
     openModal('modal-client');
 
-    // 2. Сброс поля процента на 0 при каждом новом открытии (чтобы не оставалось от старых вводов)
+    // 2. Сброс поля процента на 0 при каждом новом открытии
     const percentInput = document.getElementById('new-client-percent');
     if (percentInput) {
         percentInput.value = "0";
@@ -451,19 +451,22 @@ async function openCreateClientModal() {
 
     // 4. Если список менеджеров пуст, ждем загрузки
     if (!window.managerIdList || window.managerIdList.length === 0) {
-        select.innerHTML = '<option value="">⏳ Загрузка...</option>';
+        select.innerHTML = '<option value="">-- Нет данных --</option><option value="">⏳ Загрузка...</option>';
         await loadManagerIds();
     }
 
-    // 5. Финальное заполнение списка менеджеров
+    // 5. Финальное заполнение списка менеджеров с сохранением "Нет данных" в самом начале
     const finalList = window.managerIdList || [];
-    if (finalList.length > 0) {
-        select.innerHTML = finalList.map(m => `<option value="${m}">${m}</option>`).join('');
-    } else {
-        select.innerHTML = '<option value="OFFICE">OFFICE (дефолт)</option>';
-    }
-}
 
+    let optionsHtml = '<option value="">-- Нет данных --</option>';
+    if (finalList.length > 0) {
+        optionsHtml += finalList.map(m => `<option value="${m}">${m}</option>`).join('');
+    } else {
+        optionsHtml += '<option value="OFFICE">OFFICE (дефолт)</option>';
+    }
+
+    select.innerHTML = optionsHtml;
+}
 function applyClientFilters() {
     const searchVal = document.getElementById('search-clients').value;
     const categoryVal = document.getElementById('filter-client-category').value;
@@ -4951,7 +4954,7 @@ async function deleteProduct(id) {
                 await fetch(`/api/products/${id}`, { method: 'DELETE' });
                 showToast("Товар удален", "success");
                 closeCustomModal();
-                location.reload();
+                location.reload();t
             } catch (e) { console.warn("Удаление прервано"); }
         }
     );
