@@ -126,17 +126,22 @@ public class SyncController {
         return ResponseEntity.ok(ApiResponse.ok("Обработка завершена. Статус: " + finalStatus, resultData));
     }
 
-
-
     @PostMapping("/returns/sync")
-    public ResponseEntity<?> syncReturns(@RequestBody List<ReturnOrder> returns) {
-        if (returns == null || returns.isEmpty()) return ResponseEntity.ok(Map.of("status", "empty"));
+    public ResponseEntity<ApiResponse<Map<String, Object>>> syncReturns(@RequestBody List<ReturnOrder> returns) {
+        if (returns == null || returns.isEmpty()) {
+            return ResponseEntity.ok(ApiResponse.ok("Список пуст", Map.of("status", "empty")));
+        }
 
-        int saved = 0;
+        int savedCount = 0;
+        int duplicateCount = 0;
+        int errorCount = 0;
+        List<String> errorMessages = new ArrayList<>();
+
         for (ReturnOrder ret : returns) {
             try {
-                // Проверка на дубликат возврата (Ваша логика)
+                // Проверка на дубликат возврата
                 if (ret.getAndroidId() != null && returnOrderRepository.existsByAndroidId(ret.getAndroidId())) {
+                    duplicateCount++;
                     continue;
                 }
 
@@ -147,7 +152,7 @@ public class SyncController {
                     ret.setCreatedAt(LocalDateTime.now());
                 }
 
-                // Расчет суммы возврата (Ваша логика с исправлением BigDecimal)
+                // Расчет суммы возврата
                 BigDecimal total = BigDecimal.ZERO;
                 if (ret.getItems() != null) {
                     for (Map.Entry<Long, Integer> entry : ret.getItems().entrySet()) {
@@ -159,13 +164,26 @@ public class SyncController {
                 ret.setTotalAmount(total.setScale(2, RoundingMode.HALF_UP));
 
                 returnOrderRepository.save(ret);
-                saved++;
+                savedCount++;
             } catch (Exception e) {
-                log.error("Ошибка синхронизации возврата: {}", e.getMessage());
+                errorCount++;
+                String androidId = (ret.getAndroidId() != null) ? ret.getAndroidId() : "unknown";
+                log.error("Ошибка синхронизации возврата [{}]: {}", androidId, e.getMessage());
+                errorMessages.add("Возврат " + androidId + ": " + e.getMessage());
             }
         }
-        return ResponseEntity.ok(Map.of("status", "success", "count", saved));
+
+        Map<String, Object> resultData = Map.of(
+                "saved", savedCount,
+                "duplicates", duplicateCount,
+                "errors", errorCount,
+                "errorDetails", errorMessages
+        );
+
+        String finalStatus = errorCount == 0 ? "success" : (savedCount > 0 ? "partial_success" : "failed");
+        return ResponseEntity.ok(ApiResponse.ok("Обработка возвратов завершена. Статус: " + finalStatus, resultData));
     }
+
 
     @GetMapping("/orders/manager/{managerId}/current-month")
     public ResponseEntity<List<Order>> getOrdersByManagerCurrentMonth(@PathVariable String managerId) {
