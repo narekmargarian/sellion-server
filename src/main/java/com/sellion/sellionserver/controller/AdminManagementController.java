@@ -334,7 +334,7 @@ public class AdminManagementController {
         ret.setItemPrices(newItemPrices); // Сохраняем кастомные цены в ReturnOrder
 
 
-        ret.setTotalAmount(totalSum.setScale(3, RoundingMode.HALF_UP));
+        ret.setTotalAmount(totalSum.setScale(2, RoundingMode.HALF_UP));
 
         returnOrderRepository.save(ret);
 
@@ -509,6 +509,61 @@ public class AdminManagementController {
 
 
 
+//    @PostMapping("/returns/{id}/confirm")
+//    @Transactional(rollbackFor = Exception.class)
+//    public ResponseEntity<?> confirmReturn(@PathVariable Long id) {
+//        // 1. Поиск возврата
+//        ReturnOrder ret = returnOrderRepository.findById(id)
+//                .orElseThrow(() -> new RuntimeException("Возврат не найден: " + id));
+//
+//        // Защита от повторного подтверждения
+//        if (ret.getStatus() == ReturnStatus.CONFIRMED) {
+//            return ResponseEntity.badRequest().body(Map.of("error", "Этот возврат уже был подтвержден ранее."));
+//        }
+//
+//
+//        // 2. ФИНАНСЫ (Выполняется ВСЕГДА)
+//        // Регистрируем операцию в финансовом модуле. Долг клиента уменьшается ровно на ret.getTotalAmount()
+//        financeService.registerOperation(
+//                null,
+//                "RETURN",
+//                ret.getTotalAmount(),
+//                id,
+//                "Подтвержденный возврат #" + id + " (" + ret.getReturnReason().getDisplayName() + ")",
+//                ret.getShopName()
+//        );
+//
+//        // 3. СКЛАД (Выполняется ТОЛЬКО для определенных причин)
+//        // Если товар пригоден (склад, ошибка заказа/возврата) — возвращаем в остатки
+//        ReasonsReturn reason = ret.getReturnReason();
+//        boolean isStockUpdated = false;
+//
+//        if (reason == ReasonsReturn.WAREHOUSE ||
+//                reason == ReasonsReturn.CORRECTION_ORDER ||
+//                reason == ReasonsReturn.CORRECTION_RETURN) {
+//
+//            // Увеличиваем физическое количество товара на складе
+//            stockService.returnItemsToStock(ret.getItems(), "Пополнение склада: возврат #" + id, "ADMIN");
+//            isStockUpdated = true;
+//        }
+//
+//        // 4. Обновляем статус и сохраняем
+//        ret.setStatus(ReturnStatus.CONFIRMED);
+//        returnOrderRepository.save(ret);
+//
+//        // 5. Аудит (Логируем финальную сумму без скидок)
+//        recordAudit(id, "RETURN", "ПОДТВЕРЖДЕНИЕ",
+//                String.format("Возврат подтвержден. Сумма: %s ֏. Склад обновлен: %s",
+//                        ret.getTotalAmount(), isStockUpdated));
+//
+//        return ResponseEntity.ok(Map.of(
+//                "message", "Возврат успешно подтвержден. Долг клиента уменьшен на " + ret.getTotalAmount() + " ֏",
+//                "stockUpdated", isStockUpdated,
+//                "finalAmount", ret.getTotalAmount()
+//        ));
+//    }
+
+
     @PostMapping("/returns/{id}/confirm")
     @Transactional(rollbackFor = Exception.class)
     public ResponseEntity<?> confirmReturn(@PathVariable Long id) {
@@ -521,9 +576,7 @@ public class AdminManagementController {
             return ResponseEntity.badRequest().body(Map.of("error", "Этот возврат уже был подтвержден ранее."));
         }
 
-
         // 2. ФИНАНСЫ (Выполняется ВСЕГДА)
-        // Регистрируем операцию в финансовом модуле. Долг клиента уменьшается ровно на ret.getTotalAmount()
         financeService.registerOperation(
                 null,
                 "RETURN",
@@ -533,8 +586,24 @@ public class AdminManagementController {
                 ret.getShopName()
         );
 
+        // === ИСПРАВЛЕНИЕ: СИНХРОНИЗАЦИЯ ДОЛГА В ТАБЛИЦЕ КЛИЕНТОВ ===
+        if (ret.getShopName() != null) {
+            clientRepository.findByName(ret.getShopName()).ifPresent(client -> {
+                BigDecimal currentDebt = Optional.ofNullable(client.getDebt()).orElse(BigDecimal.ZERO);
+                BigDecimal newDebt = currentDebt.subtract(ret.getTotalAmount());
+
+                // Предотвращаем отрицательный баланс, если нужно
+                if (newDebt.compareTo(BigDecimal.ZERO) < 0) {
+                    newDebt = BigDecimal.ZERO;
+                }
+
+                client.setDebt(newDebt);
+                clientRepository.save(client);
+            });
+        }
+        // ==========================================================
+
         // 3. СКЛАД (Выполняется ТОЛЬКО для определенных причин)
-        // Если товар пригоден (склад, ошибка заказа/возврата) — возвращаем в остатки
         ReasonsReturn reason = ret.getReturnReason();
         boolean isStockUpdated = false;
 
@@ -551,7 +620,7 @@ public class AdminManagementController {
         ret.setStatus(ReturnStatus.CONFIRMED);
         returnOrderRepository.save(ret);
 
-        // 5. Аудит (Логируем финальную сумму без скидок)
+        // 5. Аудит
         recordAudit(id, "RETURN", "ПОДТВЕРЖДЕНИЕ",
                 String.format("Возврат подтвержден. Сумма: %s ֏. Склад обновлен: %s",
                         ret.getTotalAmount(), isStockUpdated));
@@ -562,7 +631,6 @@ public class AdminManagementController {
                 "finalAmount", ret.getTotalAmount()
         ));
     }
-
 
     @PostMapping("/products/{id}/inventory")
     @PreAuthorize("hasRole('ADMIN')")
