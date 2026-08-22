@@ -47,7 +47,7 @@ public class MainWebController {
             @RequestParam(value = "clientCategory", required = false) String clientCategory,
             @RequestParam(value = "clientSearch", required = false) String clientSearch,
 
-            // НОВЫЕ ПАРАМЕТРЫ ДЛЯ ПОИСКА ЗАКАЗОВ И ВОЗВРАТОВ
+            // ПАРАМЕТРЫ ДЛЯ ПОИСКА ЗАКАЗОВ И ВОЗВРАТОВ
             @RequestParam(value = "orderSearch", required = false) String orderSearch,
             @RequestParam(value = "returnSearch", required = false) String returnSearch,
 
@@ -70,30 +70,28 @@ public class MainWebController {
             @RequestParam(value = "activeTab", required = false, defaultValue = "tab-orders") String activeTab,
             Model model) {
 
-        // --- 1. ЛОГИКА ДАТ (ЗАКАЗЫ И ВОЗВРАТЫ - БЕЗ ИЗМЕНЕНИЙ) ---
+        // --- 1. ЛОГИКА ДАТ (ЗАКАЗЫ И ВОЗВРАТЫ) ---
 
         // Заказы
         LocalDateTime oStartDT = parseSafeDateTime(orderStartDate, LocalDateTime.now().with(LocalTime.MIN), false);
         LocalDateTime oEndDT = parseSafeDateTime(orderEndDate, LocalDateTime.now().with(LocalTime.MAX), true);
 
-// Возвраты
+        // Возвраты
         LocalDateTime rStartDT = parseSafeDateTime(returnStartDate, LocalDateTime.now().with(LocalTime.MIN), false);
         LocalDateTime rEndDT = parseSafeDateTime(returnEndDate, LocalDateTime.now().with(LocalTime.MAX), true);
 
-// Инвойсы
+        // Инвойсы
         LocalDateTime invStartDT = parseSafeDateTime(invoiceStart, LocalDateTime.now().withDayOfMonth(1).with(LocalTime.MIN), false);
         LocalDateTime invEndDT = parseSafeDateTime(invoiceEnd, LocalDateTime.now().with(LocalTime.MAX), true);
-// Передаем отформатированные строки обратно в модель для инпутов
+
         java.time.format.DateTimeFormatter html5PickerFormat = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
-// Передаем именно в этом формате!
         model.addAttribute("orderStartDate", oStartDT.format(html5PickerFormat));
         model.addAttribute("orderEndDate", oEndDT.format(html5PickerFormat));
 
         model.addAttribute("returnStartDate", rStartDT.format(html5PickerFormat));
         model.addAttribute("returnEndDate", rEndDT.format(html5PickerFormat));
 
-// Для инвойсов (если там тоже input type="date")
         model.addAttribute("invoiceStart", invStartDT.format(html5PickerFormat));
         model.addAttribute("invoiceEnd", invEndDT.format(html5PickerFormat));
 
@@ -122,8 +120,6 @@ public class MainWebController {
                 .map(o -> o.getTotalPurchaseCost() != null ? o.getTotalPurchaseCost() : BigDecimal.ZERO)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-
-
         // --- 3. ЛОГИКА ДЛЯ ВОЗВРАТОВ ---
         Page<ReturnOrder> returnsPage;
         if (returnManagerId != null && !returnManagerId.isEmpty()) {
@@ -132,7 +128,6 @@ public class MainWebController {
             returnsPage = returnOrderRepository.findReturnsBetweenDatesWithSearchPaged(rStartDT, rEndDT, returnSearch, pageable);
         }
 
-        // Для расчетов оставляем список за период
         List<ReturnOrder> allReturns = (returnManagerId != null && !returnManagerId.isEmpty())
                 ? returnOrderRepository.findReturnsByManagerAndDateRange(returnManagerId, rStartDT, rEndDT)
                 : returnOrderRepository.findReturnsBetweenDates(rStartDT, rEndDT);
@@ -145,29 +140,40 @@ public class MainWebController {
         BigDecimal netProfitBD = rawSales.subtract(rawPurchaseCost).subtract(totalReturnsSum)
                 .setScale(1, RoundingMode.HALF_UP);
 
-
-        // --- 4. ОБЩАЯ СТАТИСТИКА И СЧЕТА (ПАГИНАЦИЯ + ФИЛЬТРЫ) ---
-        // ИЗМЕНЕНИЕ: Учитываем возвраты в общем долге системы (totalInvoiceDebt)
-
-
+        // --- 4. ОБЩАЯ СТАТИСТИКА И СЧЕТА ---
         BigDecimal totalPaidSum = Optional.ofNullable(invoiceRepository.calculateTotalPaid()).orElse(BigDecimal.ZERO);
 
-        // Подготовка параметров для фильтра
+        // Считаем ГЛОБАЛЬНЫЙ общий долг всей системы (абсолютно по всем инвойсам и возвратам без фильтров дат)
+        BigDecimal globalSystemTotalAmount = invoiceRepository.findAll().stream()
+                .map(inv -> inv.getTotalAmount() != null ? inv.getTotalAmount() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal globalSystemPaidAmount = invoiceRepository.findAll().stream()
+                .map(inv -> inv.getPaidAmount() != null ? inv.getPaidAmount() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal globalSystemReturnsSum = returnOrderRepository.findAll().stream()
+                .filter(r -> r != null && r.getStatus() == ReturnStatus.CONFIRMED)
+                .map(r -> r.getTotalAmount() != null ? r.getTotalAmount() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        // Итоговый общий долг всей системы с учетом возвратов
+        BigDecimal totalSystemDebt = globalSystemTotalAmount
+                .subtract(globalSystemPaidAmount)
+                .subtract(globalSystemReturnsSum)
+                .setScale(2, RoundingMode.HALF_UP);
+
+        // Подготовка параметров для фильтра инвойсов
         String managerParam = (invoiceManager != null && !invoiceManager.isEmpty()) ? invoiceManager : null;
         String statusParam = (invoiceStatus != null && !invoiceStatus.isEmpty()) ? invoiceStatus : null;
 
-        // ИСПРАВЛЕНО (Пункт 3): Увеличен размер страницы с 15 до 100 записей
         Pageable invPageable = PageRequest.of(invoicePage, 100, Sort.by("createdAt").descending());
 
-        // Загружаем пагинированную страницу (100 штук) для отображения в таблице
         Page<Invoice> invoicesPage = invoiceRepository.findFilteredInvoices(
                 invStartDT, invEndDT, managerParam, statusParam, invPageable);
 
         List<Invoice> invoicesList = invoicesPage.getContent();
 
-        // ---------------------------------------------------------
-        // ТОЧЕЧНОЕ ДОБАВЛЕНИЕ: Корректировка отображаемой суммы инвойсов в таблице на лету
-        // ---------------------------------------------------------
         List<ReturnOrder> allConfirmedReturns = returnOrderRepository.findAll().stream()
                 .filter(r -> r != null && r.getStatus() == ReturnStatus.CONFIRMED)
                 .collect(Collectors.toList());
@@ -193,10 +199,7 @@ public class MainWebController {
                 }
             }
         }
-        // ---------------------------------------------------------
 
-        // ИСПРАВЛЕНО (Пункт 2): Считаем общую сумму и оплаты за ВЫБРАННЫЙ ПЕРИОД по фильтрам без лимита страниц
-        // Для этого делаем вызов метода без пагинации (он нам понадобится в InvoiceRepository)
         List<Invoice> allInvoicesForPeriod = invoiceRepository.findAllFilteredInvoicesNoPage(
                 invStartDT, invEndDT, managerParam, statusParam);
 
@@ -208,34 +211,29 @@ public class MainWebController {
                 .map(inv -> inv.getPaidAmount() != null ? inv.getPaidAmount() : BigDecimal.ZERO)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        // ИЗМЕНЕНИЕ: Вычитаем подтвержденные возвраты за выбранный период для корректного расчета periodInvoiceDebt
         BigDecimal periodReturnsSum = returnOrderRepository.findReturnsBetweenDates(invStartDT, invEndDT).stream()
                 .filter(r -> r != null && r.getStatus() == ReturnStatus.CONFIRMED)
                 .map(r -> r.getTotalAmount() != null ? r.getTotalAmount() : BigDecimal.ZERO)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        // Чистый долг именно выбранного периода для третьей карточки с учетом возвратов
+        // Чистый долг выбранного периода для карточки периода
         BigDecimal periodInvoiceDebt = periodTotalAmount.subtract(periodPaidAmount).subtract(periodReturnsSum).setScale(2, RoundingMode.HALF_UP);
-
-
 
         long activeOrdersCount = allOrdersForPeriod.size();
         BigDecimal avgCheck = (activeOrdersCount == 0) ? BigDecimal.ZERO : rawSales.divide(BigDecimal.valueOf(activeOrdersCount), 2, RoundingMode.HALF_UP);
         List<AuditLog> limitedLogs = auditLogRepository.findTop50ByOrderByTimestampDesc();
 
-        // --- 5. ЛОГИКА KPI МЕНЕДЖЕРОВ (ОПТИМИЗИРОВАНО) ---
+        // --- 5. ЛОГИКА KPI МЕНЕДЖЕРОВ ---
         List<String> managersForUI = ManagerId.getAllDisplayNames();
         Map<String, ManagerKpiDTO> managerStats = new HashMap<>();
         LocalDate now = LocalDate.now();
 
         for (String mName : managersForUI) {
-            // Используем уже существующий список allOrdersForPeriod вместо запроса к репозиторию
             BigDecimal mSales = allOrdersForPeriod.stream()
                     .filter(o -> mName.equals(o.getManagerId()) && o.getStatus() != OrderStatus.CANCELLED)
                     .map(o -> o.getTotalAmount() != null ? o.getTotalAmount() : BigDecimal.ZERO)
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-            // Используем уже существующий список allReturns
             BigDecimal mReturns = allReturns.stream()
                     .filter(r -> mName.equals(r.getManagerId()) && r.getStatus() == ReturnStatus.CONFIRMED)
                     .map(r -> r.getTotalAmount() != null ? r.getTotalAmount() : BigDecimal.ZERO)
@@ -243,7 +241,6 @@ public class MainWebController {
 
             ManagerKpiDTO dto = new ManagerKpiDTO(mSales, mReturns);
 
-            // Таргет оставляем из БД, так как это точечный запрос на конкретный месяц
             ManagerTarget target = managerTargetRepository.findByManagerIdAndMonthAndYear(
                     mName, now.getMonth(), Year.of(now.getYear()));
 
@@ -251,8 +248,6 @@ public class MainWebController {
             managerStats.put(mName, dto);
         }
 
-
-        // Если параметры пустые, берем начало и конец текущего месяца
         LocalDate defaultStart = LocalDate.now().withDayOfMonth(1);
         LocalDate defaultEnd = LocalDate.now().withDayOfMonth(LocalDate.now().lengthOfMonth());
 
@@ -264,55 +259,45 @@ public class MainWebController {
                 ? parseSafeDateTime(promoEnd, defaultEnd.atTime(LocalTime.MAX), true).toLocalDate()
                 : defaultEnd;
 
-// Передаем в модель
         model.addAttribute("promos", promoRepository.findByPeriod(pStart, pEnd));
         model.addAttribute("promoStart", pStart.toString());
         model.addAttribute("promoEnd", pEnd.toString());
-// Добавляем эти атрибуты для input th:value="${promoStartDefault}" в HTML
         model.addAttribute("promoStartDefault", pStart.toString());
         model.addAttribute("promoEndDefault", pEnd.toString());
-
-
 
         List<Long> allOrderIds = allOrdersForPeriod.stream()
                 .map(Order::getId)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toList());
 
-// Собираем ID всех возвратов за выбранный период
         List<Long> allReturnIds = allReturns.stream()
                 .map(ReturnOrder::getId)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toList());
 
-// Передаем списки в модель, чтобы JavaScript в dashboard.html их увидел
         model.addAttribute("allOrderIds", allOrderIds);
         model.addAttribute("allReturnIds", allReturnIds);
 
-
         addModel(page, orderManagerId, returnManagerId, model,
                 ordersPage, returnsPage, totalOrdersSum,
-                rawSales, rawPurchaseCost, netProfitBD, avgCheck, limitedLogs, invoicesList, periodInvoiceDebt, totalPaidSum,
+                rawSales, rawPurchaseCost, netProfitBD, avgCheck, limitedLogs, invoicesList,
+                totalSystemDebt,
+                totalPaidSum,
                 oStartDT.toLocalDate(), oEndDT.toLocalDate(), allReturns, totalReturnsSum, rStartDT.toLocalDate(), rEndDT.toLocalDate(),
                 orderSearch, returnSearch);
 
-
-        // ИСПРАВЛЕНО: Передаем periodInvoiceDebt аргументом в самый конец метода
         addInvModel(invoicePage, invoiceManager, invoiceStatus, model, invoicesList, invoicesPage, invStartDT.toLocalDate(), invEndDT.toLocalDate(), periodInvoiceDebt);
         groupAndWarehouse(activeTab, clientPage, clientCategory, clientSearch, model, managersForUI, managerStats, invoicesList);
         return "dashboard";
-
-
     }
 
     private static void addInvModel(int invoicePage, String invoiceManager, String invoiceStatus, Model model,
                                     List<Invoice> invoicesList, Page<Invoice> invoicesPage,
-                                    LocalDate invStartD, LocalDate invEndD, BigDecimal periodInvoiceDebt) { // Принимаем значение
+                                    LocalDate invStartD, LocalDate invEndD, BigDecimal periodInvoiceDebt) {
         model.addAttribute("invoices", invoicesList);
         model.addAttribute("invCurrentPage", invoicePage);
         model.addAttribute("invTotalPages", invoicesPage.getTotalPages());
 
-        // ИСПРАВЛЕНО (Пункт 2): Добавляем значение долга выбранного периода в модель для отображения в карточке
         model.addAttribute("periodInvoiceDebt", periodInvoiceDebt);
 
         java.time.format.DateTimeFormatter isoDate = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd");
@@ -323,16 +308,14 @@ public class MainWebController {
         model.addAttribute("selectedInvStatus", invoiceStatus);
     }
 
-
-
     private static void addModel(int page, String orderManagerId, String returnManagerId, Model model,
-                                 Page<Order> ordersPage, Page<ReturnOrder> returnsPage, // Принимаем page возвратов вместо списка
+                                 Page<Order> ordersPage, Page<ReturnOrder> returnsPage,
                                  BigDecimal totalOrdersSum, BigDecimal rawSales, BigDecimal rawPurchaseCost,
                                  BigDecimal netProfitBD, BigDecimal avgCheck, List<AuditLog> limitedLogs,
                                  List<Invoice> invoices, BigDecimal totalInvoiceDebt, BigDecimal totalPaidSum,
                                  LocalDate startD, LocalDate endD, List<ReturnOrder> allReturnsForCalculation,
                                  BigDecimal totalReturnsSum, LocalDate startR, LocalDate endR,
-                                 String orderSearch, String returnSearch) { // Принимаем поисковые строки
+                                 String orderSearch, String returnSearch) {
 
         model.addAttribute("orders", ordersPage.getContent());
         model.addAttribute("currentPage", page);
@@ -352,13 +335,11 @@ public class MainWebController {
 
         model.addAttribute("selectedOrderManager", orderManagerId);
 
-        // Для таблицы передаем страницу возвратов с учетом поиска
         model.addAttribute("returns", returnsPage.getContent());
         model.addAttribute("totalReturnsCount", allReturnsForCalculation.size());
         model.addAttribute("totalReturnsSum", totalReturnsSum);
         model.addAttribute("selectedReturnManager", returnManagerId);
 
-        // Сохраняем поисковые запросы в модели, чтобы инпуты на фронтенде не очищались
         model.addAttribute("orderSearch", orderSearch);
         model.addAttribute("returnSearch", returnSearch);
 
@@ -375,7 +356,6 @@ public class MainWebController {
                                    String clientSearch, Model model, List<String> managersForUI,
                                    Map<String, ManagerKpiDTO> managerStats, List<Invoice> invoices) {
 
-        // 1. СКЛАД: Оптимизируем загрузку (дизайн и логику не меняем)
         List<Product> activeProducts = Optional.ofNullable(productRepository.findAllByIsDeletedFalse()).orElse(new ArrayList<>());
         Map<String, List<Product>> groupedProducts = activeProducts.stream()
                 .filter(Objects::nonNull)
@@ -394,16 +374,13 @@ public class MainWebController {
         model.addAttribute("groupedProducts", groupedProducts);
         model.addAttribute("products", activeProducts);
 
-        // 2. КЛИЕНТЫ: Исправляем фильтр категорий и поиск
         int pageSize = 100;
         Pageable pageable = PageRequest.of(clientPage, pageSize, Sort.by("name").ascending());
 
-        // Очищаем параметры (убираем лишние пробелы)
         String searchKeyword = (clientSearch != null && !clientSearch.trim().isEmpty()) ? clientSearch.trim() : null;
         String categoryFilter = (clientCategory != null && !clientCategory.trim().isEmpty()) ? clientCategory.trim() : null;
 
         Page<Client> clientsPage;
-        // КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: поиск вызывается если есть ХОТЯ БЫ один фильтр
         if (searchKeyword != null || categoryFilter != null) {
             clientsPage = clientRepository.searchClients(searchKeyword, categoryFilter, pageable);
         } else {
@@ -415,20 +392,16 @@ public class MainWebController {
         model.addAttribute("clientTotalPages", clientsPage.getTotalPages());
         model.addAttribute("clientTotalElements", clientsPage.getTotalElements());
 
-        // Передаем параметры обратно в форму поиска, чтобы они не сбрасывались
         model.addAttribute("selectedCategory", clientCategory);
         model.addAttribute("clientSearch", clientSearch);
 
-        // ИСПРАВЛЕНИЕ: Вызываем список категорий клиентов, чтобы фильтр всегда был заполнен
         model.addAttribute("clientCategories", clientRepository.findUniqueCategories());
 
-        // 3. ПЕРСОНАЛ И KPI
         model.addAttribute("users", Optional.ofNullable(userRepository.findAll()).orElse(new ArrayList<>()));
         model.addAttribute("managers", managersForUI);
         model.addAttribute("managersKPI", managersForUI);
         model.addAttribute("managerStats", managerStats);
 
-        // 4. ЛОГИКА ПРОСРОЧКИ (БЕЗ ИЗМЕНЕНИЙ)
         LocalDateTime limitDate = LocalDateTime.now().minusDays(30);
         List<Invoice> allUnpaid = invoiceRepository.findAllByStatusNot("PAID");
         Set<String> overdueClients = allUnpaid.stream()
@@ -438,8 +411,6 @@ public class MainWebController {
                 .collect(Collectors.toSet());
         model.addAttribute("overdueClients", overdueClients);
 
-        // 5. КАРТА ДОЛГОВ ДЛЯ JS (Исправлено balance -> debt)
-        // Теперь JS не будет выдавать ошибки при поиске долга клиента
         List<Client> allActiveForMap = clientRepository.findAllByIsDeletedFalse();
         Map<String, BigDecimal> clientDebts = allActiveForMap.stream()
                 .filter(c -> c != null && c.getName() != null)
@@ -455,20 +426,17 @@ public class MainWebController {
         model.addAttribute("activeTab", activeTab);
     }
 
-
     private LocalDateTime parseSafeDateTime(String d, LocalDateTime def, boolean isEnd) {
         if (d == null || d.trim().isEmpty()) return def;
         try {
             LocalDateTime dt;
             if (d.contains("-") && !d.contains(".")) {
-                // Формат HTML5: 2026-04-08
                 if (d.contains("T") || d.contains(" ")) {
                     dt = LocalDateTime.parse(d.replace(" ", "T"));
                 } else {
                     dt = LocalDate.parse(d).atStartOfDay();
                 }
             } else if (d.contains(".")) {
-                // Формат с точками: 08.04.2026
                 if (d.contains(":")) {
                     dt = LocalDateTime.parse(d, java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm[:ss]"));
                 } else {
@@ -478,7 +446,6 @@ public class MainWebController {
                 dt = LocalDateTime.parse(d.replace(" ", "T"));
             }
 
-            // КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: если это дата "ПО", ставим конец дня
             if (isEnd && dt.toLocalTime().equals(LocalTime.MIN)) {
                 return dt.with(LocalTime.MAX);
             }
@@ -487,5 +454,4 @@ public class MainWebController {
             return def;
         }
     }
-
 }
