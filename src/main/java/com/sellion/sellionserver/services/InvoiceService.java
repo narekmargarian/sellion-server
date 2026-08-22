@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -30,7 +31,7 @@ public class InvoiceService {
     private final InvoiceRepository invoiceRepository;
     private final OrderRepository orderRepository;
     private final ClientRepository clientRepository;
-    private final PaymentRepository paymentRepository; // ДОБАВЛЕНО для контроля оплат
+    private final PaymentRepository paymentRepository;
     private final FinanceService financeService;
 
     /**
@@ -90,14 +91,12 @@ public class InvoiceService {
 
     /**
      * АТОМАРНАЯ ОТМЕНА ЗАКАЗА И СЧЕТА С КОРРЕКТИРОВКОЙ БАЛАНСА.
-     * Предотвращает зависание долгов в системе при аннулировании документов.
      */
     @Transactional(rollbackFor = Exception.class)
     public void cancelInvoiceOrOrder(Long orderId) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new RuntimeException("Заказ #" + orderId + " не найден"));
 
-        // Ситуация 1: Заказ новый или принят, счет еще не выставлялся
         if (order.getInvoiceId() == null) {
             order.setStatus(OrderStatus.CANCELLED);
             orderRepository.saveAndFlush(order);
@@ -105,30 +104,25 @@ public class InvoiceService {
             return;
         }
 
-        // Ситуация 2: По заказу уже выставлен счет
         Invoice invoice = invoiceRepository.findById(order.getInvoiceId())
                 .orElseThrow(() -> new RuntimeException("Связанный счет #" + order.getInvoiceId() + " не найден"));
 
-        // ЗАЩИТА: Запрещено отменять счета, по которым уже пошли платежи
         if ("PAID".equals(invoice.getStatus()) || "PARTIAL".equals(invoice.getStatus()) ||
                 (invoice.getPaidAmount() != null && invoice.getPaidAmount().compareTo(BigDecimal.ZERO) > 0)) {
             throw new RuntimeException("Невозможно отменить счет #" + invoice.getInvoiceNumber() +
                     ", так как по нему зарегистрированы оплаты! Сначала аннулируйте платежи.");
         }
 
-        // 1. Аннулируем статусы документов в БД
         invoice.setStatus("CANCELLED");
         invoiceRepository.saveAndFlush(invoice);
 
         order.setStatus(OrderStatus.CANCELLED);
         orderRepository.saveAndFlush(order);
 
-        // 2. ФИНАНСОВЫЙ ОТКАТ (Сторнирование долга)
-        // Тип "RETURN" уменьшит долг клиента на сумму отмененного счета
         try {
             financeService.registerOperation(
                     invoice.getClientId(),
-                    "RETURN", // Используем RETURN для списания долга обратно
+                    "RETURN",
                     invoice.getTotalAmount(),
                     invoice.getId(),
                     "Аннулирование счета " + invoice.getInvoiceNumber() + " (Отмена заказа)",
@@ -143,18 +137,13 @@ public class InvoiceService {
                 invoice.getInvoiceNumber(), orderId, invoice.getTotalAmount());
     }
 
+    /**
+     * Экспорт отчета по долгам в Excel с честными суммами без искажений и коэффициентов.
+     */
     public void exportDebtsToExcel(String start, String end, OutputStream outputStream) throws IOException {
         List<Invoice> allInvoices = invoiceRepository.findAll();
 
-        // Получаем актуальный долг клиентов из базы (где учтены все возвраты и оплаты)
-        java.util.Map<Long, BigDecimal> clientActualDebts = clientRepository.findAll().stream()
-                .collect(Collectors.toMap(Client::getId, Client::getDebt, (d1, d2) -> d1));
-
-        // Получаем общую сумму долга всех клиентов
-        BigDecimal totalSystemDebt = clientActualDebts.values().stream()
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        // Считаем сумму остатков по отфильтрованным инвойсам до пропорциональной корректировки
+        // Отбираем инвойсы по статусу и диапазону дат без каких-либо искусственных коэффициентов
         List<Invoice> filteredInvoices = allInvoices.stream()
                 .filter(inv -> {
                     String status = inv.getStatus();
@@ -177,24 +166,6 @@ public class InvoiceService {
                     return !invDate.isBefore(startDate) && !invDate.isAfter(endDate);
                 })
                 .collect(Collectors.toList());
-
-        // Вычисляем коэффициент пропорции, чтобы итоговая сумма в Excel точь-в-точь совпала с 8 131 466 (системным долгом)
-        BigDecimal sumOfFilteredInvoices = filteredInvoices.stream()
-                .map(inv -> {
-                    BigDecimal total = inv.getTotalAmount() != null ? inv.getTotalAmount() : BigDecimal.ZERO;
-                    BigDecimal paid = inv.getPaidAmount() != null ? inv.getPaidAmount() : BigDecimal.ZERO;
-                    return total.subtract(paid);
-                })
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        // Если общая сумма инвойсов больше нуля, находим коэффициент корректировки на возвраты
-        final BigDecimal correctionRatio;
-        if (sumOfFilteredInvoices.compareTo(BigDecimal.ZERO) > 0 && totalSystemDebt.compareTo(BigDecimal.ZERO) >= 0) {
-            // Если системный долг меньше суммы инвойсов из-за возвратов, корректируем пропорционально
-            correctionRatio = totalSystemDebt.divide(sumOfFilteredInvoices, 10, java.math.RoundingMode.HALF_UP);
-        } else {
-            correctionRatio = BigDecimal.ONE;
-        }
 
         try (Workbook workbook = new XSSFWorkbook()) {
             Sheet sheet = workbook.createSheet("Список долгов");
@@ -244,10 +215,11 @@ public class InvoiceService {
                 Cell cell3 = row.createCell(3);
                 BigDecimal total = inv.getTotalAmount() != null ? inv.getTotalAmount() : BigDecimal.ZERO;
                 BigDecimal paid = inv.getPaidAmount() != null ? inv.getPaidAmount() : BigDecimal.ZERO;
-                // Умножаем на коэффициент, чтобы учесть возвраты по каждому счету пропорционально
-                BigDecimal adjustedDebt = total.subtract(paid).multiply(correctionRatio).setScale(2, java.math.RoundingMode.HALF_UP);
 
-                cell3.setCellValue(adjustedDebt.doubleValue());
+                // Четкий остаток по счету без искажений
+                BigDecimal exactRemaining = total.subtract(paid).setScale(2, RoundingMode.HALF_UP);
+
+                cell3.setCellValue(exactRemaining.doubleValue());
                 cell3.setCellStyle(amountCellStyle);
 
                 Cell cell4 = row.createCell(4);
