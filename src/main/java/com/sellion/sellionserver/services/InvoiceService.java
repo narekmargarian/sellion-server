@@ -1,13 +1,7 @@
 package com.sellion.sellionserver.services;
 
-import com.sellion.sellionserver.entity.Client;
-import com.sellion.sellionserver.entity.Invoice;
-import com.sellion.sellionserver.entity.Order;
-import com.sellion.sellionserver.entity.OrderStatus;
-import com.sellion.sellionserver.repository.ClientRepository;
-import com.sellion.sellionserver.repository.InvoiceRepository;
-import com.sellion.sellionserver.repository.OrderRepository;
-import com.sellion.sellionserver.repository.PaymentRepository;
+import com.sellion.sellionserver.entity.*;
+import com.sellion.sellionserver.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.*;
@@ -21,6 +15,7 @@ import java.io.OutputStream;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -33,6 +28,7 @@ public class InvoiceService {
     private final ClientRepository clientRepository;
     private final PaymentRepository paymentRepository;
     private final FinanceService financeService;
+    private final ReturnOrderRepository returnOrderRepository;
 
     /**
      * ЭТАП 2: Создание инвойса из зарезервированного заказа.
@@ -137,13 +133,33 @@ public class InvoiceService {
                 invoice.getInvoiceNumber(), orderId, invoice.getTotalAmount());
     }
 
-    /**
-     * Экспорт отчета по долгам в Excel с честными суммами без искажений и коэффициентов.
-     */
+
+
     public void exportDebtsToExcel(String start, String end, OutputStream outputStream) throws IOException {
         List<Invoice> allInvoices = invoiceRepository.findAll();
 
-        // Отбираем инвойсы по статусу и диапазону дат без каких-либо искусственных коэффициентов
+        // Считаем общую сумму возвратов за выбранный период (или за все время, если даты не заданы)
+        BigDecimal totalReturnsSum = BigDecimal.ZERO;
+        try {
+            if (start != null && end != null && !start.isEmpty() && !end.isEmpty()) {
+                LocalDateTime startDateTime = LocalDate.parse(start).atStartOfDay();
+                LocalDateTime endDateTime = LocalDate.parse(end).atTime(23, 59, 59);
+                BigDecimal periodReturns = returnOrderRepository.sumConfirmedReturns(startDateTime, endDateTime);
+                if (periodReturns != null) {
+                    totalReturnsSum = periodReturns;
+                }
+            } else {
+                // Если диапазон дат не задан, берем сумму всех подтвержденных возвратов
+                List<ReturnOrder> allConfirmedReturns = returnOrderRepository.findAllByStatus(ReturnStatus.CONFIRMED);
+                totalReturnsSum = allConfirmedReturns.stream()
+                        .map(r -> r.getTotalAmount() != null ? r.getTotalAmount() : BigDecimal.ZERO)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+            }
+        } catch (Exception e) {
+            log.warn("Не удалось автоматически рассчитать сумму возвратов для Excel: {}", e.getMessage());
+        }
+
+        // Отбираем инвойсы по статусу и диапазону дат
         List<Invoice> filteredInvoices = allInvoices.stream()
                 .filter(inv -> {
                     String status = inv.getStatus();
@@ -216,7 +232,6 @@ public class InvoiceService {
                 BigDecimal total = inv.getTotalAmount() != null ? inv.getTotalAmount() : BigDecimal.ZERO;
                 BigDecimal paid = inv.getPaidAmount() != null ? inv.getPaidAmount() : BigDecimal.ZERO;
 
-                // Четкий остаток по счету без искажений
                 BigDecimal exactRemaining = total.subtract(paid).setScale(2, RoundingMode.HALF_UP);
 
                 cell3.setCellValue(exactRemaining.doubleValue());
@@ -242,13 +257,14 @@ public class InvoiceService {
                 totalRow.createCell(i).setCellStyle(headerStyle);
             }
 
-            totalRow.getCell(1).setCellValue("Итого");
+            totalRow.getCell(1).setCellValue("Итого (с учетом возвратов)");
 
             Cell totalFormulaCell = totalRow.getCell(3);
             totalFormulaCell.setCellStyle(amountCellStyle);
 
             if (rowNum > 1) {
-                totalFormulaCell.setCellFormula("SUBTOTAL(9,D2:D" + rowNum + ")");
+                // Динамически вычитаем реальную сумму возвратов из формулы SUBTOTAL
+                totalFormulaCell.setCellFormula("SUBTOTAL(9,D2:D" + rowNum + ") - " + totalReturnsSum.toPlainString());
             } else {
                 totalFormulaCell.setCellValue(0.0);
             }
