@@ -20,16 +20,12 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
     List<Order> findAllByStatus(OrderStatus status);
 
-
-
     @Query("SELECT o FROM Order o WHERE o.createdAt BETWEEN :start AND :end " +
             "AND (o.type IS NULL OR o.type != 'WRITE_OFF')")
     List<Order> findOrdersBetweenDates(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 
-    // Сумма подтвержденных возвратов (уже было, просто проверьте наличие)
     @Query("SELECT SUM(r.totalAmount) FROM ReturnOrder r WHERE r.createdAt BETWEEN :start AND :end AND r.status = 'CONFIRMED'")
     BigDecimal sumConfirmedReturns(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
-
 
     @Query("SELECT o FROM Order o WHERE o.managerId = :mId AND o.createdAt BETWEEN :start AND :end")
     List<Order> findOrdersByManagerAndDateRange(@Param("mId") String mId, @Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
@@ -39,13 +35,9 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
     List<Order> findByManagerId(String managerId);
 
-
-
     @Query("SELECT o FROM Order o WHERE o.managerId = :managerId AND o.deliveryDate = :date AND o.status != 'CANCELLED'")
     List<Order> findDailyRouteOrders(@Param("managerId") String managerId, @Param("date") LocalDate date);
 
-
-    // ИСПРАВЛЕНО: Добавлен Pageable для ограничения количества записей (напр. по 50 на страницу)
     @Query("SELECT o FROM Order o WHERE o.createdAt BETWEEN :start AND :end")
     Page<Order> findOrdersBetweenDatesPaged(
             @Param("start") LocalDateTime start,
@@ -53,7 +45,6 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             Pageable pageable
     );
 
-    // То же самое для фильтрации по менеджеру
     @Query("SELECT o FROM Order o WHERE o.managerId = :mId AND o.createdAt BETWEEN :start AND :end")
     Page<Order> findOrdersByManagerAndDateRangePaged(
             @Param("mId") String mId,
@@ -62,7 +53,26 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             Pageable pageable
     );
 
+    // --- НОВЫЕ МЕТОДЫ ДЛЯ СЕРВЕРНОГО ПОИСКА ЗАКАЗОВ ПО МАГАЗИНУ ---
+    @Query("SELECT o FROM Order o WHERE o.createdAt BETWEEN :start AND :end " +
+            "AND (:search IS NULL OR :search = '' OR LOWER(o.shopName) LIKE LOWER(CONCAT('%', :search, '%')))")
+    Page<Order> findOrdersWithSearchPaged(
+            @Param("start") LocalDateTime start,
+            @Param("end") LocalDateTime end,
+            @Param("search") String search,
+            Pageable pageable
+    );
 
+    @Query("SELECT o FROM Order o WHERE o.managerId = :mId AND o.createdAt BETWEEN :start AND :end " +
+            "AND (:search IS NULL OR :search = '' OR LOWER(o.shopName) LIKE LOWER(CONCAT('%', :search, '%')))")
+    Page<Order> findOrdersByManagerWithSearchPaged(
+            @Param("mId") String mId,
+            @Param("start") LocalDateTime start,
+            @Param("end") LocalDateTime end,
+            @Param("search") String search,
+            Pageable pageable
+    );
+    // -------------------------------------------------------------
 
     @Query("SELECT o FROM Order o WHERE o.createdAt BETWEEN :start AND :end AND o.invoiceId IS NOT NULL AND o.status != 'CANCELLED' AND o.managerId = :managerId")
     List<Order> findInvoicedOrdersBetweenDatesAndManager(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end, @Param("managerId") String managerId);
@@ -73,14 +83,12 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     boolean existsByAndroidId(String androidId);
     List<Order> findByManagerIdAndCreatedAtBetween(String managerId, LocalDateTime start, LocalDateTime end);
 
-    // В OrderRepository.java
     @Query("SELECT SUM(o.totalAmount) FROM Order o WHERE o.createdAt BETWEEN :start AND :end AND o.status != 'CANCELLED' AND o.type = 'SALE'")
     BigDecimal sumTotalSales(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 
     @Query("SELECT SUM(o.totalPurchaseCost) FROM Order o WHERE o.createdAt BETWEEN :start AND :end AND o.status != 'CANCELLED'")
     BigDecimal sumTotalCost(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 
-    // Новый метод специально для точной выборки по датам
     @Query("SELECT o FROM Order o WHERE o.createdAt >= :start AND o.createdAt <= :end AND o.status != 'CANCELLED'")
     List<Order> findOrdersForPrintSummary(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 
@@ -92,6 +100,4 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     @Modifying
     @Query("UPDATE Order o SET o.status = :status WHERE o.id = :id")
     void updateStatus(@Param("id") Long id, @Param("status") OrderStatus status);
-
 }
-

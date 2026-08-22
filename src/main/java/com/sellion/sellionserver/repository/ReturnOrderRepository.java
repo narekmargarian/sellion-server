@@ -2,6 +2,8 @@ package com.sellion.sellionserver.repository;
 
 import com.sellion.sellionserver.entity.ReturnOrder;
 import com.sellion.sellionserver.entity.ReturnStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -16,7 +18,6 @@ public interface ReturnOrderRepository extends JpaRepository<ReturnOrder, Long> 
 
     List<ReturnOrder> findAllByStatus(ReturnStatus status);
 
-    // ИСПРАВЛЕНО: Тип LocalDateTime для точного поиска по дате и времени
     @Query("SELECT r FROM ReturnOrder r WHERE r.createdAt BETWEEN :start AND :end")
     List<ReturnOrder> findReturnsBetweenDates(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 
@@ -25,9 +26,29 @@ public interface ReturnOrderRepository extends JpaRepository<ReturnOrder, Long> 
 
     List<ReturnOrder> findByManagerId(String managerId);
 
-    // ИСПРАВЛЕНО: Тип LocalDateTime для агрегации данных
     @Query("SELECT SUM(r.totalAmount) FROM ReturnOrder r WHERE r.createdAt BETWEEN :start AND :end AND r.status = 'CONFIRMED'")
     BigDecimal sumConfirmedReturns(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+
+    // --- НОВЫЕ МЕТОДЫ ДЛЯ СЕРВЕРНОГО ПОИСКА ВОЗВРАТОВ ПО МАГАЗИНУ ---
+    @Query("SELECT r FROM ReturnOrder r WHERE r.createdAt BETWEEN :start AND :end " +
+            "AND (:search IS NULL OR :search = '' OR LOWER(r.shopName) LIKE LOWER(CONCAT('%', :search, '%')))")
+    Page<ReturnOrder> findReturnsBetweenDatesWithSearchPaged(
+            @Param("start") LocalDateTime start,
+            @Param("end") LocalDateTime end,
+            @Param("search") String search,
+            Pageable pageable
+    );
+
+    @Query("SELECT r FROM ReturnOrder r WHERE r.managerId = :mId AND r.createdAt BETWEEN :start AND :end " +
+            "AND (:search IS NULL OR :search = '' OR LOWER(r.shopName) LIKE LOWER(CONCAT('%', :search, '%')))")
+    Page<ReturnOrder> findReturnsByManagerWithSearchPaged(
+            @Param("mId") String mId,
+            @Param("start") LocalDateTime start,
+            @Param("end") LocalDateTime end,
+            @Param("search") String search,
+            Pageable pageable
+    );
+    // -------------------------------------------------------------
 
     boolean existsByAndroidId(String androidId);
     List<ReturnOrder> findByManagerIdAndCreatedAtBetween(String managerId, LocalDateTime start, LocalDateTime end);

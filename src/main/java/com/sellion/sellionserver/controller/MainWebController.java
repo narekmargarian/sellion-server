@@ -47,6 +47,10 @@ public class MainWebController {
             @RequestParam(value = "clientCategory", required = false) String clientCategory,
             @RequestParam(value = "clientSearch", required = false) String clientSearch,
 
+            // НОВЫЕ ПАРАМЕТРЫ ДЛЯ ПОИСКА ЗАКАЗОВ И ВОЗВРАТОВ
+            @RequestParam(value = "orderSearch", required = false) String orderSearch,
+            @RequestParam(value = "returnSearch", required = false) String returnSearch,
+
             // НОВЫЕ ПАРАМЕТРЫ ДЛЯ ИНВОЙСОВ
             @RequestParam(value = "invoicePage", defaultValue = "0") int invoicePage,
             @RequestParam(value = "invoiceStart", required = false) String invoiceStart,
@@ -97,9 +101,9 @@ public class MainWebController {
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
         Page<Order> ordersPage;
         if (orderManagerId != null && !orderManagerId.isEmpty()) {
-            ordersPage = orderRepository.findOrdersByManagerAndDateRangePaged(orderManagerId, oStartDT, oEndDT, pageable);
+            ordersPage = orderRepository.findOrdersByManagerWithSearchPaged(orderManagerId, oStartDT, oEndDT, orderSearch, pageable);
         } else {
-            ordersPage = orderRepository.findOrdersBetweenDatesPaged(oStartDT, oEndDT, pageable);
+            ordersPage = orderRepository.findOrdersWithSearchPaged(oStartDT, oEndDT, orderSearch, pageable);
         }
 
         List<Order> allOrdersForPeriod = (orderManagerId != null && !orderManagerId.isEmpty())
@@ -121,6 +125,14 @@ public class MainWebController {
 
 
         // --- 3. ЛОГИКА ДЛЯ ВОЗВРАТОВ ---
+        Page<ReturnOrder> returnsPage;
+        if (returnManagerId != null && !returnManagerId.isEmpty()) {
+            returnsPage = returnOrderRepository.findReturnsByManagerWithSearchPaged(returnManagerId, rStartDT, rEndDT, returnSearch, pageable);
+        } else {
+            returnsPage = returnOrderRepository.findReturnsBetweenDatesWithSearchPaged(rStartDT, rEndDT, returnSearch, pageable);
+        }
+
+        // Для расчетов оставляем список за период
         List<ReturnOrder> allReturns = (returnManagerId != null && !returnManagerId.isEmpty())
                 ? returnOrderRepository.findReturnsByManagerAndDateRange(returnManagerId, rStartDT, rEndDT)
                 : returnOrderRepository.findReturnsBetweenDates(rStartDT, rEndDT);
@@ -136,14 +148,7 @@ public class MainWebController {
 
         // --- 4. ОБЩАЯ СТАТИСТИКА И СЧЕТА (ПАГИНАЦИЯ + ФИЛЬТРЫ) ---
         // ИЗМЕНЕНИЕ: Учитываем возвраты в общем долге системы (totalInvoiceDebt)
-        BigDecimal totalInvoiceDebt = Optional.ofNullable(invoiceRepository.calculateTotalDebt()).orElse(BigDecimal.ZERO)
-                .subtract(
-                        Optional.ofNullable(returnOrderRepository.findAll().stream()
-                                .filter(r -> r != null && r.getStatus() == ReturnStatus.CONFIRMED)
-                                .map(r -> r.getTotalAmount() != null ? r.getTotalAmount() : BigDecimal.ZERO)
-                                .reduce(BigDecimal.ZERO, BigDecimal::add)
-                        ).orElse(BigDecimal.ZERO)
-                );
+
 
         BigDecimal totalPaidSum = Optional.ofNullable(invoiceRepository.calculateTotalPaid()).orElse(BigDecimal.ZERO);
 
@@ -285,7 +290,12 @@ public class MainWebController {
         model.addAttribute("allReturnIds", allReturnIds);
 
 
-        addModel(page, orderManagerId, returnManagerId, model, ordersPage, totalOrdersSum, rawSales, rawPurchaseCost, netProfitBD, avgCheck, limitedLogs, invoicesList, totalInvoiceDebt, totalPaidSum, oStartDT.toLocalDate(), oEndDT.toLocalDate(), allReturns, totalReturnsSum, rStartDT.toLocalDate(), rEndDT.toLocalDate());
+        addModel(page, orderManagerId, returnManagerId, model,
+                ordersPage, returnsPage, totalOrdersSum,
+                rawSales, rawPurchaseCost, netProfitBD, avgCheck, limitedLogs, invoicesList, periodInvoiceDebt, totalPaidSum,
+                oStartDT.toLocalDate(), oEndDT.toLocalDate(), allReturns, totalReturnsSum, rStartDT.toLocalDate(), rEndDT.toLocalDate(),
+                orderSearch, returnSearch);
+
 
         // ИСПРАВЛЕНО: Передаем periodInvoiceDebt аргументом в самый конец метода
         addInvModel(invoicePage, invoiceManager, invoiceStatus, model, invoicesList, invoicesPage, invStartDT.toLocalDate(), invEndDT.toLocalDate(), periodInvoiceDebt);
@@ -315,7 +325,15 @@ public class MainWebController {
 
 
 
-    private static void addModel(int page, String orderManagerId, String returnManagerId, Model model, Page<Order> ordersPage, BigDecimal totalOrdersSum, BigDecimal rawSales, BigDecimal rawPurchaseCost, BigDecimal netProfitBD, BigDecimal avgCheck, List<AuditLog> limitedLogs, List<Invoice> invoices, BigDecimal totalInvoiceDebt, BigDecimal totalPaidSum, LocalDate startD, LocalDate endD, List<ReturnOrder> allReturns, BigDecimal totalReturnsSum, LocalDate startR, LocalDate endR) {
+    private static void addModel(int page, String orderManagerId, String returnManagerId, Model model,
+                                 Page<Order> ordersPage, Page<ReturnOrder> returnsPage, // Принимаем page возвратов вместо списка
+                                 BigDecimal totalOrdersSum, BigDecimal rawSales, BigDecimal rawPurchaseCost,
+                                 BigDecimal netProfitBD, BigDecimal avgCheck, List<AuditLog> limitedLogs,
+                                 List<Invoice> invoices, BigDecimal totalInvoiceDebt, BigDecimal totalPaidSum,
+                                 LocalDate startD, LocalDate endD, List<ReturnOrder> allReturnsForCalculation,
+                                 BigDecimal totalReturnsSum, LocalDate startR, LocalDate endR,
+                                 String orderSearch, String returnSearch) { // Принимаем поисковые строки
+
         model.addAttribute("orders", ordersPage.getContent());
         model.addAttribute("currentPage", page);
         model.addAttribute("totalPages", ordersPage.getTotalPages());
@@ -332,24 +350,26 @@ public class MainWebController {
         model.addAttribute("totalInvoiceDebt", totalInvoiceDebt);
         model.addAttribute("totalPaidSum", totalPaidSum);
 
-
         model.addAttribute("selectedOrderManager", orderManagerId);
 
-        model.addAttribute("returns", allReturns);
-        model.addAttribute("totalReturnsCount", allReturns.size());
+        // Для таблицы передаем страницу возвратов с учетом поиска
+        model.addAttribute("returns", returnsPage.getContent());
+        model.addAttribute("totalReturnsCount", allReturnsForCalculation.size());
         model.addAttribute("totalReturnsSum", totalReturnsSum);
         model.addAttribute("selectedReturnManager", returnManagerId);
 
+        // Сохраняем поисковые запросы в модели, чтобы инпуты на фронтенде не очищались
+        model.addAttribute("orderSearch", orderSearch);
+        model.addAttribute("returnSearch", returnSearch);
+
         java.time.format.DateTimeFormatter isoDate = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
-        // Обязательно передаем отформатированные строки обратно
         model.addAttribute("orderStartDate", startD.format(isoDate));
         model.addAttribute("orderEndDate", endD.format(isoDate));
 
         model.addAttribute("returnStartDate", startR.format(isoDate));
         model.addAttribute("returnEndDate", endR.format(isoDate));
     }
-
 
     private void groupAndWarehouse(String activeTab, int clientPage, String clientCategory,
                                    String clientSearch, Model model, List<String> managersForUI,
