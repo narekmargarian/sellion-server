@@ -107,15 +107,18 @@
             </div>
 
             <div class="filter-bar">
-                <input type="text" name="orderSearch" th:value="${orderSearch}"
-                       placeholder="Поиск по магазину..." class="form-control w-25">
-
-                <form method="get" th:action="@{/admin}" class="d-inline-flex gap-2 align-items-center">
+                <form method="get" th:action="@{/admin}" class="d-inline-flex gap-2 align-items-center w-100">
                     <input type="hidden" name="activeTab" value="tab-orders">
+
+                    <!-- Поле поиска теперь отправляется на сервер и сбрасывает страницу на 0 -->
+                    <input type="text" name="orderSearch" th:value="${orderSearch}"
+                           placeholder="Поиск по магазину..." class="form-control w-25">
+
                     <small>С:</small>
                     <input type="date" name="orderStartDate" class="form-control" th:value="${orderStartDate}">
                     <small>По:</small>
                     <input type="date" name="orderEndDate" class="form-control" th:value="${orderEndDate}">
+
                     <select name="orderManagerId" onchange="this.form.submit()" class="form-select">
                         <option value="">Все менеджеры</option>
                         <option th:each="m : ${managers}" th:value="${m}" th:text="${m}"
@@ -283,11 +286,12 @@
 
             <div class="filter-bar">
 
-                <input type="text" name="returnSearch" th:value="${returnSearch}"
-                       placeholder="Поиск по возврату..." class="form-control w-25">
-
-                <form method="get" th:action="@{/admin}" class="d-inline-flex gap-2 align-items-center">
+                <form method="get" th:action="@{/admin}" class="d-inline-flex gap-2 align-items-center w-100">
                     <input type="hidden" name="activeTab" value="tab-returns">
+
+                    <input type="text" name="returnSearch" th:value="${returnSearch}"
+                           placeholder="Поиск по возврату..." class="form-control w-25">
+
                     <small>С:</small>
                     <input type="date" name="returnStartDate" class="form-control" th:value="${returnStartDate}">
                     <small>По:</small>
