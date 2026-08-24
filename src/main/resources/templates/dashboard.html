@@ -110,16 +110,17 @@
                 <form method="get" th:action="@{/admin}" class="d-inline-flex gap-2 align-items-center w-100">
                     <input type="hidden" name="activeTab" value="tab-orders">
 
-                    <!-- Поле поиска шире -->
+                    <!-- Поле поиска -->
                     <input type="text" name="orderSearch" th:value="${orderSearch}"
-                           placeholder="Поиск по магазину..." class="form-control" style="width: 260px;">
+                           placeholder="Поиск по магазину..." class="form-control" style="width: 220px;">
 
                     <small>С:</small>
                     <input type="date" name="orderStartDate" class="form-control" th:value="${orderStartDate}" style="width: 135px;">
                     <small>По:</small>
                     <input type="date" name="orderEndDate" class="form-control" th:value="${orderEndDate}" style="width: 135px;">
 
-                    <select name="orderManagerId" onchange="this.form.submit()" class="form-select">
+                    <!-- Поле менеджера уменьшено до нормального размера -->
+                    <select name="orderManagerId" onchange="this.form.submit()" class="form-select" style="width: 170px;">
                         <option value="">Все менеджеры</option>
                         <option th:each="m : ${managers}" th:value="${m}" th:text="${m}"
                                 th:selected="${m == selectedOrderManager}"></option>
@@ -148,6 +149,7 @@
                     <i class="fa-solid fa-file-excel" style="color: #63AA2F;"></i>
                 </button>
             </div>
+
             <div class="table-container">
                 <table class="table">
                     <thead>
@@ -287,16 +289,17 @@
                 <form method="get" th:action="@{/admin}" class="d-inline-flex gap-2 align-items-center w-100">
                     <input type="hidden" name="activeTab" value="tab-returns">
 
-                    <!-- Поле поиска шире -->
+                    <!-- Поле поиска -->
                     <input type="text" name="returnSearch" th:value="${returnSearch}"
-                           placeholder="Поиск по возврату..." class="form-control" style="width: 260px;">
+                           placeholder="Поиск по возврату..." class="form-control" style="width: 220px;">
 
                     <small>С:</small>
                     <input type="date" name="returnStartDate" class="form-control" th:value="${returnStartDate}" style="width: 135px;">
                     <small>По:</small>
                     <input type="date" name="returnEndDate" class="form-control" th:value="${returnEndDate}" style="width: 135px;">
 
-                    <select name="returnManagerId" onchange="this.form.submit()" class="form-select">
+                    <!-- Поле менеджера уменьшено до нормального размера -->
+                    <select name="returnManagerId" onchange="this.form.submit()" class="form-select" style="width: 170px;">
                         <option value="">Все менеджеры</option>
                         <option th:each="m : ${managers}" th:value="${m}" th:text="${m}"
                                 th:selected="${m == selectedReturnManager}"></option>
@@ -318,6 +321,7 @@
                     📄
                 </button>
             </div>
+
             <div class="table-container">
                 <table class="table">
                     <thead>
