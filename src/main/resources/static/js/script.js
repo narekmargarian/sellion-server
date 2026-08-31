@@ -842,6 +842,9 @@ function initSmartClientSearch(inputId, datalistId) {
     const datalist = document.getElementById(datalistId);
     let fullClientsData = [];
 
+    // Нормализация: объединяет лишние пробелы в один и прибирает регистр
+    const normalize = (str) => (str || '').replace(/\s+/g, ' ').trim().toLowerCase();
+
     const updateSearch = async () => {
         const query = input.value.trim();
         try {
@@ -859,9 +862,11 @@ function initSmartClientSearch(inputId, datalistId) {
 
     input.addEventListener('change', () => {
         const val = input.value.trim();
-        const selectedClient = fullClientsData.find(c => c.name === val);
+        const selectedClient = fullClientsData.find(c => normalize(c.name) === normalize(val));
 
         if (selectedClient) {
+            input.value = selectedClient.name; // Подставляет корректное имя из базы
+
             const percentInput = document.getElementById('new-op-percent') || document.getElementById('order-discount-percent');
             if (percentInput) {
                 const clientPercent = selectedClient.defaultPercent || 0;
@@ -872,13 +877,12 @@ function initSmartClientSearch(inputId, datalistId) {
                     recalculateAllPricesByPercent();
                 }
             }
-            // Сбрасываем стили ошибки при корректном выборе
             input.style.border = "";
             input.style.backgroundColor = "";
         }
     });
 
-    // ИСПРАВЛЕННАЯ ВАЛИДАЦИЯ
+    // ВАЛИДАЦИЯ С УЧЕТОМ ПРОБЕЛОВ
     input.addEventListener('blur', () => {
         const val = input.value.trim();
         if (val === "") {
@@ -887,32 +891,35 @@ function initSmartClientSearch(inputId, datalistId) {
             return;
         }
 
-        // 1. Проверяем режим (Мягкая валидация для Редактирования и Возврата)
         const modalTitle = document.getElementById('modal-title')?.innerText.toUpperCase() || "";
         const isSoftMode = modalTitle.includes("РЕДАКТИРОВАНИЕ") || modalTitle.includes("ВОЗВРАТ");
 
-        const exists = fullClientsData.some(c => c.name === val);
+        const datalistOptions = Array.from(datalist.options || []).map(opt => opt.value);
+        const matchedClient = fullClientsData.find(c => normalize(c.name) === normalize(val));
+        const existsInDatalist = datalistOptions.some(optVal => normalize(optVal) === normalize(val));
+
+        const exists = !!matchedClient || existsInDatalist;
+
         if (!exists) {
             if (isSoftMode) {
-                // МЯГКИЙ РЕЖИМ: Только красим рамку и фон, НЕ стираем текст
                 showToast("Внимание: Магазин не найден в списке!", "info");
                 input.style.border = "2px solid #ef4444";
                 input.style.backgroundColor = "#fef2f2";
             } else {
-                // ЖЕСТКИЙ РЕЖИМ (Создание): Стираем текст, как раньше
                 showToast("Ошибка: Выберите магазин из списка!", "error");
                 input.value = "";
                 input.style.border = "2px solid red";
                 input.style.backgroundColor = "";
             }
         } else {
-            // Если все верно — очищаем стили
+            if (matchedClient) {
+                input.value = matchedClient.name;
+            }
             input.style.border = "";
             input.style.backgroundColor = "";
         }
     });
 }
-
 function toggleSelectAll(className, source) {
     document.querySelectorAll(`.${className}`).forEach(cb => cb.checked = source.checked);
 }
