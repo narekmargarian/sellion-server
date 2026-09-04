@@ -26,12 +26,12 @@ public class PlatformBlockerFilter implements Filter {
         boolean isDesktop = userAgent != null && userAgent.contains(DESKTOP_AGENT_MARKER);
         boolean isAndroid = ANDROID_PLATFORM_MARKER.equals(platformHeader);
 
-        // 3. КРИТИЧНО ДЛЯ АНДРОИД: Если запрос идет к публичному API или сокетам,
-        // мы доверяем встроенной защите Spring Security (она сама проверит токены)
+        // 3. КРИТИЧНО ДЛЯ АНДРОИД: Разрешаем все запросы к /api/, публичным эндпоинтам и сокетам
+        boolean isApiRequest = uri.startsWith("/api/");
         boolean isPublicApi = uri.startsWith("/api/public/") || uri.startsWith("/ws-sellion/");
 
-        // 4. Если проверка пройдена или путь публичный — пускаем к системе. Все остальные — 404.
-        if (isDesktop || isAndroid || isPublicApi) {
+        // 4. Если проверка пройдена или путь API/публичный — пускаем к системе. Все остальные — 404.
+        if (isDesktop || isAndroid || isApiRequest || isPublicApi) {
             chain.doFilter(request, response);
         } else {
             httpResponse.sendError(HttpServletResponse.SC_NOT_FOUND, "Not Found");
