@@ -54,12 +54,11 @@ public class OrderSyncService {
 
         // Если из приложения пришел 0 (или пусто), берем актуальный процент из твоей базы данных по имени магазина
         if (shopPercent.compareTo(BigDecimal.ZERO) == 0) {
-            shopPercent = clientRepository.findByName(order.getShopName())
-                    .map(Client::getDefaultPercent)
-                    .orElse(BigDecimal.ZERO);
+            // Ищем строго по имени магазина и коду менеджера
+            Client client = clientRepository.findByNameAndManagerId(order.getShopName(), order.getManagerId())
+                    .orElseThrow(() -> new RuntimeException("Клиент '" + order.getShopName() + "' для менеджера ID " + order.getManagerId() + " не найден в базе данных. Проверьте привязку менеджера в офисной программе."));
 
-            // Устанавливаем правильный процент в объект заказа для сохранения в БД
-            // Теперь в заголовке заказа в офисе будет отображаться "5%", а не "0%"
+            shopPercent = Optional.ofNullable(client.getDefaultPercent()).orElse(BigDecimal.ZERO);
             order.setDiscountPercent(shopPercent);
         }
 

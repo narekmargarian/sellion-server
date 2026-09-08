@@ -66,4 +66,6 @@ public interface ClientRepository extends JpaRepository<Client, Long> {
 
     Optional<Client> findByNameIgnoreCase(String name);
 
+    Optional<Client> findByNameAndManagerId(String name, String managerId);
+
 }
