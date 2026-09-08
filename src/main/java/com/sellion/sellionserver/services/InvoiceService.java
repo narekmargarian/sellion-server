@@ -48,9 +48,16 @@ public class InvoiceService {
         }
 
         String cleanShopName = (order.getShopName() != null) ? order.getShopName().trim() : "";
-        Client client = clientRepository.findByNameIgnoreCase(cleanShopName)
-                .orElseThrow(() -> new RuntimeException("Критическая ошибка: Магазин '" + cleanShopName + "' не найден в справочнике!"));
+        String managerId = order.getManagerId();
 
+// Проверяем, что менеджер вообще указан в заказе
+        if (managerId == null || managerId.isEmpty()) {
+            throw new RuntimeException("Критическая ошибка: У заказа '" + cleanShopName + "' не указан ID менеджера!");
+        }
+
+// Ищем строго по уникальной связке имени и менеджера
+        Client client = clientRepository.findByNameAndManagerId(cleanShopName, managerId)
+                .orElseThrow(() -> new RuntimeException("Критическая ошибка: Магазин '" + cleanShopName + "' для менеджера ID " + managerId + " не найден в справочнике!"));
         String invoiceNumber = "INV-" + LocalDate.now().getYear() + "-" + order.getId();
 
         Invoice invoice = new Invoice();

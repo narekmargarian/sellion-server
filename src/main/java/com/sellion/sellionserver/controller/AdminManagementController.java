@@ -426,9 +426,12 @@ public class AdminManagementController {
 
             // --- УЛУЧШЕННАЯ ЛОГИКА ОПРЕДЕЛЕНИЯ СКИДКИ ---
             if (order.getDiscountPercent() == null || order.getDiscountPercent().compareTo(BigDecimal.ZERO) == 0) {
-                clientRepository.findByName(order.getShopName()).ifPresent(client -> {
-                    order.setDiscountPercent(client.getDefaultPercent());
-                });
+                if (order.getShopName() != null && order.getManagerId() != null) {
+                    clientRepository.findByNameAndManagerId(order.getShopName(), order.getManagerId())
+                            .ifPresent(client -> {
+                                order.setDiscountPercent(client.getDefaultPercent());
+                            });
+                }
             }
 
             BigDecimal shopDefaultPercent = Optional.ofNullable(order.getDiscountPercent()).orElse(BigDecimal.ZERO);
@@ -533,17 +536,23 @@ public class AdminManagementController {
 
         // === ИСПРАВЛЕНИЕ: СИНХРОНИЗАЦИЯ ДОЛГА В ТАБЛИЦЕ КЛИЕНТОВ ===
         if (ret.getShopName() != null) {
-            clientRepository.findByName(ret.getShopName()).ifPresent(client -> {
-                BigDecimal currentDebt = Optional.ofNullable(client.getDebt()).orElse(BigDecimal.ZERO);
-                BigDecimal newDebt = currentDebt.subtract(ret.getTotalAmount());
+            Optional<Client> clientOpt = clientRepository.findByNameAndManagerId(ret.getShopName(), ret.getManagerId());
 
-                // Предотвращаем отрицательный баланс, если нужно
-                if (newDebt.compareTo(BigDecimal.ZERO) < 0) {
-                    newDebt = BigDecimal.ZERO;
-                }
+            // Страховка, если менеджер не указан или не найден, ищем по имени
+            if (clientOpt.isEmpty()) {
+                clientOpt = clientRepository.findByName(ret.getShopName()).stream().findFirst();
+            }
+
+            clientOpt.ifPresent(client -> {
+                BigDecimal currentDebt = Optional.ofNullable(client.getDebt()).orElse(BigDecimal.ZERO);
+
+                // Вычитаем сумму возврата. Если сумма возврата больше долга,
+                // newDebt автоматически станет отрицательным (например, -5000)
+                BigDecimal newDebt = currentDebt.subtract(ret.getTotalAmount()).setScale(2, RoundingMode.HALF_UP);
 
                 client.setDebt(newDebt);
                 clientRepository.save(client);
+
             });
         }
         // ==========================================================
