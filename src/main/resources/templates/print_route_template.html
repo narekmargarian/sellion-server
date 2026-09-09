@@ -40,7 +40,7 @@
             <td th:text="${stat.count}"></td>
             <td>
                 <strong th:text="${o.shopName != null ? o.shopName : '---'}"></strong><br>
-                <small th:with="clientOpt=${clientRepo.findByName(o.shopName)}"
+                <small th:with="clientOpt=${clientRepo.findByNameAndManagerId(o.shopName, managerId)}"
                        th:text="${clientOpt != null && clientOpt.isPresent() ? clientOpt.get().address : 'Адрес не найден'}"></small>
             </td>
 
