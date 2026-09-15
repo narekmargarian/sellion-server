@@ -3837,6 +3837,10 @@ function renderPromoItemsTable(isEdit) {
         const p = productsData.find(prod => prod.id == pId);
         if (!p) return;
 
+        // Расчет цены со скидкой для отображения в таблице (с одним знаком после запятой)
+        const discountModifier = 1 - (percent / 100);
+        const promoPrice = parseFloat(((p.price || 0) * discountModifier).toFixed(1));
+
         html += `
             <tr id="promo-row-${pId}">
                 <td style="padding-left: 15px;">
@@ -3845,7 +3849,8 @@ function renderPromoItemsTable(isEdit) {
                 </td>
                 <td style="text-align:center;"><b>${p.stockQuantity || 0}</b> шт</td>
                 <td style="text-align:center;">${(p.price || 0).toLocaleString()} ֏</td>
-                <td style="text-align:center;">${p.expiryDate ? formatDate(p.expiryDate) : '---'}</td>
+                <!-- ИСПРАВЛЕНО: Вместо даты выводим посчитанную цену по акции -->
+                <td style="text-align:center; font-weight:bold; color:#ea580c;">${promoPrice.toLocaleString()} ֏</td>
                 <td>
                     <div style="display:flex; align-items:center; gap:5px;">
                         <input type="number"
@@ -3888,6 +3893,7 @@ function renderPromoItemsTable(isEdit) {
 
     body.innerHTML = html;
 }
+
 
 function updatePromoPercent(pId, value) {
     let val = parseFloat(value);
