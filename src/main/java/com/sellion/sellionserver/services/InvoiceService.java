@@ -167,7 +167,7 @@ public class InvoiceService {
             headerStyle.setFont(boldFont);
 
             Row headerRow = sheet.createRow(0);
-            String[] headers = {"ID Клиента", "Магазин", "Телефон", "Адрес", "Текущий долг"};
+            String[] headers = {"Менеджер", "Магазин", "Адрес", "Текущий долг"};
             for (int i = 0; i < headers.length; i++) {
                 Cell cell = headerRow.createCell(i);
                 cell.setCellValue(headers[i]);
@@ -179,7 +179,7 @@ public class InvoiceService {
                 Row row = sheet.createRow(rowNum++);
 
                 Cell cell0 = row.createCell(0);
-                cell0.setCellValue(client.getId() != null ? client.getId().toString() : "N/A");
+                cell0.setCellValue(client.getManagerId() != null ? client.getManagerId() : "");
                 cell0.setCellStyle(cellStyle);
 
                 Cell cell1 = row.createCell(1);
@@ -187,45 +187,40 @@ public class InvoiceService {
                 cell1.setCellStyle(cellStyle);
 
                 Cell cell2 = row.createCell(2);
-                cell2.setCellValue(client.getPhone() != null ? client.getPhone() : "");
+                cell2.setCellValue(client.getAddress() != null ? client.getAddress() : "");
                 cell2.setCellStyle(cellStyle);
 
                 Cell cell3 = row.createCell(3);
-                cell3.setCellValue(client.getAddress() != null ? client.getAddress() : "");
-                cell3.setCellStyle(cellStyle);
-
-                Cell cell4 = row.createCell(4);
                 BigDecimal debt = client.getDebt() != null ? client.getDebt() : BigDecimal.ZERO;
-                cell4.setCellValue(debt.setScale(2, RoundingMode.HALF_UP).doubleValue());
-                cell4.setCellStyle(amountCellStyle);
+                cell3.setCellValue(debt.setScale(2, RoundingMode.HALF_UP).doubleValue());
+                cell3.setCellStyle(amountCellStyle);
             }
 
             Row totalRow = sheet.createRow(rowNum);
 
-            for (int i = 0; i < 5; i++) {
+            for (int i = 0; i < 4; i++) {
                 totalRow.createCell(i).setCellStyle(headerStyle);
             }
 
-            totalRow.getCell(1).setCellValue("ИТОГО ОБЩИЙ ДОЛГ:");
+            totalRow.getCell(0).setCellValue("ИТОГО ОБЩИЙ ДОЛГ:");
 
-            Cell totalFormulaCell = totalRow.getCell(4);
+            Cell totalFormulaCell = totalRow.getCell(3);
             totalFormulaCell.setCellStyle(amountCellStyle);
 
             if (rowNum > 1) {
-                totalFormulaCell.setCellFormula("SUBTOTAL(9,E2:E" + rowNum + ")");
+                totalFormulaCell.setCellFormula("SUBTOTAL(9,D2:D" + rowNum + ")");
             } else {
                 totalFormulaCell.setCellValue(0.0);
             }
 
             if (rowNum > 1) {
-                sheet.setAutoFilter(new CellRangeAddress(0, rowNum - 1, 0, 4));
+                sheet.setAutoFilter(new CellRangeAddress(0, rowNum - 1, 0, 3));
             }
 
-            for (int i = 0; i < 5; i++) {
+            for (int i = 0; i < 4; i++) {
                 sheet.autoSizeColumn(i);
             }
 
             workbook.write(outputStream);
         }
-    }
-}
+    }}

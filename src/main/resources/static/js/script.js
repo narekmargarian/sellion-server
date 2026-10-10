@@ -3236,8 +3236,8 @@ function applyInvoiceFilters() {
     const manager = document.getElementById('filter-invoice-manager') ? document.getElementById('filter-invoice-manager').value : '';
     const status = document.getElementById('filter-invoice-status') ? document.getElementById('filter-invoice-status').value : '';
 
-    // Захватываем поле поиска по имени клиента или номеру, если оно есть
-    const searchInput = document.querySelector('input[name="invoiceSearch"], #invoice-search, #filter-invoice-search, .search-invoice');
+    // ИСПРАВЛЕНО: Правильный захват текста из поля поиска по его ID
+    const searchInput = document.getElementById('search-invoices');
     const searchTxt = searchInput ? searchInput.value : '';
 
     // Берем текущие параметры из URL, чтобы не стереть глобальные настройки
@@ -3257,7 +3257,6 @@ function applyInvoiceFilters() {
 
     window.location.href = window.location.pathname + '?' + params.toString();
 }
-
 // Новая функция для выгрузки Листа долгов в Excel с учетом фильтров
 function exportDebtListExcel() {
     // Берем все текущие примененные фильтры и даты из адресной строки

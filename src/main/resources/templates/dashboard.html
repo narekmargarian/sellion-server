@@ -411,13 +411,13 @@
             </div>
 
             <div class="filter-bar">
-                <input type="text" id="search-invoices" onkeyup="filterTable('search-invoices', 'invoices-table-body')"
-                       placeholder="Поиск в таблице..." class="form-control" style="width: 150px;">
-
-<!--                <select id="filter-invoice-manager" class="form-select" style="width: 150px;" onchange="applyInvoiceFilters()">-->
-<!--                    <option value="">Все менеджеры</option>-->
-<!--                    <option th:each="m : ${managers}" th:value="${m}" th:text="${m}" th:selected="${m == selectedInvManager}"></option>-->
-<!--                </select>-->
+                <input type="text" id="search-invoices" class="form-control" style="width: 150px;"
+                       placeholder="Поиск..." th:value="${invoiceSearch}"
+                       onkeydown="if(event.key === 'Enter') applyInvoiceFilters()">
+                <!--                <select id="filter-invoice-manager" class="form-select" style="width: 150px;" onchange="applyInvoiceFilters()">-->
+                <!--                    <option value="">Все менеджеры</option>-->
+                <!--                    <option th:each="m : ${managers}" th:value="${m}" th:text="${m}" th:selected="${m == selectedInvManager}"></option>-->
+                <!--                </select>-->
 
                 <select id="filter-invoice-status" class="form-select" style="width: 150px;" onchange="applyInvoiceFilters()">
                     <option value="">Все статусы</option>
@@ -494,17 +494,16 @@
             <div class="pagination-wrapper" th:if="${invTotalPages > 1}"
                  style="display: flex; flex-direction: column; align-items: center; gap: 5px; margin-top: 15px;">
                 <div style="display: flex; gap: 10px; justify-content: center; align-items: center;">
-                    <a th:href="@{/admin(activeTab='tab-invoices', invoicePage=${invCurrentPage - 1}, invoiceStart=${invoiceStart}, invoiceEnd=${invoiceEnd})}"
+                    <a th:href="@{/admin(activeTab='tab-invoices', invoicePage=${invCurrentPage - 1}, invoiceStart=${invoiceStart}, invoiceEnd=${invoiceEnd}, invoiceStatus=${selectedInvStatus}, invoiceSearch=${invoiceSearch})}"
                        th:if="${invCurrentPage > 0}" class="btn-ghost">← Назад</a>
                     <span style="font-weight: 700; background: #f1f5f9; padding: 5px 15px; border-radius: 20px; font-size: 13px; border: 1px solid #e2e8f0;">
                 Страница <span th:text="${invCurrentPage + 1}"></span> из <span th:text="${invTotalPages}"></span>
             </span>
-                    <a th:href="@{/admin(activeTab='tab-invoices', invoicePage=${invCurrentPage + 1}, invoiceStart=${invoiceStart}, invoiceEnd=${invoiceEnd})}"
+                    <a th:href="@{/admin(activeTab='tab-invoices', invoicePage=${invCurrentPage + 1}, invoiceStart=${invoiceStart}, invoiceEnd=${invoiceEnd}, invoiceStatus=${selectedInvStatus}, invoiceSearch=${invoiceSearch})}"
                        th:if="${invCurrentPage < invTotalPages - 1}" class="btn-ghost">Вперед →</a>
                 </div>
             </div>
         </div>
-
 
         <div id="tab-clients" class="tab-pane">
 
