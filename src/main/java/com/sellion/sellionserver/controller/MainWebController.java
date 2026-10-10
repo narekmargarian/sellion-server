@@ -57,6 +57,7 @@ public class MainWebController {
             @RequestParam(value = "invoiceEnd", required = false) String invoiceEnd,
             @RequestParam(value = "invoiceManager", required = false) String invoiceManager,
             @RequestParam(value = "invoiceStatus", required = false) String invoiceStatus,
+            @RequestParam(value = "invoiceSearch", required = false) String invoiceSearch,
 
             @RequestParam(value = "promoStart", required = false) String promoStart,
             @RequestParam(value = "promoEnd", required = false) String promoEnd,
@@ -143,7 +144,6 @@ public class MainWebController {
         // --- 4. ОБЩАЯ СТАТИСТИКА И СЧЕТА ---
         BigDecimal totalPaidSum = Optional.ofNullable(invoiceRepository.calculateTotalPaid()).orElse(BigDecimal.ZERO);
 
-        // ИСПРАВЛЕНО: Общий долг системы теперь считается честно и точно по реальным балансам всех активных клиентов из БД
         BigDecimal totalSystemDebt = clientRepository.findAllByIsDeletedFalse().stream()
                 .map(c -> c.getDebt() != null ? c.getDebt() : BigDecimal.ZERO)
                 .reduce(BigDecimal.ZERO, BigDecimal::add)
@@ -153,15 +153,33 @@ public class MainWebController {
         String managerParam = (invoiceManager != null && !invoiceManager.isEmpty()) ? invoiceManager : null;
         String statusParam = (invoiceStatus != null && !invoiceStatus.isEmpty()) ? invoiceStatus : null;
 
-        Pageable invPageable = PageRequest.of(invoicePage, 100, Sort.by("createdAt").descending());
-
-        Page<Invoice> invoicesPage = invoiceRepository.findFilteredInvoices(
-                invStartDT, invEndDT, managerParam, statusParam, invPageable);
-
-        List<Invoice> invoicesList = invoicesPage.getContent();
-
         List<Invoice> allInvoicesForPeriod = invoiceRepository.findAllFilteredInvoicesNoPage(
                 invStartDT, invEndDT, managerParam, statusParam);
+
+        // Фильтрация по текстовому поиску (название магазина или номер счета)
+        String searchTrimmed = (invoiceSearch != null && !invoiceSearch.trim().isEmpty()) ? invoiceSearch.trim().toLowerCase() : null;
+        List<Invoice> filteredInvoices = allInvoicesForPeriod.stream()
+                .filter(inv -> {
+                    if (searchTrimmed == null) return true;
+                    boolean matchShop = inv.getShopName() != null && inv.getShopName().toLowerCase().contains(searchTrimmed);
+                    boolean matchNum = inv.getInvoiceNumber() != null && inv.getInvoiceNumber().toLowerCase().contains(searchTrimmed);
+                    return matchShop || matchNum;
+                })
+                .collect(Collectors.toList());
+
+        // Ручная постраничная разбивка (по 100 элементов на страницу)
+        int pageSize = 100;
+        int totalElements = filteredInvoices.size();
+        int totalPages = (int) Math.ceil((double) totalElements / pageSize);
+        if (totalPages == 0) totalPages = 1;
+
+        int startIdx = invoicePage * pageSize;
+        int endIdx = Math.min(startIdx + pageSize, totalElements);
+        List<Invoice> invoicesList = (startIdx >= totalElements) ? Collections.emptyList() : filteredInvoices.subList(startIdx, endIdx);
+
+        Page<Invoice> invoicesPage = new org.springframework.data.domain.PageImpl<>(
+                invoicesList, PageRequest.of(invoicePage, pageSize), totalElements
+        );
 
         BigDecimal periodTotalAmount = allInvoicesForPeriod.stream()
                 .map(inv -> inv.getTotalAmount() != null ? inv.getTotalAmount() : BigDecimal.ZERO)
@@ -246,17 +264,18 @@ public class MainWebController {
                 oStartDT.toLocalDate(), oEndDT.toLocalDate(), allReturns, totalReturnsSum, rStartDT.toLocalDate(), rEndDT.toLocalDate(),
                 orderSearch, returnSearch);
 
-        addInvModel(invoicePage, invoiceManager, invoiceStatus, model, invoicesList, invoicesPage, invStartDT.toLocalDate(), invEndDT.toLocalDate(), periodInvoiceDebt);
+        addInvModel(invoicePage, invoiceManager, invoiceStatus, invoiceSearch, model, invoicesList, invoicesPage, invStartDT.toLocalDate(), invEndDT.toLocalDate(), periodInvoiceDebt);
         groupAndWarehouse(activeTab, clientPage, clientCategory, clientSearch, model, managersForUI, managerStats, invoicesList);
         return "dashboard";
     }
 
-    private static void addInvModel(int invoicePage, String invoiceManager, String invoiceStatus, Model model,
+    private static void addInvModel(int invoicePage, String invoiceManager, String invoiceStatus, String invoiceSearch, Model model,
                                     List<Invoice> invoicesList, Page<Invoice> invoicesPage,
                                     LocalDate invStartD, LocalDate invEndD, BigDecimal periodInvoiceDebt) {
         model.addAttribute("invoices", invoicesList);
         model.addAttribute("invCurrentPage", invoicePage);
         model.addAttribute("invTotalPages", invoicesPage.getTotalPages());
+        model.addAttribute("invoiceSearch", invoiceSearch);
 
         model.addAttribute("periodInvoiceDebt", periodInvoiceDebt);
 
