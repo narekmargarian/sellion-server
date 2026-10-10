@@ -2575,17 +2575,19 @@ async function saveFullChanges(id) {
         return showToast("Магазин и дата доставки обязательны", "info");
     }
 
+    // Находим текущий заказ, чтобы взять его managerId
+    const order = ordersData.find(o => o.id == id);
+    const orderManagerId = order ? order.managerId : null;
+
     // 1. Сбор товаров из UI
     const itemsToSave = {};
-    let totalSum = 0; // Добавляем расчет суммы для передачи на бэкенд
+    let totalSum = 0;
 
     document.querySelectorAll('.qty-input-active').forEach(input => {
         const pId = input.id.replace('input-qty-', '');
         const val = parseInt(input.value);
         if (!isNaN(val) && val > 0) {
             itemsToSave[pId] = val;
-
-            // Расчет суммы (если у тебя есть доступ к ценам в этом месте)
             const row = input.closest('tr');
             const price = parseFloat(row.dataset.currentPrice) || 0;
             totalSum += price * val;
@@ -2600,7 +2602,8 @@ async function saveFullChanges(id) {
     const saveBtn = document.querySelector(`button[onclick="saveFullChanges(${id})"]`);
     if (saveBtn) saveBtn.disabled = true;
 
-    checkAndApplyPromos(itemsToSave, async (selectedPromos) => {
+    // Вызываем проверку акций, передавая товары и строго ID менеджера этого заказа
+    checkAndApplyPromos(itemsToSave, orderManagerId, async (selectedPromos) => {
         const promoMap = {};
         selectedPromos.forEach(promo => {
             if (promo.items) {
@@ -2613,7 +2616,7 @@ async function saveFullChanges(id) {
         const percentInput = document.getElementById('order-discount-percent');
         let discountPercent = percentInput ? parseFloat(percentInput.value) || 0 : 0;
 
-        // ПОДГОТОВКА ДАННЫХ (в соответствии с сущностью Order на Java)
+        // ПОДГОТОВКА ДАННЫХ
         const data = {
             shopName: shopName,
             deliveryDate: deliveryDate,
@@ -2624,11 +2627,10 @@ async function saveFullChanges(id) {
             comment: document.getElementById('edit-comment')?.value || "",
             items: itemsToSave,
             appliedPromoItems: promoMap,
-            totalAmount: totalSum // Передаем итоговую сумму
+            totalAmount: totalSum
         };
 
         try {
-            // ФИНАЛЬНЫЙ ЗАПРОС (Путь совпадает с @PutMapping("/admin/orders/{id}/full-edit"))
             const response = await fetch(`/api/admin/orders/${id}/full-edit`, {
                 method: 'PUT',
                 headers: {'Content-Type': 'application/json'},
@@ -2653,7 +2655,6 @@ async function saveFullChanges(id) {
         }
     });
 }
-
 async function executeEditRequest(data, btn) {
     try {
         const response = await fetch(`/api/admin/orders/${data.id}/edit`, {
@@ -3619,12 +3620,8 @@ function downloadInventoryExcel() {
         });
 }
 
-async function checkAndApplyPromos(orderItems, onApplied) {
+async function checkAndApplyPromos(orderItems, managerId, onApplied) {
     const productIds = Object.keys(orderItems).map(Number);
-
-    // ПОЛУЧАЕМ ВЫБРАННОГО В МОДАЛКЕ МЕНЕДЖЕРА (1011, 1012 и т.д.)
-    const selectedManagerId = document.getElementById('new-op-manager')?.value ||
-        document.getElementById('promo-manager')?.value;
 
     const overlay = document.getElementById('promo-checker-overlay');
     const container = document.getElementById('promo-list-container');
@@ -3636,10 +3633,9 @@ async function checkAndApplyPromos(orderItems, onApplied) {
                 'Content-Type': 'application/json',
                 'X-CSRF-TOKEN': document.querySelector('input[name="_csrf"]')?.value || ""
             },
-            // ОТПРАВЛЯЕМ И ТОВАРЫ, И ID ВЫБРАННОГО МЕНЕДЖЕРА
             body: JSON.stringify({
                 productIds: productIds,
-                managerId: selectedManagerId
+                managerId: managerId // Передаем явно тот ID, который пришел в аргументе
             })
         });
 
@@ -3649,24 +3645,20 @@ async function checkAndApplyPromos(orderItems, onApplied) {
             return onApplied([]);
         }
 
-        // Рендеринг карточек (без изменений)
-        // Внутри container.innerHTML = activePromos.map(...)
         container.innerHTML = activePromos.map(p => `
-    <div style="margin-bottom: 8px;">
-        <input type="checkbox" class="promo-checkbox" id="p-${p.id}" data-id="${p.id}" checked style="display:none;">
-        <label class="promo-card" for="p-${p.id}" style="display: flex; align-items: center; justify-content: space-between; padding: 10px; background: #f8fafc; border-radius: 12px; cursor: pointer; border: 1px solid #e2e8f0;">
-            <div style="flex-grow: 1; pointer-events: none;">
-                <div style="font-weight: 700; font-size: 13px;">${p.title}</div>
-                <div style="font-size: 11px; color: #64748b;">Для менеджера: ${p.managerId}</div>
+            <div style="margin-bottom: 8px;">
+                <input type="checkbox" class="promo-checkbox" id="p-${p.id}" data-id="${p.id}" checked style="display:none;">
+                <label class="promo-card" for="p-${p.id}" style="display: flex; align-items: center; justify-content: space-between; padding: 10px; background: #f8fafc; border-radius: 12px; cursor: pointer; border: 1px solid #e2e8f0;">
+                    <div style="flex-grow: 1; pointer-events: none;">
+                        <div style="font-weight: 700; font-size: 13px;">${p.title}</div>
+                        <div style="font-size: 11px; color: #64748b;">Для менеджера: ${p.managerId}</div>
+                    </div>
+                    <div class="custom-switch-ui" style="width: 40px; height: 20px; border-radius: 20px; position: relative; transition: 0.3s;">
+                        <div class="switch-circle" style="width: 16px; height: 16px; background: white; border-radius: 50%; position: absolute; top: 2px; transition: 0.3s;"></div>
+                    </div>
+                </label>
             </div>
-            <!-- УБРАЛИ background и position из inline-style -->
-            <div class="custom-switch-ui" style="width: 40px; height: 20px; border-radius: 20px; position: relative; transition: 0.3s;">
-                <div class="switch-circle" style="width: 16px; height: 16px; background: white; border-radius: 50%; position: absolute; top: 2px; transition: 0.3s;"></div>
-            </div>
-        </label>
-    </div>
-`).join('');
-
+        `).join('');
 
         document.getElementById('promo-apply-btn').onclick = () => {
             const selectedIds = Array.from(document.querySelectorAll('.promo-checkbox:checked')).map(el => el.dataset.id);
@@ -3684,7 +3676,6 @@ async function checkAndApplyPromos(orderItems, onApplied) {
         onApplied([]);
     }
 }
-
 function refreshPromoCounters() {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -5179,253 +5170,6 @@ document.addEventListener('DOMContentLoaded', () => {
     initNetworkStatusListener();
 });
 
-
-//function toggleGlobalSelect(masterCheckbox, childClass) {
-//    const isOrder = (childClass === 'order-print-check');
-//
-//    // 1. Визуально переключаем все чекбоксы на текущей странице
-//    const pageCheckboxes = document.querySelectorAll('.' + childClass);
-//    pageCheckboxes.forEach(cb => cb.checked = masterCheckbox.checked);
-//
-//    // 2. Достаем массив всех ID из атрибута
-//    let allIdsRaw = masterCheckbox.getAttribute('data-all-ids') || "[]";
-//    // Убираем скобки и лишние пробелы, превращаем в чистый массив строк
-//    const allIds = allIdsRaw.replace(/[\[\]]/g, '').split(',')
-//        .map(id => id.trim()).filter(id => id !== "");
-//
-//    if (masterCheckbox.checked) {
-//        // Добавляем все ID в глобальный список (без дубликатов)
-//        allIds.forEach(id => {
-//            if (isOrder) {
-//                if (!selectedOrderIds.includes(id)) selectedOrderIds.push(id);
-//            } else {
-//                if (!selectedReturnIds.includes(id)) selectedReturnIds.push(id);
-//            }
-//        });
-//    } else {
-//        // Если галочка снята — полностью очищаем список для этого типа
-//        if (isOrder) {
-//            selectedOrderIds = [];
-//        } else {
-//            selectedReturnIds = [];
-//        }
-//    }
-//
-//    saveAllToStorage();
-//    console.log("Выбрано сейчас:", isOrder ? selectedOrderIds : selectedReturnIds);
-//}
-
-// function showConfirmModal(title, text, type, onConfirm) {
-//     const modal = document.getElementById('customModal');
-//     const titleEl = document.getElementById('modalTitle');
-//     const messageEl = document.getElementById('modalMessage');
-//     const iconContainer = document.getElementById('modalIconContainer');
-//     const iconInner = document.getElementById('modalIconInner');
-//     const oldConfirmBtn = document.getElementById('modalConfirmBtn');
-//
-//     if (!modal || !oldConfirmBtn) return;
-//
-//     // --- ФИКС ПЕРВОГО НАЖАТИЯ ---
-//     // Клонируем кнопку, чтобы полностью стереть память о прошлых нажатиях
-//     const confirmBtn = oldConfirmBtn.cloneNode(true);
-//     oldConfirmBtn.parentNode.replaceChild(confirmBtn, oldConfirmBtn);
-//     // ----------------------------
-//
-//     titleEl.innerText = title;
-//     messageEl.innerText = text;
-//
-//     // Сброс и настройка стилей
-//     iconContainer.className = "mx-auto flex items-center justify-center h-20 w-20 rounded-full mb-6 transition-all flex-shrink-0";
-//     iconInner.className = "fa-solid text-3xl";
-//
-//     if (type === 'delete' || type === 'danger') {
-//         iconContainer.classList.add('bg-red-50', 'text-red-600');
-//         iconInner.className = "fa-solid fa-trash-can text-3xl";
-//         confirmBtn.style.backgroundColor = '#ef4444';
-//     } else if (type === 'invoice') {
-//         iconContainer.classList.add('bg-green-50', 'text-green-600');
-//         iconInner.className = "fa-solid fa-file-invoice-dollar text-3xl";
-//         confirmBtn.style.backgroundColor = '#63AA2F';
-//     } else {
-//         iconContainer.classList.add('bg-blue-50', 'text-blue-600');
-//         iconInner.className = "fa-solid fa-circle-info text-3xl";
-//         confirmBtn.style.backgroundColor = '#0f172a';
-//     }
-//
-//     // Показываем окно
-//     modal.style.display = 'flex';
-//     modal.classList.remove('hidden');
-//
-//     // Назначаем действие НОВОЙ кнопке. Теперь она "чистая" и сработает сразу.
-//     confirmBtn.onclick = function() {
-//         closeCustomModal();
-//         if (typeof onConfirm === 'function') {
-//             onConfirm();
-//         }
-//     };
-// }
-
-
-//function toggleGlobalSelect(masterCheckbox, childClass) {
-//    const isOrder = (childClass === 'order-print-check');
-//
-//    // 1. Собираем ID ТОЛЬКО видимых (отфильтрованных) чекбоксов на текущей странице
-//    const pageCheckboxes = document.querySelectorAll('.' + childClass);
-//    const visibleIds = [];
-//
-//    pageCheckboxes.forEach(cb => {
-//        // Проверяем, не скрыта ли строка фильтром (если родительский tr не display: none)
-//        const row = cb.closest('tr');
-//        if (row && row.style.display !== 'none') {
-//            cb.checked = masterCheckbox.checked;
-//            const val = isOrder ? Number(cb.value) : Number(cb.value);
-//            if (masterCheckbox.checked) {
-//                visibleIds.push(val);
-//            }
-//        }
-//    });
-//
-//    // 2. Обновляем глобальный массив для видимых элементов
-//    if (masterCheckbox.checked) {
-//        visibleIds.forEach(id => {
-//            if (isOrder) {
-//                if (!selectedOrderIds.includes(id)) selectedOrderIds.push(id);
-//            } else {
-//                if (!selectedReturnIds.includes(id)) selectedReturnIds.push(id);
-//            }
-//        });
-//    } else {
-//        // Убираем из выбранных только те, что были видны при снятии галочки
-//        if (isOrder) {
-//            selectedOrderIds = selectedOrderIds.filter(id => !visibleIds.includes(id));
-//        } else {
-//            selectedReturnIds = selectedReturnIds.filter(id => !visibleIds.includes(id));
-//        }
-//    }
-//
-//    saveAllToStorage();
-//    if (typeof updateSelectedCounter === 'function') updateSelectedCounter();
-//}
-
-//function updateSelectedCounter() {
-//    const counter = document.getElementById('selected-count');
-//    if (counter) {
-//        // Считаем общее количество из памяти, а не только на странице
-//        counter.innerText = selectedOrderIds.length;
-//    }
-//}
-
-//function restoreCheckboxes() {
-//    const checkboxes = document.querySelectorAll('.order-print-check');
-//    let foundOnPage = 0;
-//
-//    checkboxes.forEach(cb => {
-//        if (selectedOrderIds.includes(cb.value)) {
-//            cb.checked = true;
-//            foundOnPage++;
-//        }
-//    });
-//
-//    // Если все чекбоксы на данной странице выбраны, ставим галочку и в "Выбрать все"
-//    const selectAllBtn = document.getElementById('select-all-orders');
-//    if (selectAllBtn && checkboxes.length > 0) {
-//        selectAllBtn.checked = (foundOnPage === checkboxes.length);
-//    }
-//
-//    updateSelectedCounter();
-//}
-
-
-
-//function syncCheckboxesOnPage() {
-//    // Синхроним заказы
-//    document.querySelectorAll('.order-print-check').forEach(cb => {
-//        // Приводим ID к числу для сравнения
-//        cb.checked = selectedOrderIds.includes(Number(cb.value));
-//    });
-//    // Синхроним возвраты
-//    document.querySelectorAll('.return-print-check').forEach(cb => {
-//        cb.checked = selectedReturnIds.includes(Number(cb.value));
-//    });
-//
-//    // Обновляем главный чекбокс "Выбрать все"
-//    const orderSelectAll = document.getElementById('select-all-orders');
-//    if (orderSelectAll) {
-//        const pageCheckboxes = document.querySelectorAll('.order-print-check');
-//        if (pageCheckboxes.length > 0) {
-//            orderSelectAll.checked = Array.from(pageCheckboxes).every(cb => cb.checked);
-//        }
-//    }
-//}
-
-//function printDailySummary() {
-//    // ИСПРАВЛЕНО: Берем данные из глобального массива
-//    if (selectedOrderIds.length === 0) {
-//        showToast("Выберите заказы для сводки!", "error");
-//        return;
-//    }
-//
-//    const frame = document.getElementById('printFrame');
-//    const url = '/admin/orders/print-daily-summary';
-//
-//    const newFrame = frame.cloneNode(true);
-//    frame.parentNode.replaceChild(newFrame, frame);
-//
-//    newFrame.addEventListener('load', function () {
-//        if (newFrame.contentWindow.location.href === "about:blank") return;
-//        setTimeout(() => {
-//            newFrame.contentWindow.focus();
-//            newFrame.contentWindow.print();
-//        }, 300);
-//    }, {once: true});
-//
-//    // ИСПРАВЛЕНО: передаем накопленные ID
-//    submitAsPost(url, selectedOrderIds, 'printFrame');
-//
-//    clearOrderSelection();
-//}
-
-//function printSelectedOperations(type) {
-//    // ИСПРАВЛЕНО: Берем данные из соответствующего глобального массива
-//    const selectedIds = type === 'order' ? selectedOrderIds : selectedReturnIds;
-//
-//    if (selectedIds.length === 0) {
-//        showToast("Сначала выберите записи галочкой!", "error");
-//        return;
-//    }
-//
-//    const frame = document.getElementById('printFrame');
-//    const url = type === 'order' ? '/admin/orders/print-batch' : '/admin/returns/print-batch';
-//
-//    const newFrame = frame.cloneNode(true);
-//    frame.parentNode.replaceChild(newFrame, frame);
-//
-//    newFrame.addEventListener('load', function () {
-//        if (newFrame.contentWindow.location.href === "about:blank") return;
-//
-//        setTimeout(() => {
-//            newFrame.contentWindow.focus();
-//            newFrame.contentWindow.print();
-//        }, 300);
-//    }, {once: true});
-//
-//    submitAsPost(url, selectedIds, 'printFrame');
-//
-//    // ИСПРАВЛЕНО: очищаем именно тот тип, который напечатали
-//    if (type === 'order') {
-//        clearOrderSelection();
-//    } else {
-//        clearReturnSelection();
-//    }
-//}
-
-// function closeCustomModal() {
-//     const modal = document.getElementById('customModal');
-//     if (modal) {
-//         modal.style.display = 'none';
-//         modal.classList.add('hidden');
-//     }
-// }
 
 function updateKpiPeriod() {
     const start = document.getElementById('kpiStartInput').value;
