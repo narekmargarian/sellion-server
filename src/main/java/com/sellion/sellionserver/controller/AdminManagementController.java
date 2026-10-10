@@ -524,7 +524,7 @@ public class AdminManagementController {
             return ResponseEntity.badRequest().body(Map.of("error", "Этот возврат уже был подтвержден ранее."));
         }
 
-        // 2. ФИНАНСЫ (Выполняется ВСЕГДА)
+        // 2. ФИНАНСЫ (Выполняется ВСЕГДА через FinanceService, который атомарно обновляет долг и пишет транзакцию)
         financeService.registerOperation(
                 null,
                 "RETURN",
@@ -533,29 +533,6 @@ public class AdminManagementController {
                 "Подтвержденный возврат #" + id + " (" + ret.getReturnReason().getDisplayName() + ")",
                 ret.getShopName()
         );
-
-        // === ИСПРАВЛЕНИЕ: СИНХРОНИЗАЦИЯ ДОЛГА В ТАБЛИЦЕ КЛИЕНТОВ ===
-        if (ret.getShopName() != null) {
-            Optional<Client> clientOpt = clientRepository.findByNameAndManagerId(ret.getShopName(), ret.getManagerId());
-
-            // Страховка, если менеджер не указан или не найден, ищем по имени
-            if (clientOpt.isEmpty()) {
-                clientOpt = clientRepository.findByName(ret.getShopName()).stream().findFirst();
-            }
-
-            clientOpt.ifPresent(client -> {
-                BigDecimal currentDebt = Optional.ofNullable(client.getDebt()).orElse(BigDecimal.ZERO);
-
-                // Вычитаем сумму возврата. Если сумма возврата больше долга,
-                // newDebt автоматически станет отрицательным (например, -5000)
-                BigDecimal newDebt = currentDebt.subtract(ret.getTotalAmount()).setScale(2, RoundingMode.HALF_UP);
-
-                client.setDebt(newDebt);
-                clientRepository.save(client);
-
-            });
-        }
-        // ==========================================================
 
         // 3. СКЛАД (Выполняется ТОЛЬКО для определенных причин)
         ReasonsReturn reason = ret.getReturnReason();
@@ -585,7 +562,6 @@ public class AdminManagementController {
                 "finalAmount", ret.getTotalAmount()
         ));
     }
-
     @PostMapping("/products/{id}/inventory")
     @PreAuthorize("hasRole('ADMIN')")
     @Transactional(rollbackFor = Exception.class)
