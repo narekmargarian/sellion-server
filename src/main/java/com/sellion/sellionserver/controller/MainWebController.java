@@ -143,24 +143,10 @@ public class MainWebController {
         // --- 4. ОБЩАЯ СТАТИСТИКА И СЧЕТА ---
         BigDecimal totalPaidSum = Optional.ofNullable(invoiceRepository.calculateTotalPaid()).orElse(BigDecimal.ZERO);
 
-        // Считаем ГЛОБАЛЬНЫЙ общий долг всей системы (абсолютно по всем инвойсам и возвратам без фильтров дат)
-        BigDecimal globalSystemTotalAmount = invoiceRepository.findAll().stream()
-                .map(inv -> inv.getTotalAmount() != null ? inv.getTotalAmount() : BigDecimal.ZERO)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        BigDecimal globalSystemPaidAmount = invoiceRepository.findAll().stream()
-                .map(inv -> inv.getPaidAmount() != null ? inv.getPaidAmount() : BigDecimal.ZERO)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        BigDecimal globalSystemReturnsSum = returnOrderRepository.findAll().stream()
-                .filter(r -> r != null && r.getStatus() == ReturnStatus.CONFIRMED)
-                .map(r -> r.getTotalAmount() != null ? r.getTotalAmount() : BigDecimal.ZERO)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        // Итоговый общий долг всей системы с учетом возвратов
-        BigDecimal totalSystemDebt = globalSystemTotalAmount
-                .subtract(globalSystemPaidAmount)
-                .subtract(globalSystemReturnsSum)
+        // ИСПРАВЛЕНО: Общий долг системы теперь считается честно и точно по реальным балансам всех активных клиентов из БД
+        BigDecimal totalSystemDebt = clientRepository.findAllByIsDeletedFalse().stream()
+                .map(c -> c.getDebt() != null ? c.getDebt() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
                 .setScale(2, RoundingMode.HALF_UP);
 
         // Подготовка параметров для фильтра инвойсов
@@ -173,32 +159,6 @@ public class MainWebController {
                 invStartDT, invEndDT, managerParam, statusParam, invPageable);
 
         List<Invoice> invoicesList = invoicesPage.getContent();
-
-        List<ReturnOrder> allConfirmedReturns = returnOrderRepository.findAll().stream()
-                .filter(r -> r != null && r.getStatus() == ReturnStatus.CONFIRMED)
-                .collect(Collectors.toList());
-
-        Map<String, BigDecimal> returnsByShop = allConfirmedReturns.stream()
-                .filter(r -> r.getShopName() != null)
-                .collect(Collectors.groupingBy(
-                        ReturnOrder::getShopName,
-                        Collectors.mapping(
-                                r -> r.getTotalAmount() != null ? r.getTotalAmount() : BigDecimal.ZERO,
-                                Collectors.reducing(BigDecimal.ZERO, BigDecimal::add)
-                        )
-                ));
-
-        for (Invoice inv : invoicesList) {
-            if (inv.getShopName() != null && returnsByShop.containsKey(inv.getShopName())) {
-                BigDecimal shopReturns = returnsByShop.get(inv.getShopName());
-                if (shopReturns.compareTo(BigDecimal.ZERO) > 0) {
-                    BigDecimal currentTotal = inv.getTotalAmount() != null ? inv.getTotalAmount() : BigDecimal.ZERO;
-                    BigDecimal newTotal = currentTotal.subtract(shopReturns);
-                    if (newTotal.compareTo(BigDecimal.ZERO) < 0) newTotal = BigDecimal.ZERO;
-                    inv.setTotalAmount(newTotal);
-                }
-            }
-        }
 
         List<Invoice> allInvoicesForPeriod = invoiceRepository.findAllFilteredInvoicesNoPage(
                 invStartDT, invEndDT, managerParam, statusParam);
