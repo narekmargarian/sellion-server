@@ -15,7 +15,6 @@ import java.io.OutputStream;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -140,54 +139,10 @@ public class InvoiceService {
                 invoice.getInvoiceNumber(), orderId, invoice.getTotalAmount());
     }
 
-
-
     public void exportDebtsToExcel(String start, String end, OutputStream outputStream) throws IOException {
-        List<Invoice> allInvoices = invoiceRepository.findAll();
-
-        // Считаем общую сумму возвратов за выбранный период (или за все время, если даты не заданы)
-        BigDecimal totalReturnsSum = BigDecimal.ZERO;
-        try {
-            if (start != null && end != null && !start.isEmpty() && !end.isEmpty()) {
-                LocalDateTime startDateTime = LocalDate.parse(start).atStartOfDay();
-                LocalDateTime endDateTime = LocalDate.parse(end).atTime(23, 59, 59);
-                BigDecimal periodReturns = returnOrderRepository.sumConfirmedReturns(startDateTime, endDateTime);
-                if (periodReturns != null) {
-                    totalReturnsSum = periodReturns;
-                }
-            } else {
-                // Если диапазон дат не задан, берем сумму всех подтвержденных возвратов
-                List<ReturnOrder> allConfirmedReturns = returnOrderRepository.findAllByStatus(ReturnStatus.CONFIRMED);
-                totalReturnsSum = allConfirmedReturns.stream()
-                        .map(r -> r.getTotalAmount() != null ? r.getTotalAmount() : BigDecimal.ZERO)
-                        .reduce(BigDecimal.ZERO, BigDecimal::add);
-            }
-        } catch (Exception e) {
-            log.warn("Не удалось автоматически рассчитать сумму возвратов для Excel: {}", e.getMessage());
-        }
-
-        // Отбираем инвойсы по статусу и диапазону дат
-        List<Invoice> filteredInvoices = allInvoices.stream()
-                .filter(inv -> {
-                    String status = inv.getStatus();
-                    if (status != null && (status.equalsIgnoreCase("PAID") || status.equalsIgnoreCase("Оплачен") || status.equalsIgnoreCase("CANCELLED"))) {
-                        return false;
-                    }
-
-                    BigDecimal total = inv.getTotalAmount() != null ? inv.getTotalAmount() : BigDecimal.ZERO;
-                    BigDecimal paid = inv.getPaidAmount() != null ? inv.getPaidAmount() : BigDecimal.ZERO;
-                    BigDecimal remaining = total.subtract(paid);
-
-                    if (remaining.compareTo(BigDecimal.ZERO) <= 0) {
-                        return false;
-                    }
-
-                    if (start == null || end == null || inv.getCreatedAt() == null) return true;
-                    LocalDate invDate = inv.getCreatedAt().toLocalDate();
-                    LocalDate startDate = LocalDate.parse(start);
-                    LocalDate endDate = LocalDate.parse(end);
-                    return !invDate.isBefore(startDate) && !invDate.isAfter(endDate);
-                })
+        // Берем всех активных должников напрямую из таблицы клиентов (реальный баланс из базы)
+        List<Client> debtors = clientRepository.findAllByIsDeletedFalse().stream()
+                .filter(c -> c.getDebt() != null && c.getDebt().compareTo(BigDecimal.ZERO) > 0)
                 .collect(Collectors.toList());
 
         try (Workbook workbook = new XSSFWorkbook()) {
@@ -212,7 +167,7 @@ public class InvoiceService {
             headerStyle.setFont(boldFont);
 
             Row headerRow = sheet.createRow(0);
-            String[] headers = {"ID Счета", "Дата", "Магазин", "Сумма", "Статус"};
+            String[] headers = {"ID Клиента", "Магазин", "Телефон", "Адрес", "Текущий долг"};
             for (int i = 0; i < headers.length; i++) {
                 Cell cell = headerRow.createCell(i);
                 cell.setCellValue(headers[i]);
@@ -220,42 +175,29 @@ public class InvoiceService {
             }
 
             int rowNum = 1;
-            for (Invoice inv : filteredInvoices) {
+            for (Client client : debtors) {
                 Row row = sheet.createRow(rowNum++);
 
                 Cell cell0 = row.createCell(0);
-                cell0.setCellValue(inv.getId() != null ? inv.getId().toString() : "N/A");
+                cell0.setCellValue(client.getId() != null ? client.getId().toString() : "N/A");
                 cell0.setCellStyle(cellStyle);
 
                 Cell cell1 = row.createCell(1);
-                cell1.setCellValue(inv.getCreatedAt() != null ? inv.getCreatedAt().toLocalDate().toString() : "");
+                cell1.setCellValue(client.getName() != null ? client.getName() : "");
                 cell1.setCellStyle(cellStyle);
 
                 Cell cell2 = row.createCell(2);
-                cell2.setCellValue(inv.getShopName() != null ? inv.getShopName() : "");
+                cell2.setCellValue(client.getPhone() != null ? client.getPhone() : "");
                 cell2.setCellStyle(cellStyle);
 
                 Cell cell3 = row.createCell(3);
-                BigDecimal total = inv.getTotalAmount() != null ? inv.getTotalAmount() : BigDecimal.ZERO;
-                BigDecimal paid = inv.getPaidAmount() != null ? inv.getPaidAmount() : BigDecimal.ZERO;
-
-                BigDecimal exactRemaining = total.subtract(paid).setScale(2, RoundingMode.HALF_UP);
-
-                cell3.setCellValue(exactRemaining.doubleValue());
-                cell3.setCellStyle(amountCellStyle);
+                cell3.setCellValue(client.getAddress() != null ? client.getAddress() : "");
+                cell3.setCellStyle(cellStyle);
 
                 Cell cell4 = row.createCell(4);
-                String rawStatus = inv.getStatus() != null ? inv.getStatus() : "";
-                String russianStatus = rawStatus;
-
-                if (rawStatus.equalsIgnoreCase("UNPAID")) {
-                    russianStatus = "Не оплачен";
-                } else if (rawStatus.equalsIgnoreCase("PARTIAL")) {
-                    russianStatus = "Частично";
-                }
-
-                cell4.setCellValue(russianStatus);
-                cell4.setCellStyle(cellStyle);
+                BigDecimal debt = client.getDebt() != null ? client.getDebt() : BigDecimal.ZERO;
+                cell4.setCellValue(debt.setScale(2, RoundingMode.HALF_UP).doubleValue());
+                cell4.setCellStyle(amountCellStyle);
             }
 
             Row totalRow = sheet.createRow(rowNum);
@@ -264,14 +206,13 @@ public class InvoiceService {
                 totalRow.createCell(i).setCellStyle(headerStyle);
             }
 
-            totalRow.getCell(1).setCellValue("Итого (с учетом возвратов)");
+            totalRow.getCell(1).setCellValue("ИТОГО ОБЩИЙ ДОЛГ:");
 
-            Cell totalFormulaCell = totalRow.getCell(3);
+            Cell totalFormulaCell = totalRow.getCell(4);
             totalFormulaCell.setCellStyle(amountCellStyle);
 
             if (rowNum > 1) {
-                // Динамически вычитаем реальную сумму возвратов из формулы SUBTOTAL
-                totalFormulaCell.setCellFormula("SUBTOTAL(9,D2:D" + rowNum + ") - " + totalReturnsSum.toPlainString());
+                totalFormulaCell.setCellFormula("SUBTOTAL(9,E2:E" + rowNum + ")");
             } else {
                 totalFormulaCell.setCellValue(0.0);
             }
