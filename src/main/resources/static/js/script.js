@@ -2004,8 +2004,10 @@ async function saveNewManualOperation(type, btnElement) { // Добавили bt
     }
 
     if (type === 'order') {
-        // ВАЖНО: Проверьте, что функция checkAndApplyPromos доступна в этом файле
-        checkAndApplyPromos(itemsToSave, async (selectedPromos) => {
+        const managerIdVal = document.getElementById('new-op-manager')?.value || "";
+
+        // Передаем itemsToSave, managerIdVal и колбэк
+        checkAndApplyPromos(itemsToSave, managerIdVal, async (selectedPromos) => {
             const promoMap = {};
             selectedPromos.forEach(promo => {
                 if (promo.items) {
@@ -2017,7 +2019,7 @@ async function saveNewManualOperation(type, btnElement) { // Добавили bt
 
             const data = {
                 shopName: shopName,
-                managerId: document.getElementById('new-op-manager')?.value,
+                managerId: managerIdVal,
                 items: itemsToSave,
                 appliedPromoItems: promoMap,
                 carNumber: document.getElementById('new-op-car')?.value || "",
@@ -2047,7 +2049,6 @@ async function saveNewManualOperation(type, btnElement) { // Добавили bt
         await executeManualPost('/api/admin/returns/create-manual', data, saveBtn);
     }
 }
-
 async function executeManualPost(endpoint, data, saveBtn) {
     if (saveBtn) {
         saveBtn.disabled = true;
