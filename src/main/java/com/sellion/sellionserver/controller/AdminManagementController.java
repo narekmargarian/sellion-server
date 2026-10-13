@@ -424,13 +424,22 @@ public class AdminManagementController {
                 return ResponseEntity.badRequest().body(Map.of("error", "Заказ не может быть пустым"));
             }
 
-            // --- УЛУЧШЕННАЯ ЛОГИКА ОПРЕДЕЛЕНИЯ СКИДКИ ---
+            // --- БЕЗОПАСНАЯ ЛОГИКА ОПРЕДЕЛЕНИЯ СКИДКИ ---
             if (order.getDiscountPercent() == null || order.getDiscountPercent().compareTo(BigDecimal.ZERO) == 0) {
-                if (order.getShopName() != null && order.getManagerId() != null) {
-                    clientRepository.findByNameAndManagerId(order.getShopName(), order.getManagerId())
-                            .ifPresent(client -> {
-                                order.setDiscountPercent(client.getDefaultPercent());
-                            });
+                if (order.getShopName() != null) {
+                    // Сначала ищем по точному совпадению Магазин + Менеджер
+                    Optional<Client> clientOpt = Optional.empty();
+                    if (order.getManagerId() != null && !order.getManagerId().isBlank()) {
+                        clientOpt = clientRepository.findByNameAndManagerId(order.getShopName(), order.getManagerId());
+                    }
+                    // Если не нашли — ищем просто по названию магазина (чтобы заказ не падал!)
+                    if (clientOpt.isEmpty()) {
+                        clientOpt = clientRepository.findByName(order.getShopName());
+                    }
+
+                    clientOpt.ifPresent(client -> {
+                        order.setDiscountPercent(client.getDefaultPercent() != null ? client.getDefaultPercent() : BigDecimal.ZERO);
+                    });
                 }
             }
 
@@ -448,14 +457,17 @@ public class AdminManagementController {
             for (Map.Entry<Long, Integer> entry : order.getItems().entrySet()) {
                 Long productId = entry.getKey();
                 Product p = productMap.get(productId);
-                if (p == null) throw new RuntimeException("Товар ID " + productId + " не найден");
+                if (p == null) {
+                    return ResponseEntity.badRequest().body(Map.of("error", "Товар с ID " + productId + " не найден на складе"));
+                }
 
                 BigDecimal qty = BigDecimal.valueOf(entry.getValue());
                 BigDecimal basePrice = Optional.ofNullable(p.getPrice()).orElse(BigDecimal.ZERO);
 
                 BigDecimal currentItemPercent;
                 if (order.getAppliedPromoItems() != null && order.getAppliedPromoItems().containsKey(productId)) {
-                    currentItemPercent = order.getAppliedPromoItems().get(productId);
+                    BigDecimal promoVal = order.getAppliedPromoItems().get(productId);
+                    currentItemPercent = promoVal != null ? promoVal : shopDefaultPercent;
                     promoItemsCount++;
                 } else {
                     currentItemPercent = shopDefaultPercent;
@@ -465,14 +477,13 @@ public class AdminManagementController {
                         currentItemPercent.divide(new BigDecimal("100"), 4, RoundingMode.HALF_UP)
                 );
 
-                // ИСПРАВЛЕНО: Установлен масштаб 1 вместо 0 для сохранения точности (напр. 1751.2)
                 BigDecimal discountedPrice = basePrice.multiply(itemModifier).setScale(2, RoundingMode.HALF_UP);
 
                 totalAmount = totalAmount.add(discountedPrice.multiply(qty));
                 totalCost = totalCost.add(Optional.ofNullable(p.getPurchasePrice()).orElse(BigDecimal.ZERO).multiply(qty));
             }
 
-            // ИСПРАВЛЕНО: Устанавливаем итоговую сумму с точностью до 1 знака
+            // Устанавливаем итоговую сумму с точностью до 2 знаков
             order.setTotalAmount(totalAmount.setScale(2, RoundingMode.HALF_UP));
             order.setTotalPurchaseCost(totalCost.setScale(2, RoundingMode.HALF_UP));
             order.setPurchaseCost(totalCost.setScale(2, RoundingMode.HALF_UP));
@@ -481,7 +492,7 @@ public class AdminManagementController {
             try {
                 stockService.reserveItemsFromStock(order.getItems(), "Ручной заказ: " + order.getShopName());
             } catch (RuntimeException stockEx) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, stockEx.getMessage());
+                return ResponseEntity.badRequest().body(Map.of("error", "Ошибка склада: " + stockEx.getMessage()));
             }
 
             // 5. Сохранение заказа
@@ -502,7 +513,7 @@ public class AdminManagementController {
         } catch (ResponseStatusException e) {
             return ResponseEntity.status(e.getStatusCode()).body(Map.of("error", e.getReason()));
         } catch (Exception e) {
-            log.error("Критическая ошибка при создании заказа: {}", e.getMessage());
+            log.error("Критическая ошибка при создании заказа: ", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("error", "Ошибка сервера: " + e.getMessage()));
         }

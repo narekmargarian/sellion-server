@@ -160,7 +160,6 @@ public class PromoApiController {
 
         // 2. БЕЗОПАСНОСТЬ: Если менеджер не определен, возвращаем пустой список
         if (managerId == null || productIds.isEmpty()) {
-            log.warn("Не удалось определить managerId или список товаров пуст. Запрос отклонен.");
             return Collections.emptyList();
         }
 
