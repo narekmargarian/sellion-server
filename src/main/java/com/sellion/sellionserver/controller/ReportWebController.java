@@ -12,6 +12,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.xssf.usermodel.XSSFCellStyle;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -189,46 +190,59 @@ public class ReportWebController {
             try (Workbook workbook = new XSSFWorkbook(); OutputStream out = response.getOutputStream()) {
                 Sheet sheet = workbook.createSheet("Отчет");
 
-                // Шрифты Arial (стиль 1С)
+                // Шрифты Times New Roman
                 Font baseFont = workbook.createFont();
-                baseFont.setFontName("Arial");
+                baseFont.setFontName("Times New Roman");
                 baseFont.setFontHeightInPoints((short) 10);
 
                 Font boldFont = workbook.createFont();
-                boldFont.setFontName("Arial");
+                boldFont.setFontName("Times New Roman");
                 boldFont.setFontHeightInPoints((short) 10);
                 boldFont.setBold(true);
 
                 Font titleFont = workbook.createFont();
-                titleFont.setFontName("Arial");
-                titleFont.setFontHeightInPoints((short) 12);
+                titleFont.setFontName("Times New Roman");
+                titleFont.setFontHeightInPoints((short) 11);
                 titleFont.setItalic(true);
                 titleFont.setBold(true);
 
-                // Стили
+                // Стили заголовка периода
                 CellStyle titleStyle = workbook.createCellStyle();
                 titleStyle.setFont(titleFont);
                 titleStyle.setAlignment(HorizontalAlignment.CENTER);
+                titleStyle.setVerticalAlignment(VerticalAlignment.CENTER);
 
-                CellStyle headerStyle = workbook.createCellStyle();
+                // Цвет для границ (синеватый тон 1С)
+                short borderColor = IndexedColors.PALE_BLUE.getIndex();
+
+                // Точный цвет заливки шапки из вашего RGB (189, 215, 238) для XSSFWorkbook
+                XSSFCellStyle headerStyle = (XSSFCellStyle) workbook.createCellStyle();
                 headerStyle.setFont(boldFont);
-                // Использован правильный метод setFillForegroundColor вместо setFillForeColor
-                headerStyle.setFillForegroundColor(IndexedColors.LIGHT_CORNFLOWER_BLUE.getIndex());
+                headerStyle.setFillForegroundColor(new org.apache.poi.xssf.usermodel.XSSFColor(new java.awt.Color(189, 215, 238), null));
                 headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
                 headerStyle.setAlignment(HorizontalAlignment.CENTER);
                 headerStyle.setVerticalAlignment(VerticalAlignment.CENTER);
                 headerStyle.setBorderBottom(BorderStyle.THIN);
+                headerStyle.setBottomBorderColor(borderColor);
                 headerStyle.setBorderTop(BorderStyle.THIN);
+                headerStyle.setTopBorderColor(borderColor);
                 headerStyle.setBorderLeft(BorderStyle.THIN);
+                headerStyle.setLeftBorderColor(borderColor);
                 headerStyle.setBorderRight(BorderStyle.THIN);
+                headerStyle.setRightBorderColor(borderColor);
 
+                // Основной стиль ячеек с синеватыми тонкими границами
                 CellStyle cellStyle = workbook.createCellStyle();
                 cellStyle.setFont(baseFont);
                 cellStyle.setVerticalAlignment(VerticalAlignment.CENTER);
                 cellStyle.setBorderBottom(BorderStyle.THIN);
+                cellStyle.setBottomBorderColor(borderColor);
                 cellStyle.setBorderTop(BorderStyle.THIN);
+                cellStyle.setTopBorderColor(borderColor);
                 cellStyle.setBorderLeft(BorderStyle.THIN);
+                cellStyle.setLeftBorderColor(borderColor);
                 cellStyle.setBorderRight(BorderStyle.THIN);
+                cellStyle.setRightBorderColor(borderColor);
 
                 CellStyle centerStyle = workbook.createCellStyle();
                 centerStyle.cloneStyleFrom(cellStyle);
@@ -238,14 +252,17 @@ public class ReportWebController {
                 numberStyle.cloneStyleFrom(cellStyle);
                 numberStyle.setAlignment(HorizontalAlignment.RIGHT);
 
-                // 1. Заголовок отчета по центру
+                // 1. Заголовок периода по центру на строке 0
                 Row titleRow = sheet.createRow(0);
-                Cell titleCell = titleRow.createCell(0);
-                titleCell.setCellValue("Период: " + (request.getStart() != null ? request.getStart() : "") + " — " + (request.getEnd() != null ? request.getEnd() : ""));
+                Cell titleCell = titleRow.createCell(2);
+                String periodText = (request.getStart() != null && request.getEnd() != null)
+                        ? "Период: " + request.getStart() + " — " + request.getEnd()
+                        : "Период отчета";
+                titleCell.setCellValue(periodText);
                 titleCell.setCellStyle(titleStyle);
 
-                // 2. Шапка таблицы с точными названиями
-                Row headerRow = sheet.createRow(2);
+                // 2. Шапка таблицы сразу на строке 1
+                Row headerRow = sheet.createRow(1);
                 String[] headers = {"Код менеджера", "Клиент", "Намеклатура", "Количество(шт.)"};
                 for (int i = 0; i < headers.length; i++) {
                     Cell cell = headerRow.createCell(i);
@@ -253,7 +270,7 @@ public class ReportWebController {
                     cell.setCellStyle(headerStyle);
                 }
 
-                int rowIdx = 3;
+                int rowIdx = 2; // Данные начинаются со строки 2
                 int grandTotalQty = 0;
 
                 for (Map.Entry<String, Map<String, Map<Long, Integer>>> mgrEntry : masterMap.entrySet()) {
