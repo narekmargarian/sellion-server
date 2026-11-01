@@ -101,12 +101,6 @@ public class ReportWebController {
         }
     }
 
-    /**
-     * Эндпоинт для скачивания детального отчета по заказам с учетом структуры БД
-     */
-    /**
-     * Эндпоинт для скачивания детального отчета по заказам с учетом структуры БД
-     */
     @PostMapping("/excel/orders-detailed-custom")
     public void exportDetailedOrdersExcel(@RequestBody DetailedReportRequest request, HttpServletResponse response) {
         try {
@@ -193,36 +187,73 @@ public class ReportWebController {
             response.setHeader("Content-Disposition", "attachment; filename=Detailed_Orders_Report.xlsx");
 
             try (Workbook workbook = new XSSFWorkbook(); OutputStream out = response.getOutputStream()) {
-                Sheet sheet = workbook.createSheet("Детальный отчет");
+                Sheet sheet = workbook.createSheet("Отчет");
+
+                // Шрифты Arial (стиль 1С)
+                Font baseFont = workbook.createFont();
+                baseFont.setFontName("Arial");
+                baseFont.setFontHeightInPoints((short) 10);
+
+                Font boldFont = workbook.createFont();
+                boldFont.setFontName("Arial");
+                boldFont.setFontHeightInPoints((short) 10);
+                boldFont.setBold(true);
+
+                Font titleFont = workbook.createFont();
+                titleFont.setFontName("Arial");
+                titleFont.setFontHeightInPoints((short) 12);
+                titleFont.setItalic(true);
+                titleFont.setBold(true);
+
+                // Стили
+                CellStyle titleStyle = workbook.createCellStyle();
+                titleStyle.setFont(titleFont);
+                titleStyle.setAlignment(HorizontalAlignment.CENTER);
 
                 CellStyle headerStyle = workbook.createCellStyle();
-                Font boldFont = workbook.createFont();
-                boldFont.setBold(true);
                 headerStyle.setFont(boldFont);
+                // Использован правильный метод setFillForegroundColor вместо setFillForeColor
+                headerStyle.setFillForegroundColor(IndexedColors.LIGHT_CORNFLOWER_BLUE.getIndex());
+                headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+                headerStyle.setAlignment(HorizontalAlignment.CENTER);
+                headerStyle.setVerticalAlignment(VerticalAlignment.CENTER);
                 headerStyle.setBorderBottom(BorderStyle.THIN);
                 headerStyle.setBorderTop(BorderStyle.THIN);
                 headerStyle.setBorderLeft(BorderStyle.THIN);
                 headerStyle.setBorderRight(BorderStyle.THIN);
 
                 CellStyle cellStyle = workbook.createCellStyle();
+                cellStyle.setFont(baseFont);
+                cellStyle.setVerticalAlignment(VerticalAlignment.CENTER);
                 cellStyle.setBorderBottom(BorderStyle.THIN);
                 cellStyle.setBorderTop(BorderStyle.THIN);
                 cellStyle.setBorderLeft(BorderStyle.THIN);
                 cellStyle.setBorderRight(BorderStyle.THIN);
 
+                CellStyle centerStyle = workbook.createCellStyle();
+                centerStyle.cloneStyleFrom(cellStyle);
+                centerStyle.setAlignment(HorizontalAlignment.CENTER);
+
                 CellStyle numberStyle = workbook.createCellStyle();
                 numberStyle.cloneStyleFrom(cellStyle);
                 numberStyle.setAlignment(HorizontalAlignment.RIGHT);
 
-                Row headerRow = sheet.createRow(0);
-                String[] headers = {"Код менеджера", "Название клиента", "Имя товара", "Количество"};
+                // 1. Заголовок отчета по центру
+                Row titleRow = sheet.createRow(0);
+                Cell titleCell = titleRow.createCell(0);
+                titleCell.setCellValue("Период: " + (request.getStart() != null ? request.getStart() : "") + " — " + (request.getEnd() != null ? request.getEnd() : ""));
+                titleCell.setCellStyle(titleStyle);
+
+                // 2. Шапка таблицы с точными названиями
+                Row headerRow = sheet.createRow(2);
+                String[] headers = {"Код менеджера", "Клиент", "Намеклатура", "Количество(шт.)"};
                 for (int i = 0; i < headers.length; i++) {
                     Cell cell = headerRow.createCell(i);
                     cell.setCellValue(headers[i]);
                     cell.setCellStyle(headerStyle);
                 }
 
-                int rowIdx = 1;
+                int rowIdx = 3;
                 int grandTotalQty = 0;
 
                 for (Map.Entry<String, Map<String, Map<Long, Integer>>> mgrEntry : masterMap.entrySet()) {
@@ -242,7 +273,7 @@ public class ReportWebController {
 
                             Cell c0 = row.createCell(0);
                             c0.setCellValue(mgr);
-                            c0.setCellStyle(cellStyle);
+                            c0.setCellStyle(centerStyle);
 
                             Cell c1 = row.createCell(1);
                             c1.setCellValue(shop);
@@ -259,6 +290,7 @@ public class ReportWebController {
                     }
                 }
 
+                // Строка ИТОГО
                 Row footerRow = sheet.createRow(rowIdx);
                 footerRow.createCell(0).setCellStyle(cellStyle);
 
@@ -276,8 +308,10 @@ public class ReportWebController {
                 totalStyle.setFont(boldFont);
                 totalCell.setCellStyle(totalStyle);
 
+                // Автоподбор ширины
                 for (int i = 0; i < headers.length; i++) {
                     sheet.autoSizeColumn(i);
+                    sheet.setColumnWidth(i, sheet.getColumnWidth(i) + 1200);
                 }
 
                 workbook.write(out);
@@ -288,6 +322,4 @@ public class ReportWebController {
             response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
         }
     }
-
-
 }
