@@ -17,6 +17,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ReportWebController {
 
+
     private final ClientRepository clientRepository;
 
     @GetMapping("/debts")
