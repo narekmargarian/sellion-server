@@ -100,4 +100,6 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     @Modifying
     @Query("UPDATE Order o SET o.status = :status WHERE o.id = :id")
     void updateStatus(@Param("id") Long id, @Param("status") OrderStatus status);
+
+
 }

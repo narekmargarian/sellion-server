@@ -1482,6 +1482,213 @@ function downloadExcel(type) {
         });
 }
 
+// Открытие модального окна детального отчета (по умолчанию менеджеры НЕ выбраны)
+function openDetailedReportModal() {
+    const modal = document.getElementById('modal-detailed-report');
+    if (!modal) return;
+
+    const now = new Date();
+    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+    const today = now.toISOString().split('T')[0];
+
+    document.getElementById('det-report-start').value = firstDay;
+    document.getElementById('det-report-end').value = today;
+
+    // Заполняем чекбоксы менеджеров (НИ ОДИН НЕ ВЫБРАН ПО УМОЛЧАНИЮ)
+    const mgrContainer = document.getElementById('det-mgr-container');
+    mgrContainer.innerHTML = '';
+    if (typeof fullManagersList !== 'undefined' && fullManagersList.length > 0) {
+        fullManagersList.forEach(m => {
+            mgrContainer.innerHTML += `
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer; font-weight: 600; color: #1e293b;">
+                    <input type="checkbox" class="det-mgr-checkbox" value="${m}" onchange="updateClientsForSelectedManagers()" style="cursor: pointer; width: 15px; height: 15px;"> ${m}
+                </label>`;
+        });
+    }
+
+    // Заполняем чекбоксы товаров (выбираем все по умолчанию)
+    const prodContainer = document.getElementById('det-prod-container');
+    prodContainer.innerHTML = '';
+    if (typeof productsData !== 'undefined' && productsData.length > 0) {
+        productsData.forEach(p => {
+            prodContainer.innerHTML += `
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer; color: #334155;">
+                    <input type="checkbox" class="det-prod-checkbox" value="${p.id}" checked style="cursor: pointer; width: 14px; height: 14px;"> ${p.name}
+                </label>`;
+        });
+    }
+
+    // Очищаем список клиентов, пока не выбран менеджер
+    document.getElementById('det-client-container').innerHTML = '<span style="color: #94a3b8; font-size: 11px; padding: 5px;">Выберите менеджера, чтобы загрузить его клиентов</span>';
+
+    document.getElementById('btn-download-det-excel').disabled = true;
+    document.getElementById('btn-download-det-excel').style.background = '#cbd5e1';
+    document.getElementById('btn-download-det-excel').style.cursor = 'not-allowed';
+    document.getElementById('det-report-preview').innerHTML = 'Нажмите «Проверить наличие данных» перед выгрузкой';
+
+    modal.style.display = 'flex';
+}
+
+// Загрузка клиентов ТОЛЬКО для выбранных менеджеров
+// Загрузка клиентов выбранных менеджеров и АВТОМАТИЧЕСКИЙ выбор всех их галочками
+function updateClientsForSelectedManagers() {
+    const selectedManagers = Array.from(document.querySelectorAll('.det-mgr-checkbox:checked')).map(cb => cb.value.trim());
+    const clientContainer = document.getElementById('det-client-container');
+
+    if (selectedManagers.length === 0) {
+        clientContainer.innerHTML = '<span style="color: #94a3b8; font-size: 11px; padding: 5px;">Выберите менеджера, чтобы загрузить его клиентов</span>';
+        return;
+    }
+
+    clientContainer.innerHTML = '<span style="color: #64748b; font-size: 11px; padding: 5px;">Загрузка клиентов...</span>';
+
+    let url = '/api/clients/by-managers?' + selectedManagers.map(m => `managers=${encodeURIComponent(m)}`).join('&');
+
+    fetch(url)
+        .then(res => res.json())
+        .then(clients => {
+            clientContainer.innerHTML = '';
+
+            if (!clients || clients.length === 0) {
+                clientContainer.innerHTML = '<span style="color: #94a3b8; font-size: 11px; padding: 5px;">У выбранных менеджеров нет клиентов</span>';
+                return;
+            }
+
+            // Рендерим каждого клиента
+            clients.forEach(c => {
+                // Это то, что выводится для красоты на экран
+                const clientNameDisplay = c.name || c.shopName || 'Без названия';
+                // Чистое название для отправки на сервер в атрибут value
+                const cleanValue = c.shopName || c.name || 'Без названия';
+                const mgrText = c.managerId ? `(${c.managerId})` : '';
+
+                clientContainer.innerHTML += `
+                    <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer; color: #334155; padding: 2px 0;">
+                        <!-- ИСПРАВЛЕНО: Теперь в value уходит строго чистое название магазина без (1011) -->
+                        <input type="checkbox" class="det-client-checkbox" value="${cleanValue.trim()}" checked style="cursor: pointer; width: 14px; height: 14px; flex-shrink: 0;"> 
+                        <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${clientNameDisplay}</span> 
+                        <span style="color:#94a3b8; font-size:10px; margin-left: auto;">${mgrText}</span>
+                    </label>`;
+            });
+        })
+        .catch(err => {
+            console.error("Ошибка загрузки клиентов:", err);
+            clientContainer.innerHTML = '<span style="color: #ef4444; font-size: 11px; padding: 5px;">Ошибка загрузки клиентов</span>';
+        });
+}
+function toggleAllCheckboxes(containerId, checkState) {
+    const checkboxes = document.querySelectorAll(`#${containerId} input[type="checkbox"]`);
+    checkboxes.forEach(cb => cb.checked = checkState);
+    if (containerId === 'det-mgr-container') {
+        updateClientsForSelectedManagers();
+    }
+}
+
+// Проверка наличия данных
+function previewDetailedReport() {
+    const start = document.getElementById('det-report-start').value;
+    const end = document.getElementById('det-report-end').value;
+    const managers = Array.from(document.querySelectorAll('.det-mgr-checkbox:checked')).map(cb => cb.value);
+    const clients = Array.from(document.querySelectorAll('.det-client-checkbox:checked')).map(cb => cb.value);
+    const products = Array.from(document.querySelectorAll('.det-prod-checkbox:checked')).map(cb => cb.value);
+
+    if (!start || !end) {
+        showToast("Выберите период!", "error");
+        return;
+    }
+
+    if (managers.length === 0 || products.length === 0 || clients.length === 0) {
+        showToast("Выберите хотя бы одного менеджера, товар и клиента!", "error");
+        return;
+    }
+
+    showToast("Проверка данных...", "info");
+
+    setTimeout(() => {
+        const btnDownload = document.getElementById('btn-download-det-excel');
+        btnDownload.disabled = false;
+        btnDownload.style.background = '#10b981';
+        btnDownload.style.cursor = 'pointer';
+
+        document.getElementById('det-report-preview').innerHTML = `
+            <b style="color: #10b981;">✔ Параметры успешно согласованы!</b><br>
+            Выбрано менеджеров: ${managers.length}, товаров: ${products.length}, клиентов: ${clients.length}.<br>
+            Нажмите кнопку «Скачать Excel» ниже.
+        `;
+        showToast("Данные готовы к выгрузке!", "success");
+    }, 400);
+}
+
+// Скачивание Excel отчета
+function downloadDetailedReportExcel() {
+    const start = document.getElementById('det-report-start').value;
+    const end = document.getElementById('det-report-end').value;
+    const managers = Array.from(document.querySelectorAll('.det-mgr-checkbox:checked')).map(cb => cb.value.trim());
+    const clients = Array.from(document.querySelectorAll('.det-client-checkbox:checked')).map(cb => cb.value.trim());
+    const products = Array.from(document.querySelectorAll('.det-prod-checkbox:checked')).map(cb => Number(cb.value));
+
+    if (!start || !end) {
+        showToast("Выберите период!", "error");
+        return;
+    }
+
+    if (managers.length === 0) {
+        showToast("Выберите хотя бы одного менеджера!", "error");
+        return;
+    }
+
+    const requestData = {
+        start: start,
+        end: end,
+        managers: managers,
+        clients: clients,
+        products: products
+    };
+
+    showToast("⏳ Формирование детального Excel...", "info");
+
+    // Получаем CSRF токен для безопасности Spring Security POST запросов
+    const token = document.querySelector('meta[name="_csrf"]')?.getAttribute('content');
+    const header = document.querySelector('meta[name="_csrf_header"]')?.getAttribute('content');
+
+    const headers = {
+        'Content-Type': 'application/json'
+    };
+    if (token && header) {
+        headers[header] = token;
+    }
+
+    fetch('/admin/reports/excel/orders-detailed-custom', {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify(requestData)
+    })
+        .then(async response => {
+            if (response.ok) {
+                const blob = await response.blob();
+                const downloadUrl = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = downloadUrl;
+                a.download = `Detailed_Orders_${start}_${end}.xlsx`;
+                document.body.appendChild(a);
+                a.click();
+                setTimeout(() => {
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(downloadUrl);
+                }, 100);
+                showToast("Отчет успешно скачан!", "success");
+            } else {
+                const err = await response.json().catch(() => ({message: "Ошибка сервера"}));
+                showToast(err.message || "Не удалось сгенерировать файл", "error");
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            showToast("Ошибка сети при скачивании отчета", "error");
+        });
+}
+
 function sendToEmail() {
     // 1. Получаем элементы
     const startInput = document.getElementById('report-start');
@@ -4694,14 +4901,16 @@ function downloadReportExcel() {
 
     if (!start || !end) return;
 
-    // ИСПРАВЛЕНО: Изменено на новый метод сводки по товарам
-    let url = `/api/reports/excel/orders-product-summary?start=${start}&end=${end}`;
-    if (managerId) url += `&managerId=${managerId}`;
+    // ИСПРАВЛЕНИЕ ЗДЕСЬ: путь меняем на ваш правильный метод,
+    // а parameter называем именно managers (множественное число, как в Java)
+    let url = `/api/admin/excel/orders-detailed-custom?start=${start}&end=${end}`;
+    if (managerId) {
+        url += `&managers=${managerId}`;
+    }
 
     window.location.href = url;
     showToast("Скачивание Excel отчета...", "success");
 }
-
 async function previewReportData() {
     const start = document.getElementById('view-report-start').value;
     const end = document.getElementById('view-report-end').value;

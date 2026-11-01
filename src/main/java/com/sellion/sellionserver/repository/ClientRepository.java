@@ -68,4 +68,7 @@ public interface ClientRepository extends JpaRepository<Client, Long> {
 
     Optional<Client> findByNameAndManagerId(String name, String managerId);
 
+    // Для детального отчета: поиск всех активных клиентов по списку кодов менеджеров
+    List<Client> findAllByManagerIdInAndIsDeletedFalse(List<String> managerIds);
+
 }

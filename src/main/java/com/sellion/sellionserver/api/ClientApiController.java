@@ -18,6 +18,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/clients")
@@ -31,6 +32,25 @@ public class ClientApiController {
     public List<Client> getAllClients(@RequestParam String managerId) {
         // Выдает всех активных клиентов только для того менеджера, который сделал запрос
         return clientRepository.findAllByManagerIdAndIsDeletedFalse(managerId)
+                .stream()
+                .sorted(Comparator.comparing(Client::getName))
+                .toList();
+    }
+
+    /**
+     * Эндпоинт для получения всех клиентов выбранных менеджеров из базы данных (для детального отчета)
+     */
+    /**
+     * Эндпоинт для получения всех клиентов выбранных менеджеров из базы данных (для детального отчета)
+     */
+    @GetMapping("/by-managers")
+    public List<Client> getClientsByManagers(@RequestParam(value = "managers", required = false) List<String> managers) {
+        if (managers == null || managers.isEmpty()) {
+            return new java.util.ArrayList<>(); // Если менеджеры не выбраны, возвращаем пустоту
+        }
+
+        // Загружаем из базы только тех клиентов, чти managerId входят в выбранный список
+        return clientRepository.findAllByManagerIdInAndIsDeletedFalse(managers)
                 .stream()
                 .sorted(Comparator.comparing(Client::getName))
                 .toList();
@@ -51,8 +71,6 @@ public class ClientApiController {
 
         Client client = clientRepository.findById(id).orElseThrow();
 
-        // ИСПРАВЛЕНО: Вместо выгрузки всей истории в память Java и фильтрации через Stream,
-        // мы переводим LocalDate в LocalDateTime границы суток и делаем эффективный запрос в БД.
         LocalDateTime startDateTime = start.atStartOfDay();
         LocalDateTime endDateTime = end.atTime(LocalTime.MAX);
 

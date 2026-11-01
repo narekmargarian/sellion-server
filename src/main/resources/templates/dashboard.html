@@ -148,6 +148,10 @@
                 <button type="button" onclick="openViewReportModal()" title="Выгрузка отчетов" style="background: #1e293b; color: white; border: none; width: 38px; height: 38px; border-radius: 10px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; font-size: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
                     <i class="fa-solid fa-file-excel" style="color: #63AA2F;"></i>
                 </button>
+
+                <button type="button" onclick="openDetailedReportModal()" title="Детальная выгрузка отчетов" style="background: #0f172a; color: white; border: none; height: 38px; padding: 0 14px; border-radius: 10px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; gap: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                    <i class="fa-solid fa-file-excel" style="color: #10b981;"></i> Детальный отчет
+                </button>
             </div>
             <div class="table-container">
                 <table class="table">
@@ -1603,6 +1607,97 @@
             </div>
         </div>
 
+        <!-- Модальное окно детальной выгрузки отчетов -->
+        <div id="modal-detailed-report" style="display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(4px); z-index: 99999; align-items: center; justify-content: center;">
+            <div style="background: white; padding: 25px; border-radius: 20px; max-width: 650px; width: 92%; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); max-height: 92vh; display: flex; flex-direction: column;">
+
+                <!-- Шапка модалки -->
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h3 style="font-size: 16px; font-weight: 800; color: #1e293b; margin: 0;">
+                        <i class="fa-solid fa-file-invoice" style="color: #10b981; margin-right: 8px;"></i> Детальная выгрузка заказов в Excel
+                    </h3>
+                    <button type="button" onclick="document.getElementById('modal-detailed-report').style.display='none'" style="background: #f1f5f9; border: none; width: 32px; height: 32px; border-radius: 50%; font-size: 16px; cursor: pointer; color: #64748b; display: flex; align-items: center; justify-content: center;">✕</button>
+                </div>
+
+                <div style="flex: 1; overflow-y: auto; padding-right: 4px; display: flex; flex-direction: column; gap: 14px;">
+
+                    <!-- 1. Период -->
+                    <div style="display: flex; gap: 10px;">
+                        <div style="flex: 1;">
+                            <label style="font-size: 11px; font-weight: 700; color: #64748b; display: block; margin-bottom: 5px;">1. ПЕРИОД С</label>
+                            <input type="date" id="det-report-start" class="form-control" style="width: 100%; padding: 8px; border-radius: 8px; border: 1px solid #cbd5e1;">
+                        </div>
+                        <div style="flex: 1;">
+                            <label style="font-size: 11px; font-weight: 700; color: #64748b; display: block; margin-bottom: 5px;">ПО</label>
+                            <input type="date" id="det-report-end" class="form-control" style="width: 100%; padding: 8px; border-radius: 8px; border: 1px solid #cbd5e1;">
+                        </div>
+                    </div>
+
+                    <!-- 2. Выбор менеджеров (с кнопками Все / Снять) -->
+                    <div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                            <label style="font-size: 11px; font-weight: 700; color: #64748b;">2. МЕНЕДЖЕРЫ</label>
+                            <div style="display: flex; gap: 10px;">
+                                <button type="button" onclick="toggleAllCheckboxes('det-mgr-container', true)" style="background:none; border:none; color:#6366f1; font-size:11px; font-weight:700; cursor:pointer;">Все</button>
+                                <button type="button" onclick="toggleAllCheckboxes('det-mgr-container', false)" style="background:none; border:none; color:#64748b; font-size:11px; font-weight:700; cursor:pointer;">Снять</button>
+                            </div>
+                        </div>
+                        <div id="det-mgr-container" style="max-height: 110px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px; background: #f8fafc; display: flex; flex-direction: column; gap: 6px;">
+                            <!-- Заполняется динамически -->
+                        </div>
+                    </div>
+
+                    <!-- 3. Список товаров с птичками -->
+                    <div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                            <label style="font-size: 11px; font-weight: 700; color: #64748b;">3. ТОВАРЫ </label>
+                            <div style="display: flex; gap: 10px;">
+                                <button type="button" onclick="toggleAllCheckboxes('det-prod-container', true)" style="background:none; border:none; color:#6366f1; font-size:11px; font-weight:700; cursor:pointer;">Выбрать все</button>
+                                <button type="button" onclick="toggleAllCheckboxes('det-prod-container', false)" style="background:none; border:none; color:#64748b; font-size:11px; font-weight:700; cursor:pointer;">Снять</button>
+                            </div>
+                        </div>
+                        <div id="det-prod-container" style="max-height: 130px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px; background: #f8fafc; display: flex; flex-direction: column; gap: 6px;">
+                            <!-- Заполняется динамически -->
+                        </div>
+                    </div>
+
+                    <!-- 4. Список клиентов (все клиенты / по галочкам) -->
+                    <div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                            <label style="font-size: 11px; font-weight: 700; color: #64748b;">4. КЛИЕНТЫ</label>
+                            <div style="display: flex; gap: 10px;">
+                                <button type="button" onclick="toggleAllCheckboxes('det-client-container', true)" style="background:none; border:none; color:#6366f1; font-size:11px; font-weight:700; cursor:pointer;">Все клиенты</button>
+                                <button type="button" onclick="toggleAllCheckboxes('det-client-container', false)" style="background:none; border:none; color:#64748b; font-size:11px; font-weight:700; cursor:pointer;">Снять</button>
+                            </div>
+                        </div>
+                        <div id="det-client-container" style="max-height: 120px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px; background: #f8fafc; display: flex; flex-direction: column; gap: 6px;">
+                            <!-- Заполняется динамически -->
+                        </div>
+                    </div>
+
+                    <!-- 5. Кнопка «Проверить наличие данных» -->
+                    <button type="button" onclick="previewDetailedReport()" style="background: #1e293b; color: white; border: none; padding: 10px; border-radius: 8px; font-weight: 700; cursor: pointer; width: 100%;">
+                        <i class="fa-solid fa-magnifying-glass"></i> 5. Проверить наличие данных
+                    </button>
+
+                    <!-- Блок предпросмотра -->
+                    <div id="det-report-preview" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; font-size: 12px; color: #475569; min-height: 50px; text-align: center;">
+                        Нажмите «Проверить наличие данных» перед выгрузкой
+                    </div>
+                </div>
+
+                <!-- Нижние кнопки -->
+                <div style="display: flex; gap: 10px; margin-top: 15px; padding-top: 8px; border-top: 1px solid #e2e8f0;">
+                    <button type="button" id="btn-download-det-excel" onclick="downloadDetailedReportExcel()" disabled style="flex: 1; background: #cbd5e1; color: white; border: none; padding: 12px; border-radius: 12px; font-weight: 800; cursor: not-allowed; text-transform: uppercase; font-size: 11px; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                        <i class="fa-solid fa-file-excel"></i> Скачать Excel
+                    </button>
+                    <button type="button" onclick="document.getElementById('modal-detailed-report').style.display='none'" style="background: #64748b; color: white; border: none; padding: 12px 20px; border-radius: 12px; font-weight: 800; cursor: pointer; text-transform: uppercase; font-size: 11px;">
+                        Закрыть
+                    </button>
+                </div>
+
+            </div>
+        </div>
         <div id="modal-set-target" class="modal">
             <div class="modal-content" style="width: 400px;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
